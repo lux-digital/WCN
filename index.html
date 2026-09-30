@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>West Coast Natural Series | LUX Architectural Products</title>
+
+<style>
+
+* { box-sizing:border-box; margin:0; padding:0; }
+
+html,body { width:100%; min-height:100%; background:#000; font-family:Arial,Helvetica,sans-serif; }
+
+body { overflow-x:hidden; }
+
+
+
+/* Make the experience fill the actual browser viewport, even inside a
+
+   narrower Elementor/container column. JS also aligns its left edge. */
+
+#experience { position:relative; width:100vw !important; max-width:none !important; height:450vh; background:#000; }
+
+#stage { position:sticky; top:0; width:100vw; height:100vh; overflow:hidden; background:#000; }
+
+#sceneCanvas { position:absolute; inset:0; display:block; width:100%; height:100%; z-index:1; }
+
+
+
+#panorama { position:absolute; inset:0; z-index:2; width:100%; height:100%; opacity:0; background:#000;
+
+    will-change:opacity; touch-action:pan-y; cursor:grab; }
+
+#panorama.dragging { cursor:grabbing; }
+
+#panorama > canvas { position:absolute; inset:0; display:block; width:100%!important; height:100%!important; z-index:1; }
+
+#flareLayer { position:absolute; inset:0; z-index:5; pointer-events:none; overflow:hidden; }
+
+#sunBloom { position:absolute; width:760px; height:760px; margin-left:-380px; margin-top:-380px; border-radius:50%;
+
+    background:radial-gradient(circle,rgba(255,255,255,1) 0%,rgba(255,253,225,1) 4%,rgba(255,234,155,.90) 10%,rgba(255,204,95,.66) 20%,rgba(255,170,55,.38) 32%,rgba(255,140,35,.18) 46%,rgba(255,125,25,.07) 60%,transparent 77%);
+
+    mix-blend-mode:screen; filter:blur(5px) brightness(1.8); opacity:0; will-change:left,top,opacity,transform; }
+
+#sunCore { position:absolute; width:130px; height:130px; margin-left:-65px; margin-top:-65px; border-radius:50%;
+
+    background:radial-gradient(circle,rgba(255,255,255,1) 0%,rgba(255,255,245,1) 12%,rgba(255,239,175,.96) 27%,rgba(255,200,100,.60) 48%,rgba(255,165,65,.18) 68%,transparent 84%);
+
+    mix-blend-mode:screen; filter:blur(2px) brightness(1.8); opacity:0; }
+
+#sunStreak { position:absolute; width:1000px; height:58px; margin-left:-500px; margin-top:-29px;
+
+    background:radial-gradient(ellipse,rgba(255,248,215,.94) 0%,rgba(255,220,145,.48) 20%,rgba(255,180,85,.19) 44%,transparent 75%);
+
+    mix-blend-mode:screen; filter:blur(5px) brightness(1.7); opacity:0; }
+
+.flareGhost { position:absolute; border-radius:50%; opacity:0; pointer-events:none; mix-blend-mode:screen; will-change:left,top,opacity,transform; }
+
+#flareGhost1 { width:104px; height:104px; margin-left:-52px; margin-top:-52px; border:3px solid rgba(255,205,120,.76);
+
+    background:radial-gradient(circle,rgba(255,235,175,.52),rgba(255,165,75,.17) 54%,transparent 77%); box-shadow:0 0 45px rgba(255,175,70,.30); }
+
+#flareGhost2 { width:166px; height:166px; margin-left:-83px; margin-top:-83px; border:3px solid rgba(120,230,200,.58);
+
+    background:radial-gradient(circle,rgba(115,235,205,.40),rgba(60,180,155,.12) 58%,transparent 79%); box-shadow:0 0 50px rgba(80,220,190,.22); }
+
+#flareGhost3 { width:72px; height:72px; margin-left:-36px; margin-top:-36px;
+
+    background:radial-gradient(circle,rgba(255,250,205,.76),rgba(255,190,85,.22) 48%,transparent 76%); }
+
+#flareGhost4 { width:210px; height:210px; margin-left:-105px; margin-top:-105px; border:3px solid rgba(255,150,95,.36);
+
+    background:radial-gradient(circle,rgba(255,145,90,.18),transparent 70%); }
+
+
+
+#heroText { position:absolute; inset:0; z-index:6; display:flex; justify-content:center; align-items:flex-start;
+
+    padding-top:14vh; color:#fff; text-align:center; pointer-events:none; opacity:0; transform:scale(.86);
+
+    transform-origin:50% 50%; will-change:opacity,transform; }
+
+#heroTextInner { width:min(900px,72vw); }
+
+.eyebrow { color:#be2925; font-size:clamp(14px,1.25vw,24px); font-weight:400; margin-bottom:1.6vh; }
+
+.hero-title,.hero-copy { text-shadow:0 2px 5px rgba(0,0,0,.28),0 5px 18px rgba(0,0,0,.20); }
+
+.hero-title { color:#fff; font-size:clamp(55px,7.2vw,138px); line-height:.82; font-weight:700; letter-spacing:-.055em; margin-bottom:2.3vh; }
+
+.hero-copy { width:min(680px,70vw); margin:0 auto; font-size:clamp(12px,1.05vw,19px); line-height:1.18; font-weight:400; }
+
+.hero-copy p { margin-bottom:1.1em; }
+
+#maskedTextCanvas { position:absolute; inset:0; width:100%; height:100%; z-index:6; opacity:0; pointer-events:none; }
+
+
+
+/* Story text */
+
+#storyLayer { position:absolute; inset:0; z-index:8; overflow:hidden; pointer-events:none; }
+
+.storyMessage { position:absolute; left:50%; top:59%; width:min(1500px,92vw); transform:translate(-50%,-50%);
+
+    text-align:center; color:#fff; pointer-events:none; }
+
+.storyLine { display:block; width:100%; opacity:0; text-align:center; will-change:opacity,transform,color;
+
+    text-shadow:0 2px 6px rgba(0,0,0,.26),0 6px 20px rgba(0,0,0,.18); }
+
+#storyMessage1 { width:min(1460px,92vw); }
+
+#storyMessage1 .storyHeadline { display:block; width:100%; font-size:clamp(26px,3.7vw,72px); line-height:1.02;
+
+    letter-spacing:-.045em; white-space:nowrap; }
+
+.storyRegular { font-weight:300; }
+
+.storyBold { font-weight:800; }
+
+#storyMessage1 .storySubtitle { margin-top:.68em; font-size:clamp(15px,1.35vw,25px); line-height:1.16; font-weight:300; letter-spacing:.01em; }
+
+#storyMessage2 { width:min(1380px,88vw); text-align:center; }
+
+#storyMessage2 .storyLine { font-size:clamp(19px,1.8vw,34px); line-height:1.12; font-weight:600; letter-spacing:-.02em; text-align:center; }
+
+#storyMessage2Line2 { margin-top:.20em; }
+
+
+
+/* Coastal Sand section */
+
+#moodSection { position:absolute; inset:0; z-index:auto; opacity:1; pointer-events:none; overflow:hidden; }
+
+/* White is the base of the transition. The video fades in ABOVE it. */
+#moodWhiteFade { position:absolute; inset:0; z-index:7; background:#fff; opacity:0; }
+
+#moodVideo { position:absolute; inset:0; z-index:9; width:100%; height:100%; object-fit:cover; opacity:0; }
+
+/* Footer readability gradient. It rises with all of the white footer elements. */
+#moodBottomGradient { position:absolute; left:0; right:0; bottom:0; z-index:10; height:38vh; opacity:0;
+    transform:translate3d(0,12vh,0); will-change:opacity,transform;
+    background:linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,.06) 18%, rgba(0,0,0,.18) 40%, rgba(0,0,0,.52) 76%, rgba(0,0,0,.85) 100%); }
+
+#moodContent { position:absolute; inset:0; z-index:11; pointer-events:none; }
+
+/* This group is always mathematically centered. Its transition changes opacity only,
+   so the left:50% / translateX(-50%) centering can never be overwritten. */
+#woodViewerCluster { position:absolute; left:50%; top:15vh; width:min(94vw,1500px); display:flex; align-items:center; justify-content:center; gap:30px;
+    transform:translateX(-50%); opacity:0; will-change:opacity; pointer-events:auto; }
+
+#woodViewerShell { position:relative; width:min(74vw,1260px); aspect-ratio:2.45/1; border-radius:32px; overflow:hidden;
+
+    background:rgba(255,255,255,.14); box-shadow:0 24px 65px rgba(0,0,0,.22), 0 8px 18px rgba(0,0,0,.12); backdrop-filter:blur(2px); }
+
+#woodViewerStrip { position:absolute; inset:0; background-image:url("01_coastal%20sand.jpg"); background-repeat:repeat-x; background-size:auto 100%; background-position:0 0; }
+
+#woodViewerStrip::after { content:""; position:absolute; inset:0; background:linear-gradient(to bottom, rgba(255,255,255,.08), rgba(255,255,255,.03) 32%, rgba(0,0,0,.06) 100%); }
+
+#woodDotButtons { position:absolute; left:50%; bottom:17px; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; gap:12px; z-index:2; line-height:0; }
+
+.woodDot { -webkit-appearance:none !important; appearance:none !important; box-sizing:border-box !important; flex:0 0 12px !important;
+    width:12px !important; height:12px !important; min-width:12px !important; min-height:12px !important; max-width:12px !important; max-height:12px !important;
+    aspect-ratio:1/1 !important; padding:0 !important; margin:0 !important; border:0 !important; border-radius:999px !important; line-height:0 !important;
+    cursor:pointer; background:rgba(255,255,255,.30) !important; box-shadow:0 0 0 1px rgba(255,255,255,.06); }
+
+.woodDot.is-active { background:rgba(255,255,255,1) !important; }
+
+.woodNavButton { -webkit-appearance:none !important; appearance:none !important; flex:0 0 68px; width:68px; height:68px; padding:0 !important; margin:0; border:0 !important; border-radius:50%; cursor:pointer; background:rgba(0,0,0,.28); backdrop-filter:blur(8px);
+    display:grid !important; place-items:center !important; line-height:0 !important; box-shadow:0 8px 22px rgba(0,0,0,.18); }
+
+.woodNavIcon { width:18px; height:26px; display:block; margin:0 !important; padding:0 !important; background-repeat:no-repeat; background-position:50% 50%; background-size:18px 26px; transform:none !important; }
+
+.woodNavIconPrev { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 26'%3E%3Cpath fill='white' d='M15.8 1.8c.7.7.7 1.8 0 2.5L7.1 13l8.7 8.7c.7.7.7 1.8 0 2.5s-1.8.7-2.5 0L3.3 14c-.5-.5-.7-1.1-.7-1.8s.3-1.3.7-1.8L13.3 1.8c.7-.7 1.8-.7 2.5 0z'/%3E%3C/svg%3E"); }
+
+.woodNavIconNext { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 26'%3E%3Cpath fill='white' d='M2.2 24.2c-.7-.7-.7-1.8 0-2.5l8.7-8.7-8.7-8.7c-.7-.7-.7-1.8 0-2.5s1.8-.7 2.5 0l10 10c.5.5.7 1.1.7 1.8s-.3 1.3-.7 1.8l-10 10c-.7.7-1.8.7-2.5 0z'/%3E%3C/svg%3E"); }
+
+#moodFooter { position:absolute; left:0; right:0; top:86.5vh; bottom:auto; height:13.5vh; padding:0 3.4vw;
+    opacity:0; transform:translate3d(0,12vh,0); will-change:opacity,transform; pointer-events:none; }
+
+/* Keep the Coastal Sand copy anchored to the left, exactly like the original layout. */
+#moodLabelBlock { position:absolute; left:3.4vw; top:0; min-width:0; padding:0; margin:0; color:#fff; text-align:left !important;
+    text-shadow:0 2px 7px rgba(0,0,0,.30), 0 7px 22px rgba(0,0,0,.22); }
+
+#moodSeriesName { font-size:clamp(27px,2.35vw,47px); font-weight:800; letter-spacing:-.03em; line-height:.96; text-align:left !important; transform:translateY(18px); }
+
+#moodSeriesSubhead { margin-top:9px; font-size:clamp(11px,.92vw,18px); font-weight:400; letter-spacing:.01em; line-height:1.12; white-space:nowrap; text-align:left !important; }
+
+/* Keep the product row independent on the right so it can never push the text inward. */
+#productThumbButtons { position:absolute; left:37vw; right:3.4vw; top:auto; bottom:0; min-width:0; display:flex; justify-content:flex-end; align-items:flex-end;
+    gap:clamp(9px,1vw,16px); pointer-events:auto; overflow:visible; }
+
+.productThumbButton { flex:0 0 auto; -webkit-appearance:none; appearance:none; border:none; background:none; cursor:pointer; padding:0; opacity:.98;
+    transform:translateZ(0) scale(1); transform-origin:50% 0%; transition:transform .48s cubic-bezier(.16,1,.3,1), opacity .35s ease, filter .48s cubic-bezier(.16,1,.3,1); will-change:transform; }
+
+/* Taller than before, but the row itself is raised so the full products are visible. */
+.productThumbButton img { display:block; height:clamp(82px,13vh,128px); width:auto; max-width:none; object-fit:contain; object-position:top center;
+    filter:drop-shadow(0 10px 16px rgba(0,0,0,.18)); pointer-events:none; }
+
+@media (hover:hover) and (pointer:fine) {
+  .productThumbButton:hover { transform:translate3d(0,-7px,0) scale(1.12); opacity:1; filter:brightness(1.06); }
+}
+.productThumbButton:focus-visible { outline:2px solid rgba(255,255,255,.95); outline-offset:7px; border-radius:8px; transform:translate3d(0,-5px,0) scale(1.10); }
+
+
+
+#scrollIndicator { position:absolute; left:50%; bottom:25px; transform:translateX(-50%); width:130px; height:130px;
+
+    z-index:20; opacity:0; pointer-events:none; }
+
+#loader { position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center;
+
+    background:#000; color:#fff; transition:opacity 800ms cubic-bezier(.16,1,.3,1),visibility 800ms linear; }
+
+#loader.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+
+#loaderText { font-size:12px; letter-spacing:.15em; text-transform:uppercase; }
+
+.loaderTrack { width:min(280px,60vw); height:2px; margin-top:14px; background:rgba(255,255,255,.2); overflow:hidden; }
+
+#loaderProgress { width:0%; height:100%; background:#fff; transition:width 120ms linear; }
+
+
+
+@media (max-width:800px) {
+
+    #heroText { padding-top:17vh; }
+
+    #heroTextInner { width:88vw; }
+
+    .hero-title { font-size:clamp(48px,13vw,88px); line-height:.88; }
+
+    .hero-copy { width:84vw; font-size:13px; line-height:1.3; }
+
+    .eyebrow { font-size:14px; }
+
+    #scrollIndicator { width:100px; height:100px; bottom:18px; }
+
+    #sunBloom { width:480px; height:480px; margin-left:-240px; margin-top:-240px; }
+
+    .storyMessage { top:52%; }
+
+    #storyMessage1 { width:90vw; }
+
+    #storyMessage1 .storyHeadline { font-size:clamp(30px,9vw,52px); line-height:.98; white-space:normal; text-wrap:balance; }
+
+    #storyMessage1 .storySubtitle { font-size:clamp(16px,4.4vw,23px); line-height:1.18; margin-top:.8em; }
+
+    #storyMessage2 { width:88vw; }
+
+    #storyMessage2 .storyLine { font-size:clamp(20px,5.2vw,30px); line-height:1.12; }
+
+    #woodViewerCluster { top:16vh; width:100%; gap:10px; padding:0 10px; }
+
+    .woodNavButton { width:50px; height:50px; }
+
+    #woodViewerShell { width:min(78vw,620px); border-radius:20px; }
+
+    #woodDotButtons { gap:8px; bottom:12px; }
+
+    .woodDot { flex-basis:9px !important; width:9px !important; height:9px !important; min-width:9px !important; min-height:9px !important; max-width:9px !important; max-height:9px !important; }
+
+    #moodFooter { padding:0 18px 18px; flex-direction:column; align-items:flex-start; gap:16px; }
+
+    #moodSeriesName { font-size:clamp(25px,7.2vw,40px); }
+
+    #moodSeriesSubhead { font-size:clamp(11px,3.2vw,15px); }
+
+    #productThumbButtons { width:100%; justify-content:flex-start; align-items:flex-end; gap:10px; flex-wrap:wrap; top:auto; bottom:0; }
+
+    .productThumbButton img { height:60px; }
+
+    #moodBottomGradient { height:48vh; }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="loader"><div id="loaderText">Loading Experience</div><div class="loaderTrack"><div id="loaderProgress"></div></div></div>
+
+<div id="experience">
+
+  <div id="stage">
+
+    <canvas id="sceneCanvas"></canvas>
+
+    <div id="panorama"><div id="flareLayer">
+
+      <div id="sunBloom"></div><div id="sunStreak"></div><div id="sunCore"></div>
+
+      <div class="flareGhost" id="flareGhost1"></div><div class="flareGhost" id="flareGhost2"></div>
+
+      <div class="flareGhost" id="flareGhost3"></div><div class="flareGhost" id="flareGhost4"></div>
+
+    </div></div>
+
+    <div id="heroText"><div id="heroTextInner">
+
+      <div class="eyebrow" id="eyebrow">LUX ARCHITECTURAL PRODUCTS</div>
+
+      <h1 class="hero-title" id="heroTitle">West Coast<br>Natural Series</h1>
+
+      <div class="hero-copy" id="heroCopy">
+
+        <p>LUX Architectural Products is proud to present our newest colour series,<br>the West Coast Natural Series.</p>
+
+        <p>The LUX West Coast Natural Series is a collection of beautiful and intricately<br>designed siding options that are perfect for homeowners, builders, and architects<br>looking to bring the natural beauty of the West Coast forests into their projects.</p>
+
+        <p>This series is inspired by the lush and varied landscapes of the<br>Pacific North West and designed to mimic the look of natural wood, but with<br>all the benefits of modern metal siding.</p>
+
+      </div>
+
+    </div></div>
+
+    <canvas id="maskedTextCanvas"></canvas>
+
+    <div id="storyLayer">
+
+      <div class="storyMessage" id="storyMessage1">
+
+        <span class="storyLine storyHeadline" id="storyMessage1Line1"><span class="storyRegular">100 SQUARE FEET OF </span><span class="storyBold">NON-REPEATING WOODGRAIN.</span></span>
+
+        <span class="storyLine storySubtitle" id="storyMessage1Line2">A more natural look, without visible repetition.</span>
+
+      </div>
+
+      <div class="storyMessage" id="storyMessage2">
+
+        <span class="storyLine" id="storyMessage2Line1">Inspired by the forests of the Pacific North West, this series provides the availability</span>
+
+        <span class="storyLine" id="storyMessage2Line2">of rich, warm woodgrain as a metal cladding solution in impressive realism</span>
+
+      </div>
+
+    </div>
+
+    <div id="moodSection" aria-label="Coastal Sand Section">
+
+      <video id="moodVideo" muted loop playsinline autoplay preload="auto">
+
+        <source src="Mood/coastal%20sand.mp4" type="video/mp4">
+
+      </video>
+
+      <div id="moodWhiteFade"></div>
+
+      <div id="moodBottomGradient"></div>
+
+      <div id="moodContent">
+
+        <div id="woodViewerCluster">
+
+          <button class="woodNavButton" id="woodPrevButton" type="button" aria-label="Previous woodgrain">
+
+            <span class="woodNavIcon woodNavIconPrev"></span>
+
+          </button>
+
+          <div id="woodViewerShell">
+
+            <div id="woodViewerStrip"></div>
+
+            <div id="woodDotButtons" aria-label="Woodgrain options">
+
+              <button class="woodDot is-active" type="button" aria-label="Woodgrain 1"></button>
+
+              <button class="woodDot" type="button" aria-label="Woodgrain 2"></button>
+
+              <button class="woodDot" type="button" aria-label="Woodgrain 3"></button>
+
+              <button class="woodDot" type="button" aria-label="Woodgrain 4"></button>
+
+              <button class="woodDot" type="button" aria-label="Woodgrain 5"></button>
+
+              <button class="woodDot" type="button" aria-label="Woodgrain 6"></button>
+
+              <button class="woodDot" type="button" aria-label="Woodgrain 7"></button>
+
+              <button class="woodDot" type="button" aria-label="Woodgrain 8"></button>
+
+              <button class="woodDot" type="button" aria-label="Woodgrain 9"></button>
+
+            </div>
+
+          </div>
+
+          <button class="woodNavButton" id="woodNextButton" type="button" aria-label="Next woodgrain">
+
+            <span class="woodNavIcon woodNavIconNext"></span>
+
+          </button>
+
+        </div>
+
+        <div id="moodFooter">
+
+          <div id="moodLabelBlock">
+
+            <div id="moodSeriesName">COASTAL SAND</div>
+
+            <div id="moodSeriesSubhead">AVAILABLE IN THE FOLLOWING PRODUCTS</div>
+
+          </div>
+
+          <div id="productThumbButtons" aria-label="Available products"></div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <div id="scrollIndicator"></div>
+
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.1/three.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+
+<script>
+
+(() => {
+
+'use strict';
+
+
+
+/* Assets */
+
+const PANORAMA_IMAGE='360.jpg', SCROLL_FOLDER='Scroll_01', MASK_FOLDER='Mask_01', SCROLL_FRAME_COUNT=109;
+
+const SCROLL_LENGTH_VH=350, SCROLL_SENSITIVITY=1.35, SCROLL_EASE=.10, STORY_SCROLL_EASE=.085;
+
+const SCROLL_SETTLE_THRESHOLD=.01, STORY_SETTLE_THRESHOLD=.00005, PANORAMA_FADE_END_FRAME=24;
+
+
+
+/* Retain the dramatic parallax values requested. */
+
+const CAMERA_SCROLL_DROP=40.2;
+
+const CAMERA_TARGET_RISE=40.0;
+
+
+
+const SUN_IMAGE_WIDTH=2048, SUN_IMAGE_HEIGHT=1022, SUN_IMAGE_X=1887, SUN_IMAGE_Y=394;
+
+const SUN_U=SUN_IMAGE_X/SUN_IMAGE_WIDTH, SUN_V=SUN_IMAGE_Y/SUN_IMAGE_HEIGHT;
+
+const PANORAMA_INTRO_FADE_DURATION=2200, AUTO_ROTATE_SPEED=.025, MOUSE_YAW_SPEED=.16, MOUSE_PITCH_SPEED=.05;
+
+const PANORAMA_FOV=58;
+
+const MOOD_VIDEO_PATH='Mood/coastal sand.mp4', WOODGRAIN_STRIP_IMAGE='01_coastal sand.jpg';
+
+/* Final transition timing on the existing 0..1 story-scroll timeline.
+   The working scroll engine below is intentionally left unchanged. */
+const MOOD_WHITE_START=.905;
+const MOOD_SLOWDOWN=5; // stretch only the final Coastal Sand phase; everything before .905 keeps its existing scroll speed
+const MOOD_WHITE_END=.958;
+const MOOD_VIDEO_START=.948;
+const MOOD_VIDEO_END=.992;
+const MOOD_FOOTER_START=(MOOD_VIDEO_START+MOOD_VIDEO_END)/2;
+const MOOD_FOOTER_END=.995;
+const MOOD_VIEWER_START=.980;
+const MOOD_VIEWER_END=1.0;
+const LOTTIE_FADE_START=MOOD_VIDEO_START;
+const LOTTIE_FADE_END=MOOD_VIDEO_END;
+
+const PRODUCT_THUMBS=[
+
+  {label:'LUX LAP', file:'01_LUX LAP.png'},
+
+  {label:'SOFFIT', file:'02_SOFFIT.png'},
+
+  {label:'RANDOM PLANK', file:'03_RANDOM PLANK.png'},
+
+  {label:'CHANNEL SIDING', file:'04_CHANNEL SIDING.png'},
+
+  {label:'FOLDED WALL', file:'04_FOLDED WALL.png'},
+
+  {label:'VARIABLE WALL', file:'05_VARIABLE WALL.png'},
+
+  {label:'NEO LUMBER', file:'06_NEO LUMBER.png'},
+
+  {label:'BOARD + BATTEN', file:'07_BOARD + BATTEN.png'}
+
+];
+
+const CAMERA_VELOCITY_SMOOTHING=1.6, MAX_PITCH=THREE.MathUtils.degToRad(24);
+
+const DRAG_SENSITIVITY=.0032, DRAG_FRICTION=2.35, MAX_DRAG_VELOCITY=1.25;
+
+const FOG_DENSITY=.14, FOG_MOUSE_STRENGTH=1, FOG_DRAG_STRENGTH=1.35, FOG_INTERACTION_DECAY=2;
+
+
+
+const $=id=>document.getElementById(id);
+
+const experience=$('experience'), stage=$('stage'), panoramaElement=$('panorama'), heroText=$('heroText');
+
+const eyebrowElement=$('eyebrow'), titleElement=$('heroTitle'), copyElement=$('heroCopy');
+
+const sceneCanvas=$('sceneCanvas'), sceneCtx=sceneCanvas.getContext('2d',{alpha:false});
+
+const maskedTextCanvas=$('maskedTextCanvas'), maskedTextCtx=maskedTextCanvas.getContext('2d');
+
+const scrollIndicator=$('scrollIndicator'), loader=$('loader'), loaderProgress=$('loaderProgress');
+
+const storyMessage1Line1=$('storyMessage1Line1'), storyMessage1Line2=$('storyMessage1Line2');
+
+const storyMessage2Line1=$('storyMessage2Line1'), storyMessage2Line2=$('storyMessage2Line2');
+
+const moodSection=$('moodSection'), moodVideo=$('moodVideo'), moodWhiteFade=$('moodWhiteFade'), moodBottomGradient=$('moodBottomGradient');
+
+const woodViewerCluster=$('woodViewerCluster'), moodFooter=$('moodFooter'), woodViewerStrip=$('woodViewerStrip');
+
+const moodLabelBlock=$('moodLabelBlock'), productThumbButtons=$('productThumbButtons');
+
+const woodPrevButton=$('woodPrevButton'), woodNextButton=$('woodNextButton');
+
+const sunBloom=$('sunBloom'), sunCore=$('sunCore'), sunStreak=$('sunStreak');
+
+const flareGhost1=$('flareGhost1'), flareGhost2=$('flareGhost2'), flareGhost3=$('flareGhost3'), flareGhost4=$('flareGhost4');
+
+const textSnapshotCanvas=document.createElement('canvas'), textSnapshotCtx=textSnapshotCanvas.getContext('2d');
+
+const maskWorkCanvas=document.createElement('canvas'), maskWorkCtx=maskWorkCanvas.getContext('2d',{willReadFrequently:true});
+
+
+
+let renderer, panoramaScene, camera, fogMaterial, panoramaLoaded=false;
+
+let yaw=0, pitch=THREE.MathUtils.degToRad(-2), yawVelocity=AUTO_ROTATE_SPEED, pitchVelocity=0;
+
+let inertialYawVelocity=0, inertialPitchVelocity=0, mouseX=0, mouseY=0, smoothMouseX=0, smoothMouseY=0;
+
+let isDragging=false, dragPointerId=null, previousDragX=0, previousDragY=0, previousDragTime=0;
+
+let latestDragYawVelocity=0, latestDragPitchVelocity=0;
+
+let fogInteractionStrength=0, fogTargetInteractionStrength=0, lastPointerX=0, lastPointerY=0, lastPointerTime=performance.now();
+
+const fogInteractionUV=new THREE.Vector2(.5,.5), fogInteractionVelocity=new THREE.Vector2(0,0);
+
+const sunDirection=new THREE.Vector3();
+
+let panoramaIntroReveal=0, panoramaIntroStartTime=null, previousAnimationTime=performance.now();
+
+const scrollFrames=[],maskFrames=[];
+
+let scrollingReady=false,currentScrollFrame=-1,targetScrollFrame=0,smoothScrollFrame=0;
+
+let targetStoryProgress=0,smoothStoryProgress=0,scrollAnimationRunning=false,usingCanvasText=false;
+
+let viewportWidth=window.innerWidth,viewportHeight=window.innerHeight,sceneScale=1,textScale=1;
+
+let textBounds={left:0,top:0,width:0,height:0};
+
+let woodLoopOffset=0;
+
+let woodLoopImage=null;
+
+let woodLoopImageWidth=1600;
+let scrollIndicatorIntroAnimation=null;
+let scrollIndicatorFadeOverride=false;
+
+
+
+const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+
+function smootherstep01(v){const x=clamp(v,0,1);return x*x*x*(x*(x*6-15)+10);}
+
+function easeOutExpo(v){const x=clamp(v,0,1);return x<=0?0:x>=1?1:1-Math.pow(2,-10*x);}
+
+function easeInExpo(v){const x=clamp(v,0,1);return x<=0?0:x>=1?1:Math.pow(2,10*(x-1));}
+
+const rangeProgress=(v,a,b)=>clamp((v-a)/(b-a),0,1);
+
+const padFrame=n=>String(n).padStart(3,'0');
+
+const scrollImagePath=f=>`${SCROLL_FOLDER}/Scroll${padFrame(f)}.jpg`;
+
+const maskImagePath=f=>`${MASK_FOLDER}/Mask${padFrame(f)}.jpg`;
+
+
+
+/* Keep the main headline on one line where practical; measure the actual
+
+   rendered width instead of allowing white-space:nowrap to clip it. */
+
+function fitStoryHeadline(){
+
+  const headline=storyMessage1Line1;
+
+  headline.style.fontSize='';
+
+  if(viewportWidth<=800) return; // mobile is allowed to wrap neatly
+
+  let size=parseFloat(getComputedStyle(headline).fontSize);
+
+  while(headline.scrollWidth>headline.clientWidth+1 && size>22){
+
+    size-=.75;
+
+    headline.style.fontSize=`${size}px`;
+
+  }
+
+}
+
+
+
+function updateMoodSectionMotion(){
+  const p=smoothStoryProgress;
+
+  /* 1) Slowly wash the existing scene to white while the last text leaves. */
+  const whiteReveal=smootherstep01(rangeProgress(p,MOOD_WHITE_START,MOOD_WHITE_END));
+
+  /* 2) Fade Coastal Sand in over the white background. */
+  const videoOpacity=smootherstep01(rangeProgress(p,MOOD_VIDEO_START,MOOD_VIDEO_END));
+
+  /* 3) At roughly half video opacity, all footer elements and the gradient rise together. */
+  const footerRaw=rangeProgress(p,MOOD_FOOTER_START,MOOD_FOOTER_END);
+  const footerPosition=easeOutExpo(footerRaw);
+  const footerOpacity=smootherstep01(footerRaw);
+  const footerY=(1-footerPosition)*viewportHeight*.12;
+
+  /* 4) The remaining viewer controls simply fade in, already centered. */
+  const viewerOpacity=smootherstep01(rangeProgress(p,MOOD_VIEWER_START,MOOD_VIEWER_END));
+
+  moodSection.style.opacity='1';
+  moodSection.style.pointerEvents=(videoOpacity>.02||footerOpacity>.02||viewerOpacity>.02)?'auto':'none';
+
+  moodWhiteFade.style.opacity=String(whiteReveal);
+  moodVideo.style.opacity=String(videoOpacity);
+
+  /* Keep the final copy exactly where it settled and transition it to black as white takes over. */
+  const storyTone=Math.round(255*(1-whiteReveal));
+  const storyColor=`rgb(${storyTone},${storyTone},${storyTone})`;
+  storyMessage2Line1.style.color=storyColor;
+  storyMessage2Line2.style.color=storyColor;
+  const shadowAlpha=.26*(1-whiteReveal)+.10*whiteReveal;
+  storyMessage2Line1.style.textShadow=`0 2px 6px rgba(0,0,0,${shadowAlpha}),0 6px 20px rgba(0,0,0,${shadowAlpha*.65})`;
+  storyMessage2Line2.style.textShadow=storyMessage2Line1.style.textShadow;
+
+  moodBottomGradient.style.opacity=String(footerOpacity);
+  moodBottomGradient.style.transform=`translate3d(0,${footerY}px,0)`;
+
+  moodFooter.style.opacity=String(footerOpacity);
+  moodFooter.style.transform=`translate3d(0,${footerY}px,0)`;
+
+  /* Keep the cluster centered; never overwrite translateX(-50%). */
+  woodViewerCluster.style.transform='translateX(-50%)';
+  woodViewerCluster.style.opacity=String(viewerOpacity);
+
+  /* Fade the scroll Lottie out with the slow white transition. */
+  if(p>=LOTTIE_FADE_START && !scrollIndicatorFadeOverride){
+    scrollIndicatorFadeOverride=true;
+    if(scrollIndicatorIntroAnimation){
+      try{scrollIndicatorIntroAnimation.cancel();}catch(e){}
+    }
+  }
+
+  if(scrollIndicatorFadeOverride){
+    const lottieOut=smootherstep01(rangeProgress(p,LOTTIE_FADE_START,LOTTIE_FADE_END));
+    scrollIndicator.style.opacity=String(1-lottieOut);
+  }
+}
+
+function initMoodSection(){
+
+  woodViewerStrip.style.backgroundImage=`url("${encodeURI(WOODGRAIN_STRIP_IMAGE)}")`;
+
+  if(moodVideo){moodVideo.muted=true; moodVideo.loop=true; const playPromise=moodVideo.play(); if(playPromise&&playPromise.catch) playPromise.catch(()=>{});}
+
+  productThumbButtons.innerHTML='';
+
+  PRODUCT_THUMBS.forEach(({label,file},index)=>{
+
+    const button=document.createElement('button');
+
+    button.type='button';
+
+    button.className='productThumbButton';
+
+    button.setAttribute('aria-label',label);
+
+    button.dataset.index=String(index);
+
+    const img=document.createElement('img');
+
+    img.alt=label;
+
+    img.src=encodeURI(`Thumb/${file}`);
+
+    button.appendChild(img);
+
+    productThumbButtons.appendChild(button);
+
+  });
+
+  const loopLoader=new Image();
+
+  loopLoader.onload=()=>{woodLoopImage=loopLoader; woodLoopImageWidth=Math.max(1, loopLoader.naturalWidth||loopLoader.width||1600);};
+
+  loopLoader.src=encodeURI(WOODGRAIN_STRIP_IMAGE);
+
+}
+
+
+
+function updateWoodStripLoop(dt){
+
+  woodLoopOffset=(woodLoopOffset+dt*34)%woodLoopImageWidth;
+
+  woodViewerStrip.style.backgroundPosition=`${woodLoopOffset}px 0px`;
+
+}
+
+
+
+function setStoryLineMotion(element,progress,enterStart,enterEnd,exitStart,exitEnd){
+
+  const enterRaw=rangeProgress(progress,enterStart,enterEnd);
+
+  let translateY=(1-easeOutExpo(enterRaw))*viewportHeight*.48;
+
+  let opacity=smootherstep01(enterRaw);
+
+  if(exitStart!==null && exitEnd!==null){
+
+    const exitRaw=rangeProgress(progress,exitStart,exitEnd);
+
+    translateY-=easeInExpo(exitRaw)*viewportHeight*.42;
+
+    opacity*=1-smootherstep01(exitRaw);
+
+  }
+
+  element.style.transform=`translate3d(0,${translateY}px,0)`;
+
+  element.style.opacity=String(clamp(opacity,0,1));
+
+}
+
+function updateStoryTextMotion(){
+
+  const p=smoothStoryProgress;
+
+  setStoryLineMotion(storyMessage1Line1,p,.290,.405,.755,.835);
+
+  setStoryLineMotion(storyMessage1Line2,p,.325,.445,.775,.855);
+
+  /* Final copy remains in place. It changes from white to black during the white wash, then the MP4 fades over it. */
+  setStoryLineMotion(storyMessage2Line1,p,.825,.915,null,null);
+
+  setStoryLineMotion(storyMessage2Line2,p,.850,.940,null,null);
+
+}
+
+
+function loadImage(src){
+
+  return new Promise((resolve,reject)=>{
+
+    const image=new Image();
+
+    image.onload=async()=>{try{if(image.decode)await image.decode();}catch(e){}resolve(image);};
+
+    image.onerror=()=>reject(new Error(`Failed to load ${src}`));
+
+    image.src=src;
+
+  });
+
+}
+
+function getCoverRect(image,targetWidth,targetHeight){
+
+  const iw=image.naturalWidth||image.width,ih=image.naturalHeight||image.height;
+
+  const scale=Math.max(targetWidth/iw,targetHeight/ih),width=iw*scale,height=ih*scale;
+
+  return {x:(targetWidth-width)/2,y:(targetHeight-height)/2,width,height};
+
+}
+
+function drawCover(context,image,canvas){
+
+  const r=getCoverRect(image,canvas.width,canvas.height);
+
+  context.drawImage(image,r.x,r.y,r.width,r.height);
+
+}
+
+
+
+/* This is the tested, correctly oriented sun mapping. */
+
+function uvToSphereDirection(u,v){
+
+  const phi=u*Math.PI*2, theta=v*Math.PI,s=Math.sin(theta);
+
+  return new THREE.Vector3(-Math.cos(phi)*s,Math.cos(theta),Math.sin(phi)*s).normalize();
+
+}
+
+sunDirection.copy(uvToSphereDirection(SUN_U,SUN_V));
+
+
+
+const fogVertexShader=`
+
+varying vec2 vUv;
+
+void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
+
+const fogFragmentShader=`
+
+precision mediump float;
+
+varying vec2 vUv;
+
+uniform float uTime,uDensity,uInteractionStrength;
+
+uniform vec2 uInteractionUV,uInteractionVelocity;
+
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
+
+float noise(vec2 p){
+
+ vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+
+ float a=hash(i),b=hash(i+vec2(1.0,0.0)),c=hash(i+vec2(0.0,1.0)),d=hash(i+vec2(1.0,1.0));
+
+ return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
+
+}
+
+float fbm(vec2 p){float value=0.0,amplitude=0.5;for(int i=0;i<4;i++){
+
+ value+=amplitude*noise(p);p=p*2.03+vec2(7.7,3.1);amplitude*=0.5;}return value;}
+
+void main(){
+
+ vec2 uv=vUv,delta=uv-uInteractionUV;
+
+ if(delta.x>0.5)delta.x-=1.0;if(delta.x< -0.5)delta.x+=1.0;
+
+ vec2 compactDelta=delta*vec2(2.6,1.9);
+
+ float interaction=exp(-dot(compactDelta,compactDelta)*110.0)*uInteractionStrength;
+
+ vec2 velocity=uInteractionVelocity;float velocityLength=length(velocity);
+
+ vec2 velocityDirection=velocityLength>0.001?velocity/velocityLength:vec2(1.0,0.0);
+
+ float angle=interaction*1.15,s=sin(angle),c=cos(angle);
+
+ vec2 curled=mat2(c,-s,s,c)*delta;
+
+ vec2 wakeOffset=-velocityDirection*interaction*velocityLength*0.022;
+
+ vec2 fogUV=uv+(curled-delta)*0.70+wakeOffset;fogUV.x=fract(fogUV.x);
+
+ vec2 drift=vec2(uTime*0.009,uTime*0.0035);
+
+ float largeNoise=fbm(fogUV*vec2(5.0,3.0)+drift);
+
+ float detailNoise=fbm(fogUV*vec2(11.0,6.0)-drift*1.7);
+
+ float fog=largeNoise*0.72+detailNoise*0.28;
+
+ float horizonBand=smoothstep(0.18,0.39,vUv.y)*(1.0-smoothstep(0.77,0.98,vUv.y));
+
+ fog=smoothstep(0.42,0.78,fog);
+
+ float clearing=exp(-dot(compactDelta,compactDelta)*185.0)*uInteractionStrength;
+
+ fog*=1.0-clearing*0.36;
+
+ float rim=interaction*(1.0-exp(-dot(compactDelta,compactDelta)*250.0));fog+=rim*0.11;
+
+ float alpha=fog*horizonBand*uDensity;
+
+ vec3 fogColor=mix(vec3(0.88,0.93,0.95),vec3(1.0,0.93,0.82),smoothstep(0.65,1.0,vUv.x));
+
+ gl_FragColor=vec4(fogColor,alpha);
+
+}`;
+
+
+
+function initPanorama(){
+
+  panoramaScene=new THREE.Scene();
+
+  camera=new THREE.PerspectiveCamera(PANORAMA_FOV,viewportWidth/viewportHeight,.1,200);
+
+  camera.position.set(0,0,0);
+
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+
+  renderer.setSize(viewportWidth,viewportHeight,false);
+
+  panoramaElement.insertBefore(renderer.domElement,panoramaElement.firstChild);
+
+  return new Promise((resolve,reject)=>{
+
+    new THREE.TextureLoader().load(PANORAMA_IMAGE,texture=>{
+
+      texture.colorSpace=THREE.SRGBColorSpace;
+
+      texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+
+      panoramaScene.add(new THREE.Mesh(new THREE.SphereGeometry(100,64,40),new THREE.MeshBasicMaterial({map:texture,side:THREE.BackSide})));
+
+      fogMaterial=new THREE.ShaderMaterial({
+
+        vertexShader:fogVertexShader,fragmentShader:fogFragmentShader,
+
+        uniforms:{uTime:{value:0},uDensity:{value:FOG_DENSITY},uInteractionUV:{value:fogInteractionUV},
+
+          uInteractionVelocity:{value:fogInteractionVelocity},uInteractionStrength:{value:0}},
+
+        side:THREE.BackSide,transparent:true,depthWrite:false,depthTest:false
+
+      });
+
+      panoramaScene.add(new THREE.Mesh(new THREE.SphereGeometry(99.2,48,32),fogMaterial));
+
+      panoramaLoaded=true;resolve();
+
+    },null,reject);
+
+  });
+
+}
+
+function getCameraScrollProgress(){return smootherstep01(smoothScrollFrame/PANORAMA_FADE_END_FRAME);}
+
+function renderPanorama(){
+
+  const e=getCameraScrollProgress();
+
+  camera.position.set(0,-CAMERA_SCROLL_DROP*e,0);
+
+  const cp=Math.cos(pitch),direction=new THREE.Vector3(Math.sin(yaw)*cp,Math.sin(pitch),-Math.cos(yaw)*cp);
+
+  const lookTarget=camera.position.clone().add(direction.multiplyScalar(100));
+
+  lookTarget.y+=CAMERA_TARGET_RISE*e;
+
+  camera.lookAt(lookTarget);
+
+  renderer.render(panoramaScene,camera);
+
+}
+
+function screenPointToPanoramaUV(clientX,clientY){
+
+  if(!camera)return null;
+
+  const bounds=stage.getBoundingClientRect();
+
+  const ndc=new THREE.Vector2(((clientX-bounds.left)/viewportWidth)*2-1,-(((clientY-bounds.top)/viewportHeight)*2-1));
+
+  const dir=new THREE.Vector3(ndc.x,ndc.y,.5).unproject(camera).sub(camera.position).normalize();
+
+  const origin=camera.position.clone(),b=origin.dot(dir),c=origin.dot(origin)-10000,disc=b*b-c;
+
+  if(disc<0)return null;
+
+  const hit=origin.add(dir.multiplyScalar(-b+Math.sqrt(disc))).normalize();
+
+  const theta=Math.acos(clamp(hit.y,-1,1));let phi=Math.atan2(hit.z,-hit.x);
+
+  if(phi<0)phi+=Math.PI*2;
+
+  return {u:phi/(Math.PI*2),v:theta/Math.PI};
+
+}
+
+function updateFogInteractionFromPointer(event,strengthMultiplier){
+
+  const uv=screenPointToPanoramaUV(event.clientX,event.clientY);
+
+  if(uv)fogInteractionUV.set(uv.u,uv.v);
+
+  const now=performance.now(),dt=Math.max(8,now-lastPointerTime);
+
+  const dx=event.clientX-lastPointerX,dy=event.clientY-lastPointerY;
+
+  const pixelSpeed=Math.hypot(dx,dy)/dt,strength=clamp(pixelSpeed*2.6,0,1);
+
+  fogInteractionVelocity.set(clamp(dx*.018,-1,1),clamp(-dy*.018,-1,1));
+
+  fogTargetInteractionStrength=Math.max(fogTargetInteractionStrength,strength*strengthMultiplier);
+
+  lastPointerX=event.clientX;lastPointerY=event.clientY;lastPointerTime=now;
+
+}
+
+function updatePanoramaMotion(dt,elapsed){
+
+  if(!panoramaLoaded)return;
+
+  fogMaterial.uniforms.uTime.value=elapsed;
+
+  const ease=1-Math.exp(-dt*7);
+
+  fogInteractionStrength+=(fogTargetInteractionStrength-fogInteractionStrength)*ease;
+
+  fogTargetInteractionStrength*=Math.exp(-FOG_INTERACTION_DECAY*dt);
+
+  fogInteractionVelocity.multiplyScalar(Math.exp(-3.2*dt));
+
+  fogMaterial.uniforms.uInteractionStrength.value=fogInteractionStrength;
+
+  if(isDragging){renderPanorama();return;}
+
+  const me=1-Math.exp(-dt*2.25);
+
+  smoothMouseX+=(mouseX-smoothMouseX)*me;smoothMouseY+=(mouseY-smoothMouseY)*me;
+
+  const requestedYaw=AUTO_ROTATE_SPEED+smoothMouseX*MOUSE_YAW_SPEED,requestedPitch=smoothMouseY*MOUSE_PITCH_SPEED;
+
+  const ve=1-Math.exp(-dt*CAMERA_VELOCITY_SMOOTHING);
+
+  yawVelocity+=(requestedYaw-yawVelocity)*ve;pitchVelocity+=(requestedPitch-pitchVelocity)*ve;
+
+  const dragDecay=Math.exp(-DRAG_FRICTION*dt);
+
+  inertialYawVelocity*=dragDecay;inertialPitchVelocity*=dragDecay;
+
+  yaw+=(yawVelocity+inertialYawVelocity)*dt;
+
+  pitch=clamp(pitch+(pitchVelocity+inertialPitchVelocity)*dt,-MAX_PITCH,MAX_PITCH);
+
+  renderPanorama();
+
+}
+
+
+
+function setGhostPosition(el,sunX,sunY,cx,cy,factor,opacity,scale){
+
+  el.style.left=`${sunX+(cx-sunX)*factor}px`;el.style.top=`${sunY+(cy-sunY)*factor}px`;
+
+  el.style.opacity=String(opacity);el.style.transform=`scale(${scale})`;
+
+}
+
+function hideLensFlare(){[sunBloom,sunCore,sunStreak,flareGhost1,flareGhost2,flareGhost3,flareGhost4].forEach(el=>el.style.opacity='0');}
+
+function updateLensFlare(){
+
+  if(!camera||!panoramaLoaded)return;
+
+  const sunWorldPoint=sunDirection.clone().multiplyScalar(100);
+
+  if(sunWorldPoint.clone().applyMatrix4(camera.matrixWorldInverse).z>=-.01){hideLensFlare();return;}
+
+  const projected=sunWorldPoint.clone().project(camera);
+
+  if(Math.abs(projected.x)>1.55||Math.abs(projected.y)>1.55){hideLensFlare();return;}
+
+  const sunX=(projected.x*.5+.5)*viewportWidth,sunY=(-projected.y*.5+.5)*viewportHeight;
+
+  const centerX=viewportWidth/2,centerY=viewportHeight/2;
+
+  const radial=Math.hypot(projected.x,projected.y);
+
+  const intensity=clamp(1-smootherstep01(clamp((radial-.96)/.50,0,1)),0,1);
+
+  sunBloom.style.left=sunCore.style.left=sunStreak.style.left=`${sunX}px`;
+
+  sunBloom.style.top=sunCore.style.top=sunStreak.style.top=`${sunY}px`;
+
+  sunBloom.style.opacity=sunCore.style.opacity=String(intensity);
+
+  sunBloom.style.transform=`scale(${1+intensity*.32})`;
+
+  sunStreak.style.opacity=String(intensity*.98);
+
+  setGhostPosition(flareGhost1,sunX,sunY,centerX,centerY,.32,intensity,1);
+
+  setGhostPosition(flareGhost2,sunX,sunY,centerX,centerY,.70,intensity*.92,1);
+
+  setGhostPosition(flareGhost3,sunX,sunY,centerX,centerY,1.15,intensity,1.18);
+
+  setGhostPosition(flareGhost4,sunX,sunY,centerX,centerY,1.55,intensity*.72,1);
+
+}
+
+
+
+/* Click-and-drag plus mouse follow. */
+
+window.addEventListener('pointermove',event=>{
+
+  if(panoramaLoaded&&smoothScrollFrame<PANORAMA_FADE_END_FRAME)
+
+    updateFogInteractionFromPointer(event,isDragging?FOG_DRAG_STRENGTH:FOG_MOUSE_STRENGTH);
+
+  if(isDragging||event.pointerType==='touch')return;
+
+  const bounds=stage.getBoundingClientRect();
+
+  mouseX=((event.clientX-bounds.left)/viewportWidth)*2-1;
+
+  mouseY=-(((event.clientY-bounds.top)/viewportHeight)*2-1);
+
+},{passive:true});
+
+document.addEventListener('mouseleave',()=>{if(!isDragging){mouseX=0;mouseY=0;}});
+
+panoramaElement.addEventListener('pointerdown',event=>{
+
+  if(smoothScrollFrame>=PANORAMA_FADE_END_FRAME)return;
+
+  if(event.pointerType==='mouse'&&event.button!==0)return;
+
+  isDragging=true;dragPointerId=event.pointerId;panoramaElement.classList.add('dragging');
+
+  try{panoramaElement.setPointerCapture(event.pointerId);}catch(e){}
+
+  previousDragX=event.clientX;previousDragY=event.clientY;previousDragTime=performance.now();
+
+  latestDragYawVelocity=latestDragPitchVelocity=inertialYawVelocity=inertialPitchVelocity=0;
+
+});
+
+panoramaElement.addEventListener('pointermove',event=>{
+
+  if(!isDragging||event.pointerId!==dragPointerId)return;
+
+  const now=performance.now(),dt=Math.max(.008,(now-previousDragTime)/1000);
+
+  const dx=event.clientX-previousDragX,dy=event.clientY-previousDragY;
+
+  const yd=-dx*DRAG_SENSITIVITY,pd=dy*DRAG_SENSITIVITY;
+
+  yaw+=yd;pitch=clamp(pitch+pd,-MAX_PITCH,MAX_PITCH);
+
+  latestDragYawVelocity=clamp(latestDragYawVelocity+(yd/dt-latestDragYawVelocity)*.35,-MAX_DRAG_VELOCITY,MAX_DRAG_VELOCITY);
+
+  latestDragPitchVelocity=clamp(latestDragPitchVelocity+(pd/dt-latestDragPitchVelocity)*.35,-MAX_DRAG_VELOCITY,MAX_DRAG_VELOCITY);
+
+  previousDragX=event.clientX;previousDragY=event.clientY;previousDragTime=now;
+
+  updateFogInteractionFromPointer(event,FOG_DRAG_STRENGTH);
+
+  renderPanorama();
+
+});
+
+function finishDrag(event){
+
+  if(!isDragging||(event&&dragPointerId!==null&&event.pointerId!==dragPointerId))return;
+
+  isDragging=false;panoramaElement.classList.remove('dragging');
+
+  if(!event||event.type==='pointerup'){
+
+    inertialYawVelocity=latestDragYawVelocity;inertialPitchVelocity=latestDragPitchVelocity;
+
+  }
+
+  dragPointerId=null;mouseX=mouseY=0;
+
+}
+
+['pointerup','pointercancel','lostpointercapture'].forEach(type=>panoramaElement.addEventListener(type,finishDrag));
+
+
+
+function animateHeroText(){
+
+  heroText.animate([
+
+    {opacity:0,transform:'scale(.86)',offset:0},{opacity:.04,transform:'scale(.865)',offset:.08},
+
+    {opacity:.18,transform:'scale(.88)',offset:.22},{opacity:.48,transform:'scale(.915)',offset:.42},
+
+    {opacity:.76,transform:'scale(.955)',offset:.62},{opacity:.92,transform:'scale(.982)',offset:.79},
+
+    {opacity:.985,transform:'scale(.996)',offset:.94},{opacity:1,transform:'scale(1)',offset:1}
+
+  ],{duration:6000,delay:700,easing:'cubic-bezier(.05,.78,.05,1)',fill:'forwards'});
+
+}
+
+function initializeLottie(){
+
+  if(typeof lottie==='undefined')return;
+
+  lottie.loadAnimation({container:scrollIndicator,renderer:'svg',loop:true,autoplay:true,path:'Scroll.json'});
+
+  scrollIndicatorIntroAnimation=scrollIndicator.animate(
+    [{opacity:0},{opacity:1}],
+    {duration:1800,delay:2600,easing:'cubic-bezier(.16,1,.3,1)',fill:'forwards'}
+  );
+
+}
+
+async function loadScrollAssets(){
+
+  let loaded=0;const total=SCROLL_FRAME_COUNT*2;
+
+  const track=()=>{loaded++;loaderProgress.style.width=`${40+loaded/total*60}%`;};
+
+  const promises=[];
+
+  for(let frame=0;frame<SCROLL_FRAME_COUNT;frame++){
+
+    promises.push(Promise.all([
+
+      loadImage(scrollImagePath(frame)).then(image=>{track();return image;}),
+
+      loadImage(maskImagePath(frame)).then(image=>{track();return image;})
+
+    ]).then(([image,mask])=>{scrollFrames[frame]=image;maskFrames[frame]=mask;}));
+
+  }
+
+  await Promise.all(promises);
+
+  scrollingReady=true;
+  const extraMoodVH=SCROLL_LENGTH_VH*(1-MOOD_WHITE_START)*(MOOD_SLOWDOWN-1);
+  experience.style.height=`${SCROLL_LENGTH_VH+extraMoodVH+100}vh`;
+
+}
+
+
+
+/* Original text is rendered and masked together with the color frame. */
+
+function getElementLines(element){
+
+  const lines=[];let current='';
+
+  function walk(node){
+
+    if(node.nodeType===Node.TEXT_NODE){current+=node.textContent;return;}
+
+    if(node.nodeName==='BR'){lines.push(current.trim());current='';return;}
+
+    node.childNodes.forEach(walk);
+
+  }
+
+  element.childNodes.forEach(walk);if(current.trim())lines.push(current.trim());return lines;
+
+}
+
+function getLineHeight(style){const v=parseFloat(style.lineHeight);return Number.isFinite(v)?v:parseFloat(style.fontSize)*1.2;}
+
+function setCanvasFont(ctx,style){
+
+  ctx.font=`${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+
+  ctx.textAlign='center';ctx.textBaseline='top';ctx.fillStyle=style.color;
+
+  if('letterSpacing'in ctx)ctx.letterSpacing=style.letterSpacing==='normal'?'0px':style.letterSpacing;
+
+}
+
+function drawDOMTextElement(element){
+
+  const style=getComputedStyle(element),rect=element.getBoundingClientRect();
+
+  const lines=getElementLines(element),lineHeight=getLineHeight(style),textHeight=lines.length*lineHeight;
+
+  const x=rect.left+rect.width/2;let y=rect.top+(rect.height-textHeight)/2;
+
+  setCanvasFont(textSnapshotCtx,style);
+
+  const hasShadow=element.classList.contains('hero-title')||element.closest('.hero-copy');
+
+  if(hasShadow){
+
+    textSnapshotCtx.save();setCanvasFont(textSnapshotCtx,style);
+
+    textSnapshotCtx.shadowColor='rgba(0,0,0,.20)';textSnapshotCtx.shadowBlur=18;textSnapshotCtx.shadowOffsetY=5;
+
+    let sy=y;lines.forEach(line=>{textSnapshotCtx.fillText(line,x,sy);sy+=lineHeight;});
+
+    textSnapshotCtx.restore();setCanvasFont(textSnapshotCtx,style);
+
+    textSnapshotCtx.shadowColor='rgba(0,0,0,.28)';textSnapshotCtx.shadowBlur=5;textSnapshotCtx.shadowOffsetY=2;
+
+  }else{
+
+    textSnapshotCtx.shadowColor='transparent';textSnapshotCtx.shadowBlur=0;textSnapshotCtx.shadowOffsetY=0;
+
+  }
+
+  lines.forEach(line=>{textSnapshotCtx.fillText(line,x,y);y+=lineHeight;});
+
+}
+
+function buildTextSnapshot(){
+
+  textScale=Math.min(window.devicePixelRatio||1,1.5);
+
+  const pw=Math.round(viewportWidth*textScale),ph=Math.round(viewportHeight*textScale);
+
+  textSnapshotCanvas.width=maskedTextCanvas.width=pw;
+
+  textSnapshotCanvas.height=maskedTextCanvas.height=ph;
+
+  maskedTextCanvas.style.width=`${viewportWidth}px`;maskedTextCanvas.style.height=`${viewportHeight}px`;
+
+  textSnapshotCtx.setTransform(textScale,0,0,textScale,0,0);
+
+  textSnapshotCtx.clearRect(0,0,viewportWidth,viewportHeight);
+
+  const oldTransform=heroText.style.transform,oldOpacity=heroText.style.opacity;
+
+  heroText.style.transform='none';heroText.style.opacity='1';
+
+  heroText.getBoundingClientRect();
+
+  drawDOMTextElement(eyebrowElement);drawDOMTextElement(titleElement);
+
+  copyElement.querySelectorAll('p').forEach(drawDOMTextElement);
+
+  const rects=[eyebrowElement,titleElement,copyElement].map(el=>el.getBoundingClientRect());
+
+  const padding=35,left=Math.max(0,Math.min(...rects.map(r=>r.left))-padding);
+
+  const top=Math.max(0,Math.min(...rects.map(r=>r.top))-padding);
+
+  const right=Math.min(viewportWidth,Math.max(...rects.map(r=>r.right))+padding);
+
+  const bottom=Math.min(viewportHeight,Math.max(...rects.map(r=>r.bottom))+padding);
+
+  textBounds={left,top,width:Math.max(1,right-left),height:Math.max(1,bottom-top)};
+
+  heroText.style.transform=oldTransform;heroText.style.opacity=oldOpacity;
+
+  maskWorkCanvas.width=Math.max(1,Math.ceil(textBounds.width*textScale));
+
+  maskWorkCanvas.height=Math.max(1,Math.ceil(textBounds.height*textScale));
+
+}
+
+function buildMaskForTextArea(mask){
+
+  const w=maskWorkCanvas.width,h=maskWorkCanvas.height;
+
+  maskWorkCtx.setTransform(1,0,0,1,0,0);maskWorkCtx.clearRect(0,0,w,h);
+
+  const cover=getCoverRect(mask,viewportWidth,viewportHeight);
+
+  maskWorkCtx.drawImage(mask,(cover.x-textBounds.left)*textScale,(cover.y-textBounds.top)*textScale,
+
+    cover.width*textScale,cover.height*textScale);
+
+  const data=maskWorkCtx.getImageData(0,0,w,h),p=data.data;
+
+  for(let i=0;i<p.length;i+=4){
+
+    const luminance=p[i]*.2126+p[i+1]*.7152+p[i+2]*.0722;
+
+    p[i]=p[i+1]=p[i+2]=255;p[i+3]=luminance;
+
+  }
+
+  maskWorkCtx.putImageData(data,0,0);
+
+}
+
+function renderFrame(frame){
+
+  const image=scrollFrames[frame],mask=maskFrames[frame];if(!image||!mask)return;
+
+  drawCover(sceneCtx,image,sceneCanvas); // cover the entire physical canvas, no letterboxing
+
+  maskedTextCtx.setTransform(1,0,0,1,0,0);
+
+  maskedTextCtx.clearRect(0,0,maskedTextCanvas.width,maskedTextCanvas.height);
+
+  maskedTextCtx.drawImage(textSnapshotCanvas,0,0);
+
+  buildMaskForTextArea(mask);
+
+  maskedTextCtx.globalCompositeOperation='destination-in';
+
+  maskedTextCtx.drawImage(maskWorkCanvas,textBounds.left*textScale,textBounds.top*textScale);
+
+  maskedTextCtx.globalCompositeOperation='source-over';
+
+}
+
+function updatePanoramaOpacity(){
+
+  const fade=smootherstep01(smoothScrollFrame/PANORAMA_FADE_END_FRAME);
+
+  const opacity=panoramaIntroReveal*(1-fade);
+
+  panoramaElement.style.opacity=String(opacity);
+
+  panoramaElement.style.pointerEvents=opacity>.01?'auto':'none';
+
+}
+
+function calculateRawScrollProgress(){
+
+  const travelled=Math.max(0,-experience.getBoundingClientRect().top);
+
+  /*
+     Preserve the exact working scroll distance from 0 -> MOOD_WHITE_START.
+     Only the final Coastal Sand section is stretched by MOOD_SLOWDOWN.
+  */
+  const baseActiveDistance=window.innerHeight*(SCROLL_LENGTH_VH/100);
+  const moodStartDistance=baseActiveDistance*MOOD_WHITE_START;
+  const originalMoodDistance=baseActiveDistance*(1-MOOD_WHITE_START);
+  const stretchedMoodDistance=originalMoodDistance*MOOD_SLOWDOWN;
+
+  if(travelled<=moodStartDistance){
+    return baseActiveDistance<=0?0:clamp(travelled/baseActiveDistance,0,MOOD_WHITE_START);
+  }
+
+  const moodTravel=travelled-moodStartDistance;
+  const moodLocal=stretchedMoodDistance<=0?1:clamp(moodTravel/stretchedMoodDistance,0,1);
+
+  return MOOD_WHITE_START+(1-MOOD_WHITE_START)*moodLocal;
+
+}
+
+const calculateTargetFrame=raw=>clamp(raw*SCROLL_SENSITIVITY,0,1)*(SCROLL_FRAME_COUNT-1);
+
+function updateScrollTarget(){
+
+  if(!scrollingReady)return;
+
+  const raw=calculateRawScrollProgress();targetStoryProgress=raw;targetScrollFrame=calculateTargetFrame(raw);
+
+  if(!scrollAnimationRunning){scrollAnimationRunning=true;requestAnimationFrame(animateScrollSequence);}
+
+}
+
+function updateTextMode(){
+
+  if(smoothScrollFrame>.04){
+
+    if(!usingCanvasText){
+
+      usingCanvasText=true;renderFrame(Math.max(0,currentScrollFrame));
+
+      maskedTextCanvas.style.opacity='1';heroText.style.visibility='hidden';
+
+    }
+
+  }else if(usingCanvasText){
+
+    usingCanvasText=false;heroText.style.visibility='visible';maskedTextCanvas.style.opacity='0';
+
+  }
+
+}
+
+function animateScrollSequence(){
+
+  if(!scrollingReady){scrollAnimationRunning=false;return;}
+
+  const fd=targetScrollFrame-smoothScrollFrame,sd=targetStoryProgress-smoothStoryProgress;
+
+  smoothScrollFrame+=fd*SCROLL_EASE;smoothStoryProgress+=sd*STORY_SCROLL_EASE;
+
+  const frame=clamp(Math.round(smoothScrollFrame),0,SCROLL_FRAME_COUNT-1);
+
+  if(frame!==currentScrollFrame){currentScrollFrame=frame;renderFrame(frame);}
+
+  updatePanoramaOpacity();updateTextMode();updateStoryTextMotion();updateMoodSectionMotion();
+
+  if(Math.abs(fd)>SCROLL_SETTLE_THRESHOLD||Math.abs(sd)>STORY_SETTLE_THRESHOLD){
+
+    requestAnimationFrame(animateScrollSequence);
+
+  }else{
+
+    smoothScrollFrame=targetScrollFrame;smoothStoryProgress=targetStoryProgress;
+
+    const finalFrame=clamp(Math.round(targetScrollFrame),0,SCROLL_FRAME_COUNT-1);
+
+    if(finalFrame!==currentScrollFrame){currentScrollFrame=finalFrame;renderFrame(finalFrame);}
+
+    updatePanoramaOpacity();updateTextMode();updateStoryTextMotion();updateMoodSectionMotion();scrollAnimationRunning=false;
+
+  }
+
+}
+
+window.addEventListener('scroll',updateScrollTarget,{passive:true});
+
+
+
+/* This fixes the previous wide-window bug: the stage, both 2D canvases,
+
+   the WebGL renderer, camera aspect, masks and story type all resize. */
+
+function alignExperienceToViewport(){
+
+  experience.style.left='0px';
+
+  const actualLeft=experience.getBoundingClientRect().left;
+
+  experience.style.left=`${-actualLeft}px`;
+
+}
+
+function resizeEverything(){
+
+  alignExperienceToViewport();
+
+  viewportWidth=Math.round(stage.getBoundingClientRect().width)||window.innerWidth;
+
+  viewportHeight=Math.round(stage.getBoundingClientRect().height)||window.innerHeight;
+
+  sceneScale=Math.min(window.devicePixelRatio||1,1.5);
+
+  sceneCanvas.width=Math.round(viewportWidth*sceneScale);
+
+  sceneCanvas.height=Math.round(viewportHeight*sceneScale);
+
+  sceneCanvas.style.width=`${viewportWidth}px`;
+
+  sceneCanvas.style.height=`${viewportHeight}px`;
+
+  if(renderer){
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+
+    renderer.setSize(viewportWidth,viewportHeight,false);
+
+  }
+
+  if(camera){camera.aspect=viewportWidth/viewportHeight;camera.updateProjectionMatrix();}
+
+  fitStoryHeadline();buildTextSnapshot();updateStoryTextMotion();updateMoodSectionMotion();
+
+  if(scrollingReady)renderFrame(Math.max(0,currentScrollFrame));
+
+  if(panoramaLoaded){renderPanorama();updateLensFlare();
+
+  updateMoodSectionMotion();}
+
+}
+
+let resizeQueued=false;
+
+function scheduleResize(){
+
+  if(resizeQueued)return;
+
+  resizeQueued=true;
+
+  requestAnimationFrame(()=>{
+
+    resizeQueued=false;resizeEverything();
+
+    if(scrollingReady){
+
+      targetScrollFrame=calculateTargetFrame(calculateRawScrollProgress());
+
+      targetStoryProgress=calculateRawScrollProgress();
+
+      updateScrollTarget();
+
+    }
+
+  });
+
+}
+
+window.addEventListener('resize',scheduleResize,{passive:true});
+
+if(typeof ResizeObserver!=='undefined'){
+
+  const observer=new ResizeObserver(()=>scheduleResize());
+
+  observer.observe(stage);
+
+}
+
+
+
+function masterAnimationLoop(time){
+
+  const dt=Math.min(.05,(time-previousAnimationTime)/1000);previousAnimationTime=time;
+
+  if(panoramaLoaded&&panoramaIntroReveal<1){
+
+    if(panoramaIntroStartTime===null)panoramaIntroStartTime=time;
+
+    const progress=clamp((time-panoramaIntroStartTime)/PANORAMA_INTRO_FADE_DURATION,0,1);
+
+    panoramaIntroReveal=easeOutExpo(progress);updatePanoramaOpacity();
+
+  }
+
+  if(panoramaLoaded&&smoothScrollFrame<PANORAMA_FADE_END_FRAME+1){
+
+    updatePanoramaMotion(dt,time/1000);updateLensFlare();
+
+  }else hideLensFlare();
+
+  updateWoodStripLoop(dt);
+
+  requestAnimationFrame(masterAnimationLoop);
+
+}
+
+async function init(){
+
+  window.scrollTo(0,0);
+
+  if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+
+  resizeEverything();
+
+  initMoodSection();
+
+  try{
+
+    const scrollPromise=loadScrollAssets();
+
+    await initPanorama();
+
+    loader.classList.add('hidden');animateHeroText();initializeLottie();
+
+    await scrollPromise;
+
+    currentScrollFrame=0;targetScrollFrame=smoothScrollFrame=0;
+
+    targetStoryProgress=smoothStoryProgress=0;
+
+    buildTextSnapshot();renderFrame(0);renderPanorama();updateStoryTextMotion();updateMoodSectionMotion();
+
+    heroText.style.visibility='visible';maskedTextCanvas.style.opacity='0';updatePanoramaOpacity();
+
+    updateScrollTarget();
+
+  }catch(error){
+
+    console.error(error);loader.classList.remove('hidden');
+
+    loader.innerHTML='<div style="max-width:600px;padding:30px;text-align:center;line-height:1.6">One or more assets could not be loaded.<br>Check the browser console for the missing filename.</div>';
+
+  }
+
+}
+
+requestAnimationFrame(masterAnimationLoop);
+
+init();
+
+})();
+
+</script>
+
+</body>
+
+</html>
