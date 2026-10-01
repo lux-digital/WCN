@@ -86,83 +86,153 @@ body { overflow-x:hidden; }
 
 #flareLayer { position:absolute; inset:0; z-index:5; pointer-events:none; overflow:hidden; }
 
-
-
-#sunBloom { position:absolute; width:760px; height:760px; margin-left:-380px; margin-top:-380px; border-radius:50%;
-
-
-
-    background:radial-gradient(circle,rgba(255,255,255,1) 0%,rgba(255,253,225,1) 4%,rgba(255,234,155,.90) 10%,rgba(255,204,95,.66) 20%,rgba(255,170,55,.38) 32%,rgba(255,140,35,.18) 46%,rgba(255,125,25,.07) 60%,transparent 77%);
+#flareFrontLayer { position:absolute; inset:0; z-index:9; pointer-events:none; overflow:hidden; }
 
 
 
-    mix-blend-mode:screen; filter:blur(5px) brightness(1.8); opacity:0; will-change:left,top,opacity,transform; }
+#sunBloom { position:absolute; width:500px; height:500px; margin-left:-250px; margin-top:-250px; border-radius:50%;
+
+    background:radial-gradient(circle,rgba(255,255,255,.92) 0%,rgba(255,252,225,.82) 4%,rgba(255,231,157,.63) 11%,rgba(255,200,91,.38) 22%,rgba(255,167,55,.19) 35%,rgba(255,136,39,.075) 49%,rgba(255,120,28,.025) 61%,transparent 76%);
+
+    mix-blend-mode:screen; filter:blur(4px) brightness(1.48); opacity:0; will-change:left,top,opacity,transform; }
 
 
 
-#sunCore { position:absolute; width:130px; height:130px; margin-left:-65px; margin-top:-65px; border-radius:50%;
+#sunCore { position:absolute; width:88px; height:88px; margin-left:-44px; margin-top:-44px; border-radius:50%;
+
+    background:radial-gradient(circle,rgba(255,255,255,.98) 0%,rgba(255,255,243,.94) 10%,rgba(255,242,182,.83) 24%,rgba(255,203,102,.43) 47%,rgba(255,163,61,.11) 68%,transparent 84%);
+
+    mix-blend-mode:screen; filter:blur(1.2px) brightness(1.58); opacity:0; will-change:left,top,opacity,transform; }
 
 
 
-    background:radial-gradient(circle,rgba(255,255,255,1) 0%,rgba(255,255,245,1) 12%,rgba(255,239,175,.96) 27%,rgba(255,200,100,.60) 48%,rgba(255,165,65,.18) 68%,transparent 84%);
+/* A restrained warm anamorphic streak through the sun. */
+#sunStreak { position:absolute; width:980px; height:34px; margin-left:-490px; margin-top:-17px;
+
+    background:radial-gradient(ellipse,rgba(255,253,232,.86) 0%,rgba(255,224,153,.42) 18%,rgba(255,183,86,.14) 42%,transparent 74%);
+
+    mix-blend-mode:screen; filter:blur(4px) brightness(1.55); opacity:0; will-change:left,top,opacity,transform; }
 
 
 
-    mix-blend-mode:screen; filter:blur(2px) brightness(1.8); opacity:0; }
+/* Warm starburst rays. The whole group scales as the sun moves farther into view. */
+#sunRays { position:absolute; width:1080px; height:1080px; margin-left:-540px; margin-top:-540px;
+    opacity:0; pointer-events:none; mix-blend-mode:screen; transform-origin:50% 50%; will-change:left,top,opacity,transform; }
+
+.sunRay { position:absolute; left:50%; top:50%; width:47%; height:1.6px; transform-origin:0 50%;
+    background:linear-gradient(90deg,rgba(255,255,244,.98) 0%,rgba(255,232,168,.82) 7%,rgba(255,194,91,.42) 25%,rgba(255,168,64,.12) 54%,transparent 91%);
+    filter:blur(.30px) drop-shadow(0 0 3px rgba(255,194,88,.46)); }
+.sunRay:nth-child(1){ transform:rotate(0deg); }
+.sunRay:nth-child(2){ transform:rotate(31deg); width:39%; opacity:.72; }
+.sunRay:nth-child(3){ transform:rotate(67deg); width:45%; opacity:.88; }
+.sunRay:nth-child(4){ transform:rotate(101deg); width:35%; opacity:.62; }
+.sunRay:nth-child(5){ transform:rotate(137deg); width:43%; opacity:.78; }
+.sunRay:nth-child(6){ transform:rotate(168deg); width:36%; opacity:.65; }
+.sunRay:nth-child(7){ transform:rotate(214deg); width:42%; opacity:.76; }
+.sunRay:nth-child(8){ transform:rotate(286deg); width:38%; opacity:.68; }
 
 
 
-#sunStreak { position:absolute; width:1000px; height:58px; margin-left:-500px; margin-top:-29px;
+/* Polygonal optical ghosts with real edge softness.
+   The polygon itself is drawn by an inner span; blur is applied to the OUTER
+   wrapper so the silhouette/edge is softened rather than only the interior.
+   Shapes farther from the sun become progressively softer and fainter. */
+.flareGhost,
+#flareGhostFront2,
+#flareGhostFront4 {
+    position:absolute;
+    opacity:0;
+    pointer-events:none;
+    mix-blend-mode:screen;
+    will-change:left,top,opacity,transform;
+    overflow:visible;
+}
 
+.flareGhostShape {
+    position:absolute;
+    inset:0;
+    display:block;
+    pointer-events:none;
+    -webkit-backdrop-filter:blur(2px) saturate(1.08);
+    backdrop-filter:blur(2px) saturate(1.08);
+}
 
+/* Closest to the sun: still soft, but the clearest/brightest ghost. */
+#flareGhost1 {
+    width:92px; height:92px; margin-left:-46px; margin-top:-46px;
+    filter:blur(2.5px) brightness(1.10);
+}
+#flareGhost1 .flareGhostShape {
+    clip-path:polygon(50% 0%,88% 19%,100% 58%,74% 94%,31% 100%,4% 67%,10% 24%);
+    background:radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0) 43%,
+      rgba(255,250,225,.74) 61%,
+      rgba(255,207,108,.40) 76%,
+      rgba(255,150,54,.10) 88%,
+      transparent 100%);
+    box-shadow:0 0 20px rgba(255,218,133,.32),0 0 38px rgba(255,174,72,.20);
+}
 
-    background:radial-gradient(ellipse,rgba(255,248,215,.94) 0%,rgba(255,220,145,.48) 20%,rgba(255,180,85,.19) 44%,transparent 75%);
+/* Middle-depth ghost, rendered in front of the text. */
+#flareGhostFront2 {
+    width:148px; height:148px; margin-left:-74px; margin-top:-74px;
+    filter:blur(4.0px) brightness(1.00);
+}
+#flareGhostFront2 .flareGhostShape {
+    clip-path:polygon(50% 0%,85% 15%,100% 50%,85% 85%,50% 100%,15% 85%,0% 50%,15% 15%);
+    background:radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0) 47%,
+      rgba(255,245,207,.57) 65%,
+      rgba(255,185,82,.27) 81%,
+      rgba(214,108,39,.08) 91%,
+      transparent 100%);
+    box-shadow:0 0 28px rgba(255,204,104,.22),0 0 54px rgba(255,159,67,.16);
+    -webkit-backdrop-filter:blur(2.6px) saturate(1.07);
+    backdrop-filter:blur(2.6px) saturate(1.07);
+}
 
+/* Farther along the optical axis: softer and more faded. */
+#flareGhost3 {
+    width:68px; height:68px; margin-left:-34px; margin-top:-34px;
+    filter:blur(5.4px) brightness(.96);
+}
+#flareGhost3 .flareGhostShape {
+    clip-path:polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
+    background:radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0) 41%,
+      rgba(255,251,229,.67) 59%,
+      rgba(255,211,120,.32) 75%,
+      rgba(255,158,56,.08) 87%,
+      transparent 100%);
+    box-shadow:0 0 20px rgba(255,221,142,.24),0 0 34px rgba(255,188,82,.15);
+    -webkit-backdrop-filter:blur(3.2px) saturate(1.05);
+    backdrop-filter:blur(3.2px) saturate(1.05);
+}
 
+/* Closest-to-camera ghost: most blurred and most faded. */
+#flareGhostFront4 {
+    width:190px; height:190px; margin-left:-95px; margin-top:-95px;
+    filter:blur(7.2px) brightness(.86);
+}
+#flareGhostFront4 .flareGhostShape {
+    clip-path:polygon(50% 0%,82% 10%,100% 38%,96% 70%,70% 96%,36% 100%,8% 78%,0% 45%,17% 15%);
+    background:radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0) 50%,
+      rgba(255,216,148,.40) 69%,
+      rgba(205,94,35,.16) 85%,
+      rgba(158,63,24,.05) 93%,
+      transparent 100%);
+    box-shadow:0 0 36px rgba(235,140,66,.16),0 0 66px rgba(227,119,52,.11);
+    -webkit-backdrop-filter:blur(4.0px) saturate(1.03);
+    backdrop-filter:blur(4.0px) saturate(1.03);
+}
 
-    mix-blend-mode:screen; filter:blur(5px) brightness(1.7); opacity:0; }
-
-
-
-.flareGhost { position:absolute; border-radius:50%; opacity:0; pointer-events:none; mix-blend-mode:screen; will-change:left,top,opacity,transform; }
-
-
-
-#flareGhost1 { width:104px; height:104px; margin-left:-52px; margin-top:-52px; border:3px solid rgba(255,205,120,.76);
-
-
-
-    background:radial-gradient(circle,rgba(255,235,175,.52),rgba(255,165,75,.17) 54%,transparent 77%); box-shadow:0 0 45px rgba(255,175,70,.30); }
-
-
-
-#flareGhost2 { width:166px; height:166px; margin-left:-83px; margin-top:-83px; border:3px solid rgba(120,230,200,.58);
-
-
-
-    background:radial-gradient(circle,rgba(115,235,205,.40),rgba(60,180,155,.12) 58%,transparent 79%); box-shadow:0 0 50px rgba(80,220,190,.22); }
-
-
-
-#flareGhost3 { width:72px; height:72px; margin-left:-36px; margin-top:-36px;
-
-
-
-    background:radial-gradient(circle,rgba(255,250,205,.76),rgba(255,190,85,.22) 48%,transparent 76%); }
-
-
-
-#flareGhost4 { width:210px; height:210px; margin-left:-105px; margin-top:-105px; border:3px solid rgba(255,150,95,.36);
-
-
-
-    background:radial-gradient(circle,rgba(255,145,90,.18),transparent 70%); }
-
-
-
-
-
-
+/* The legacy large ghosts remain hidden; the front-layer versions above are used. */
+#flareGhost2, #flareGhost4 { display:none; }
 
 #heroText { position:absolute; inset:0; z-index:6; display:flex; justify-content:center; align-items:flex-start;
 
@@ -251,7 +321,12 @@ body { overflow-x:hidden; }
 
 
 
-#storyMessage1 .storySubtitle { margin-top:.68em; font-size:clamp(15px,1.35vw,25px); line-height:1.16; font-weight:300; letter-spacing:.01em; }
+#storyMessage1 .storyHeadline {
+    text-shadow:0 2px 5px rgba(0,0,0,.34),0 6px 18px rgba(0,0,0,.22);
+}
+
+#storyMessage1 .storySubtitle { margin-top:.18em; font-size:clamp(15px,1.35vw,25px); line-height:1.10; font-weight:700; letter-spacing:.01em;
+    text-shadow:0 2px 5px rgba(0,0,0,.34),0 6px 18px rgba(0,0,0,.22); }
 
 
 
@@ -259,11 +334,12 @@ body { overflow-x:hidden; }
 
 
 
-#storyMessage2 .storyLine { font-size:clamp(19px,1.8vw,34px); line-height:1.12; font-weight:600; letter-spacing:-.02em; text-align:center; }
+#storyMessage2 .storyLine { font-size:clamp(19px,1.8vw,34px); line-height:1.06; font-weight:600; letter-spacing:-.02em; text-align:center;
+    text-shadow:0 2px 5px rgba(0,0,0,.34),0 6px 18px rgba(0,0,0,.22); }
 
 
 
-#storyMessage2Line2 { margin-top:.20em; }
+#storyMessage2Line2 { margin-top:.06em; }
 
 
 
@@ -289,9 +365,15 @@ body { overflow-x:hidden; }
 
 
 
+/* Time-based darkening layer for Coastal Sand only. It sits immediately above
+   the MP4 and below every label, thumbnail, gradient and viewer control. */
+#moodVideoShade { position:absolute; inset:0; z-index:23; background:#000; opacity:0; pointer-events:none; will-change:opacity; }
+
+
+
 /* Footer readability gradient. It rises with all of the white footer elements. */
 
-#moodBottomGradient { position:absolute; left:0; right:0; bottom:0; z-index:23; height:44vh; opacity:0;
+#moodBottomGradient { position:absolute; left:0; right:0; bottom:0; z-index:24; height:44vh; opacity:0;
 
     transform:translate3d(0,12vh,0); will-change:opacity,transform; pointer-events:none;
 
@@ -305,7 +387,7 @@ body { overflow-x:hidden; }
 
 
 
-#moodContent { position:absolute; inset:0; z-index:24; pointer-events:none; }
+#moodContent { position:absolute; inset:0; z-index:25; pointer-events:none; }
 
 
 
@@ -602,13 +684,18 @@ body { overflow-x:hidden; }
 
       <div id="sunBloom"></div><div id="sunStreak"></div><div id="sunCore"></div>
 
+      <div id="sunRays">
+        <span class="sunRay"></span><span class="sunRay"></span><span class="sunRay"></span><span class="sunRay"></span>
+        <span class="sunRay"></span><span class="sunRay"></span><span class="sunRay"></span><span class="sunRay"></span>
+      </div>
 
 
-      <div class="flareGhost" id="flareGhost1"></div><div class="flareGhost" id="flareGhost2"></div>
+
+      <div class="flareGhost" id="flareGhost1"><span class="flareGhostShape"></span></div><div class="flareGhost" id="flareGhost2"></div>
 
 
 
-      <div class="flareGhost" id="flareGhost3"></div><div class="flareGhost" id="flareGhost4"></div>
+      <div class="flareGhost" id="flareGhost3"><span class="flareGhostShape"></span></div><div class="flareGhost" id="flareGhost4"></div>
 
 
 
@@ -652,7 +739,13 @@ body { overflow-x:hidden; }
 
 
 
-    <canvas id="maskedTextCanvas"></canvas>
+    
+    <div id="flareFrontLayer">
+      <div id="flareGhostFront2"><span class="flareGhostShape"></span></div>
+      <div id="flareGhostFront4"><span class="flareGhostShape"></span></div>
+    </div>
+
+    <canvas id="maskedTextCanvas"></canvas>
 
 
 
@@ -712,7 +805,9 @@ body { overflow-x:hidden; }
 
 
 
-      <div id="moodWhiteFade"></div>
+      <div id="moodVideoShade"></div>
+
+      <div id="moodWhiteFade"></div>
 
 
 
@@ -908,11 +1003,11 @@ const SCROLL_SETTLE_THRESHOLD=.01, STORY_SETTLE_THRESHOLD=.00005, PANORAMA_FADE_
 
 
 
-const CAMERA_SCROLL_DROP=40.2;
+const CAMERA_SCROLL_DROP=-0.2;
 
 
 
-const CAMERA_TARGET_RISE=40.0;
+const CAMERA_TARGET_RISE=-100.0;
 
 
 
@@ -928,7 +1023,7 @@ const SUN_U=SUN_IMAGE_X/SUN_IMAGE_WIDTH, SUN_V=SUN_IMAGE_Y/SUN_IMAGE_HEIGHT;
 
 
 
-const PANORAMA_INTRO_FADE_DURATION=2200, AUTO_ROTATE_SPEED=.025, MOUSE_YAW_SPEED=.16, MOUSE_PITCH_SPEED=.05;
+const PANORAMA_INTRO_FADE_DURATION=2200, AUTO_ROTATE_SPEED=.025, MOUSE_YAW_SPEED=.24, MOUSE_PITCH_SPEED=.16;
 
 
 
@@ -1002,7 +1097,7 @@ const PRODUCT_THUMBS=[
 
 
 
-const CAMERA_VELOCITY_SMOOTHING=1.6, MAX_PITCH=THREE.MathUtils.degToRad(24);
+const CAMERA_VELOCITY_SMOOTHING=2.35, MAX_PITCH=THREE.MathUtils.degToRad(24);
 
 
 
@@ -1010,7 +1105,40 @@ const DRAG_SENSITIVITY=.0032, DRAG_FRICTION=2.35, MAX_DRAG_VELOCITY=1.25;
 
 
 
-const FOG_DENSITY=.14, FOG_MOUSE_STRENGTH=1, FOG_DRAG_STRENGTH=1.35, FOG_INTERACTION_DECAY=2;
+/* Fluid-fog tuning. The simulation is deliberately low-resolution; the blur/detail
+   comes from the density field itself rather than a giant full-screen buffer. */
+const FOG_DENSITY=.1000;
+const FOG_SIM_WIDTH=320, FOG_SIM_HEIGHT=160;
+const FOG_MOUSE_STRENGTH=.72, FOG_DRAG_STRENGTH=1.00;
+const FOG_SPLAT_RADIUS=.021, FOG_DRAG_SPLAT_RADIUS=.030;
+const FOG_FORCE_GAIN=.18, FOG_MAX_FORCE=.95;
+const FOG_VORTICITY=10.5, FOG_PRESSURE_ITERATIONS=50;
+const FOG_VELOCITY_DISSIPATION=.990, FOG_DENSITY_DISSIPATION=.9998;
+const FOG_DENSITY_RESTORE_RATE=.035, FOG_CLEAR_STRENGTH=.085;
+/* Vertical fog placement on the equirectangular panorama. THREE's sphere UV has
+   v=0 at the bottom and v=1 at the top. These values deliberately suppress the
+   foreground/rocks and concentrate the mist through the islands, water and
+   mountain/horizon area shown in the yellow markup. */
+const FOG_VERTICAL_CENTER=.50;
+const FOG_VERTICAL_CORE_WIDTH=.46;
+const FOG_VERTICAL_BOTTOM_START=.08;
+const FOG_VERTICAL_BOTTOM_FULL=.24;
+const FOG_VERTICAL_TOP_FADE=.92;
+const FOG_VERTICAL_TOP_END=.995;
+const FOG_VERTICAL_BASE=.78;
+const FOG_VERTICAL_CENTER_GAIN=1.22;
+/* A tiny positive Y drift makes the fog very slowly float upward instead of
+   gradually settling toward the bottom of the sphere. */
+const FOG_AMBIENT_DRIFT_X=.0022, FOG_AMBIENT_DRIFT_Y=.00018;
+
+/* User-painted 360° fog distribution converted to a grayscale mask and embedded
+   directly into this HTML. White = strong fog, black = none, grey = subtle. */
+/* Save a grayscale map beside this HTML as: "fog map.jpg"
+   Black = no fog, darker gray = subtle fog, lighter gray = denser fog, white = maximum fog. */
+const FOG_DISTRIBUTION_MASK_PATH='fog map.jpg';
+let fogDistributionTexture=null;
+
+const FOG_POINTER_FORCE_SMOOTHING=10.0;
 
 
 
@@ -1050,7 +1178,7 @@ const storyMessage2Line1=$('storyMessage2Line1'), storyMessage2Line2=$('storyMes
 
 
 
-const moodSection=$('moodSection'), moodVideo=$('moodVideo'), moodWhiteFade=$('moodWhiteFade'), moodBottomGradient=$('moodBottomGradient');
+const moodSection=$('moodSection'), moodVideo=$('moodVideo'), moodVideoShade=$('moodVideoShade'), moodWhiteFade=$('moodWhiteFade'), moodBottomGradient=$('moodBottomGradient');
 
 
 
@@ -1066,11 +1194,12 @@ const woodPrevButton=$('woodPrevButton'), woodNextButton=$('woodNextButton');
 
 
 
-const sunBloom=$('sunBloom'), sunCore=$('sunCore'), sunStreak=$('sunStreak');
+const sunBloom=$('sunBloom'), sunCore=$('sunCore'), sunStreak=$('sunStreak'), sunRays=$('sunRays');
 
 
 
 const flareGhost1=$('flareGhost1'), flareGhost2=$('flareGhost2'), flareGhost3=$('flareGhost3'), flareGhost4=$('flareGhost4');
+const flareGhostFront2=$('flareGhostFront2'), flareGhostFront4=$('flareGhostFront4');
 
 
 
@@ -1106,11 +1235,16 @@ let latestDragYawVelocity=0, latestDragPitchVelocity=0;
 
 
 
-let fogInteractionStrength=0, fogTargetInteractionStrength=0, lastPointerX=0, lastPointerY=0, lastPointerTime=performance.now();
-
-
-
-const fogInteractionUV=new THREE.Vector2(.5,.5), fogInteractionVelocity=new THREE.Vector2(0,0);
+/* GPU fluid state. The mouse adds force to a persistent velocity field; the fog
+   density is then advected by that field, so the wake keeps curling after the
+   pointer has already moved away. */
+let fluidReady=false, fluidScene, fluidCamera, fluidQuad;
+let fluidVelocity, fluidDensity, fluidPressure, fluidDivergence, fluidCurl;
+let fluidAdvectVelocityMaterial, fluidAdvectDensityMaterial, fluidCurlMaterial, fluidVorticityMaterial;
+let fluidDivergenceMaterial, fluidPressureMaterial, fluidGradientMaterial, fluidSplatMaterial, fluidSeedMaterial;
+let lastFogPointerUV=null, lastFogPointerTime=performance.now();
+const smoothedFogForce=new THREE.Vector2(0,0);
+const pendingFogSplats=[];
 
 
 
@@ -1151,6 +1285,10 @@ let woodLoopImage=null;
 
 
 let woodLoopImageWidth=1600;
+
+/* Once the large Coastal Sand viewer is fully visible, wait 0.6 seconds and then
+   darken only the MP4 to 45% black over 2 seconds. Scrolling away resets it. */
+let moodShadeTimer=null, moodShadeAnimation=null, moodShadeArmed=false;
 
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 
@@ -1240,6 +1378,35 @@ function fitStoryHeadline(){
 
 
 
+function resetMoodVideoShade(){
+  if(moodShadeTimer!==null){clearTimeout(moodShadeTimer);moodShadeTimer=null;}
+  if(moodShadeAnimation){try{moodShadeAnimation.cancel();}catch(e){}moodShadeAnimation=null;}
+  moodShadeArmed=false;
+  if(moodVideoShade)moodVideoShade.style.opacity='0';
+}
+
+function updateMoodVideoShade(viewerOpacity){
+  if(!moodVideoShade)return;
+  const viewerIsFullyVisible=viewerOpacity>=.9995;
+
+  if(viewerIsFullyVisible && !moodShadeArmed){
+    moodShadeArmed=true;
+    moodShadeTimer=setTimeout(()=>{
+      moodShadeTimer=null;
+      const stillAtBottom=smootherstep01(rangeProgress(smoothStoryProgress,MOOD_VIEWER_START,MOOD_VIEWER_END))>=.9995;
+      if(!stillAtBottom){resetMoodVideoShade();return;}
+      moodShadeAnimation=moodVideoShade.animate(
+        [{opacity:0},{opacity:.45}],
+        {duration:2000,easing:'linear',fill:'forwards'}
+      );
+    },600);
+  }else if(!viewerIsFullyVisible && moodShadeArmed){
+    resetMoodVideoShade();
+  }
+}
+
+
+
 function updateMoodSectionMotion(){
 
   const p=smoothStoryProgress;
@@ -1324,6 +1491,8 @@ function updateMoodSectionMotion(){
   woodViewerCluster.style.transform='translateX(-50%)';
 
   woodViewerCluster.style.opacity=String(viewerOpacity);
+
+  updateMoodVideoShade(viewerOpacity);
 }
 
 
@@ -1614,263 +1783,483 @@ sunDirection.copy(uvToSphereDirection(SUN_U,SUN_V));
 
 const fogVertexShader=`
 
-
-
 varying vec2 vUv;
-
-
 
 void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
 
 
 
-const fogFragmentShader=`
+/* --------------------------------------------------------------------------
+   GPU FLUID FOG
 
+   This replaces the old "bend some FBM noise around the cursor" trick with a
+   real persistent velocity + density simulation. It is the same family of
+   technique used by WebGL stable-fluid demos: advection -> curl/vorticity ->
+   divergence -> pressure solve -> gradient subtraction -> density advection.
+   -------------------------------------------------------------------------- */
 
-
-precision mediump float;
-
-
-
+const fluidVertexShader=`
+precision highp float;
 varying vec2 vUv;
+void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}`;
 
-
-
-uniform float uTime,uDensity,uInteractionStrength;
-
-
-
-uniform vec2 uInteractionUV,uInteractionVelocity;
-
-
-
+const fluidCommonNoise=`
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
-
-
-
 float noise(vec2 p){
-
-
-
- vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
-
-
-
- float a=hash(i),b=hash(i+vec2(1.0,0.0)),c=hash(i+vec2(0.0,1.0)),d=hash(i+vec2(1.0,1.0));
-
-
-
- return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
-
-
-
+  vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  float a=hash(i),b=hash(i+vec2(1.0,0.0)),c=hash(i+vec2(0.0,1.0)),d=hash(i+vec2(1.0,1.0));
+  return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
 }
-
-
-
-float fbm(vec2 p){float value=0.0,amplitude=0.5;for(int i=0;i<4;i++){
-
-
-
- value+=amplitude*noise(p);p=p*2.03+vec2(7.7,3.1);amplitude*=0.5;}return value;}
-
-
-
-void main(){
-
-
-
- vec2 uv=vUv,delta=uv-uInteractionUV;
-
-
-
- if(delta.x>0.5)delta.x-=1.0;if(delta.x< -0.5)delta.x+=1.0;
-
-
-
- vec2 compactDelta=delta*vec2(2.6,1.9);
-
-
-
- float interaction=exp(-dot(compactDelta,compactDelta)*110.0)*uInteractionStrength;
-
-
-
- vec2 velocity=uInteractionVelocity;float velocityLength=length(velocity);
-
-
-
- vec2 velocityDirection=velocityLength>0.001?velocity/velocityLength:vec2(1.0,0.0);
-
-
-
- float angle=interaction*1.15,s=sin(angle),c=cos(angle);
-
-
-
- vec2 curled=mat2(c,-s,s,c)*delta;
-
-
-
- vec2 wakeOffset=-velocityDirection*interaction*velocityLength*0.022;
-
-
-
- vec2 fogUV=uv+(curled-delta)*0.70+wakeOffset;fogUV.x=fract(fogUV.x);
-
-
-
- vec2 drift=vec2(uTime*0.009,uTime*0.0035);
-
-
-
- float largeNoise=fbm(fogUV*vec2(5.0,3.0)+drift);
-
-
-
- float detailNoise=fbm(fogUV*vec2(11.0,6.0)-drift*1.7);
-
-
-
- float fog=largeNoise*0.72+detailNoise*0.28;
-
-
-
- float horizonBand=smoothstep(0.18,0.39,vUv.y)*(1.0-smoothstep(0.77,0.98,vUv.y));
-
-
-
- fog=smoothstep(0.42,0.78,fog);
-
-
-
- float clearing=exp(-dot(compactDelta,compactDelta)*185.0)*uInteractionStrength;
-
-
-
- fog*=1.0-clearing*0.36;
-
-
-
- float rim=interaction*(1.0-exp(-dot(compactDelta,compactDelta)*250.0));fog+=rim*0.11;
-
-
-
- float alpha=fog*horizonBand*uDensity;
-
-
-
- vec3 fogColor=mix(vec3(0.88,0.93,0.95),vec3(1.0,0.93,0.82),smoothstep(0.65,1.0,vUv.x));
-
-
-
- gl_FragColor=vec4(fogColor,alpha);
-
-
-
+float fbm(vec2 p){
+  float v=0.0,a=.5;
+  for(int i=0;i<4;i++){v+=a*noise(p);p=p*2.03+vec2(7.7,3.1);a*=.5;}
+  return v;
 }`;
 
+const fluidSeedFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uFogMask;
+${fluidCommonNoise}
 
+float fogDistribution(vec2 uv){
+  return texture2D(uFogMask,uv).r;
+}
 
+void main(){
+  float broad=fbm(vUv*vec2(5.0,3.0)+vec2(1.7,4.2));
+  float detail=fbm(vUv*vec2(11.0,6.0)+vec2(9.4,2.6));
+  float distribution=fogDistribution(vUv);
+  float wisps=smoothstep(.26,.60,broad*.72+detail*.28);
+  float d=clamp(wisps*distribution*1.38,0.0,1.0);
+  gl_FragColor=vec4(d,0.0,0.0,1.0);
+}`;
 
+const fluidAdvectVelocityFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uVelocity;
+uniform vec2 uTexelSize;
+uniform float uDt,uDissipation;
+void main(){
+  vec2 vel=texture2D(uVelocity,vUv).xy;
+  vec2 coord=vUv-uDt*vel;
+  coord.x=fract(coord.x);coord.y=clamp(coord.y,0.001,0.999);
+  vec2 advected=texture2D(uVelocity,coord).xy*uDissipation;
+  gl_FragColor=vec4(advected,0.0,1.0);
+}`;
 
+const fluidAdvectDensityFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uVelocity,uSource,uFogMask;
+uniform float uDt,uDissipation,uTime,uRestore;
+uniform vec2 uAmbient;
+${fluidCommonNoise}
 
+float fogDistribution(vec2 uv){
+  return texture2D(uFogMask,uv).r;
+}
+
+float baselineFog(vec2 uv){
+  vec2 drift=vec2(uTime*.0048,uTime*.0014);
+  float broad=fbm(uv*vec2(5.0,3.0)+drift+vec2(1.7,4.2));
+  float detail=fbm(uv*vec2(11.0,6.0)-drift*1.35+vec2(9.4,2.6));
+  float distribution=fogDistribution(uv);
+  return clamp(smoothstep(.24,.58,broad*.72+detail*.28)*distribution*1.34,0.0,1.0);
+}
+
+void main(){
+  vec2 vel=texture2D(uVelocity,vUv).xy+uAmbient;
+  vec2 coord=vUv-uDt*vel;
+  coord.x=fract(coord.x);coord.y=clamp(coord.y,0.001,0.999);
+
+  float distribution=fogDistribution(vUv);
+  float preserve=smoothstep(0.004,0.095,distribution);
+
+  float d=texture2D(uSource,coord).r*uDissipation;
+  d*=preserve;
+  d=mix(d,baselineFog(vUv),uRestore);
+
+  gl_FragColor=vec4(clamp(d,0.0,1.4),0.0,0.0,1.0);
+}`;
+
+const fluidCurlFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uVelocity;
+uniform vec2 uTexelSize;
+void main(){
+  float L=texture2D(uVelocity,vUv-vec2(uTexelSize.x,0.0)).y;
+  float R=texture2D(uVelocity,vUv+vec2(uTexelSize.x,0.0)).y;
+  float B=texture2D(uVelocity,vUv-vec2(0.0,uTexelSize.y)).x;
+  float T=texture2D(uVelocity,vUv+vec2(0.0,uTexelSize.y)).x;
+  float c=.5*(R-L-T+B);
+  gl_FragColor=vec4(c,0.0,0.0,1.0);
+}`;
+
+const fluidVorticityFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uVelocity,uCurl;
+uniform vec2 uTexelSize;
+uniform float uCurlStrength,uDt;
+void main(){
+  float L=abs(texture2D(uCurl,vUv-vec2(uTexelSize.x,0.0)).x);
+  float R=abs(texture2D(uCurl,vUv+vec2(uTexelSize.x,0.0)).x);
+  float B=abs(texture2D(uCurl,vUv-vec2(0.0,uTexelSize.y)).x);
+  float T=abs(texture2D(uCurl,vUv+vec2(0.0,uTexelSize.y)).x);
+  float C=texture2D(uCurl,vUv).x;
+  vec2 force=.5*vec2(T-B,R-L);
+  force/=length(force)+.0001;
+  force*=uCurlStrength*C;
+  force.y*=-1.0;
+  vec2 vel=texture2D(uVelocity,vUv).xy+force*uDt;
+  gl_FragColor=vec4(vel,0.0,1.0);
+}`;
+
+const fluidDivergenceFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uVelocity;
+uniform vec2 uTexelSize;
+void main(){
+  float L=texture2D(uVelocity,vUv-vec2(uTexelSize.x,0.0)).x;
+  float R=texture2D(uVelocity,vUv+vec2(uTexelSize.x,0.0)).x;
+  float B=texture2D(uVelocity,vUv-vec2(0.0,uTexelSize.y)).y;
+  float T=texture2D(uVelocity,vUv+vec2(0.0,uTexelSize.y)).y;
+  gl_FragColor=vec4(.5*(R-L+T-B),0.0,0.0,1.0);
+}`;
+
+const fluidPressureFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uPressure,uDivergence;
+uniform vec2 uTexelSize;
+void main(){
+  float L=texture2D(uPressure,vUv-vec2(uTexelSize.x,0.0)).x;
+  float R=texture2D(uPressure,vUv+vec2(uTexelSize.x,0.0)).x;
+  float B=texture2D(uPressure,vUv-vec2(0.0,uTexelSize.y)).x;
+  float T=texture2D(uPressure,vUv+vec2(0.0,uTexelSize.y)).x;
+  float div=texture2D(uDivergence,vUv).x;
+  gl_FragColor=vec4((L+R+B+T-div)*.25,0.0,0.0,1.0);
+}`;
+
+const fluidGradientFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uPressure,uVelocity;
+uniform vec2 uTexelSize;
+void main(){
+  float L=texture2D(uPressure,vUv-vec2(uTexelSize.x,0.0)).x;
+  float R=texture2D(uPressure,vUv+vec2(uTexelSize.x,0.0)).x;
+  float B=texture2D(uPressure,vUv-vec2(0.0,uTexelSize.y)).x;
+  float T=texture2D(uPressure,vUv+vec2(0.0,uTexelSize.y)).x;
+  vec2 vel=texture2D(uVelocity,vUv).xy-.5*vec2(R-L,T-B);
+  gl_FragColor=vec4(vel,0.0,1.0);
+}`;
+
+const fluidSplatFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uTarget;
+uniform vec2 uPoint;
+uniform vec4 uValue;
+uniform float uRadius,uAspect;
+void main(){
+  vec4 base=texture2D(uTarget,vUv);
+  vec2 d=vUv-uPoint;
+  if(d.x>.5)d.x-=1.0;if(d.x<-.5)d.x+=1.0;
+  d.x*=uAspect;
+  float falloff=exp(-dot(d,d)/max(uRadius*uRadius,.000001));
+  gl_FragColor=base+uValue*falloff;
+}`;
+
+const fogFragmentShader=`
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uDensityTex,uVelocityTex,uFogMask;
+uniform float uTime,uDensity,uFluidMix;
+${fluidCommonNoise}
+
+float fogDistribution(vec2 uv){
+  return texture2D(uFogMask,uv).r;
+}
+
+float baselineFog(vec2 uv){
+  vec2 drift=vec2(uTime*.0065,uTime*.0018);
+  float broad=fbm(uv*vec2(4.2,2.5)+drift+vec2(1.7,4.2));
+  float medium=fbm(uv*vec2(8.5,4.4)-drift*.85+vec2(5.2,8.1));
+  float detail=fbm(uv*vec2(17.0,8.5)+drift*1.4+vec2(9.4,2.6));
+
+  float distribution=fogDistribution(uv);
+  float shape=smoothstep(.18,.58,broad*.56+medium*.30+detail*.14);
+  return clamp(shape*distribution*1.32,0.0,1.0);
+}
+
+void main(){
+  vec2 velocity=texture2D(uVelocityTex,vUv).xy*uFluidMix;
+  float speed=length(velocity);
+
+  vec2 flowUv=vUv-velocity*.18;
+  flowUv.x=fract(flowUv.x);
+  flowUv.y=clamp(flowUv.y,.001,.999);
+
+  float distribution=fogDistribution(vUv);
+  float base=baselineFog(flowUv);
+  float simulated=texture2D(uDensityTex,vUv).r;
+
+  float d=mix(base,simulated,.80*uFluidMix);
+
+  float micro=fbm((flowUv+velocity*.08)*vec2(20.0,10.0)+vec2(uTime*.010,-uTime*.004));
+  d*=mix(.92,1.26,micro);
+
+  d+=smoothstep(.04,.55,speed)*.08*uFluidMix;
+  d=smoothstep(.004,.48,d);
+
+  /* Hard safety against seam bleed: the painted red/black zones remain empty,
+     while the user's green zones receive a substantial visibility boost. */
+  /* The mask is already spatially blurred. Use a gentle response so the
+     transition between strong, medium and low fog is continuous. */
+  d*=smoothstep(.004,.080,distribution);
+
+  vec3 cool=vec3(.94,.975,1.0);
+  vec3 warm=vec3(1.0,.975,.91);
+  vec3 fogColor=mix(cool,warm,smoothstep(.57,.96,vUv.x));
+
+  /* White/neutral painted zones now remain clearly visible, while the green
+     cloud zones retain the dramatic boost that looked so good in the sky. */
+  float strongBoost=mix(.76,1.78,smoothstep(.22,.82,distribution));
+  float alpha=clamp(d*uDensity*5.0*strongBoost,0.0,.92);
+  gl_FragColor=vec4(fogColor,alpha);
+}`;
+
+function makeFluidTarget(width,height){
+  const fluidFilter=renderer.extensions.has('OES_texture_float_linear')?THREE.LinearFilter:THREE.NearestFilter;
+  const target=new THREE.WebGLRenderTarget(width,height,{
+    type:THREE.HalfFloatType,format:THREE.RGBAFormat,
+    minFilter:fluidFilter,magFilter:fluidFilter,
+    wrapS:THREE.RepeatWrapping,wrapT:THREE.ClampToEdgeWrapping,
+    depthBuffer:false,stencilBuffer:false
+  });
+  target.texture.generateMipmaps=false;
+  return target;
+}
+
+function makeDoubleFluidTarget(width,height){
+  let read=makeFluidTarget(width,height),write=makeFluidTarget(width,height);
+  return {get read(){return read;},get write(){return write;},swap(){const t=read;read=write;write=t;}};
+}
+
+function renderFluidPass(material,target){
+  fluidQuad.material=material;
+  renderer.setRenderTarget(target);
+  renderer.render(fluidScene,fluidCamera);
+}
+
+function clearFluidTarget(target){
+  renderer.setRenderTarget(target);renderer.clear(true,false,false);
+}
+
+function fluidMaterial(fragmentShader,uniforms={}){
+  return new THREE.ShaderMaterial({vertexShader:fluidVertexShader,fragmentShader,uniforms,depthTest:false,depthWrite:false});
+}
+
+function initFluidFog(){
+  if(!renderer.capabilities.isWebGL2){
+    throw new Error('WebGL2 is required for the interactive fluid fog.');
+  }
+  if(!renderer.extensions.has('EXT_color_buffer_float')){
+    console.warn('EXT_color_buffer_float was not reported. Attempting half-float fluid targets anyway; the atmospheric fallback will remain visible if the simulation is unavailable.');
+  }
+  const width=viewportWidth<800?192:FOG_SIM_WIDTH;
+  const height=viewportWidth<800?96:FOG_SIM_HEIGHT;
+  const texel=new THREE.Vector2(1/width,1/height);
+
+  fluidScene=new THREE.Scene();
+  fluidCamera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+  fluidQuad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());
+  fluidScene.add(fluidQuad);
+
+  fluidVelocity=makeDoubleFluidTarget(width,height);
+  fluidDensity=makeDoubleFluidTarget(width,height);
+  fluidPressure=makeDoubleFluidTarget(width,height);
+  fluidDivergence=makeFluidTarget(width,height);
+  fluidCurl=makeFluidTarget(width,height);
+
+  fluidSeedMaterial=fluidMaterial(fluidSeedFragmentShader,{uFogMask:{value:fogDistributionTexture}});
+  fluidAdvectVelocityMaterial=fluidMaterial(fluidAdvectVelocityFragmentShader,{
+    uVelocity:{value:null},uTexelSize:{value:texel},uDt:{value:0},uDissipation:{value:FOG_VELOCITY_DISSIPATION}
+  });
+  fluidAdvectDensityMaterial=fluidMaterial(fluidAdvectDensityFragmentShader,{
+    uVelocity:{value:null},uSource:{value:null},uFogMask:{value:fogDistributionTexture},
+    uDt:{value:0},uDissipation:{value:FOG_DENSITY_DISSIPATION},
+    uTime:{value:0},uRestore:{value:0},uAmbient:{value:new THREE.Vector2(FOG_AMBIENT_DRIFT_X,FOG_AMBIENT_DRIFT_Y)}
+  });
+  fluidCurlMaterial=fluidMaterial(fluidCurlFragmentShader,{uVelocity:{value:null},uTexelSize:{value:texel}});
+  fluidVorticityMaterial=fluidMaterial(fluidVorticityFragmentShader,{
+    uVelocity:{value:null},uCurl:{value:null},uTexelSize:{value:texel},uCurlStrength:{value:FOG_VORTICITY},uDt:{value:0}
+  });
+  fluidDivergenceMaterial=fluidMaterial(fluidDivergenceFragmentShader,{uVelocity:{value:null},uTexelSize:{value:texel}});
+  fluidPressureMaterial=fluidMaterial(fluidPressureFragmentShader,{uPressure:{value:null},uDivergence:{value:null},uTexelSize:{value:texel}});
+  fluidGradientMaterial=fluidMaterial(fluidGradientFragmentShader,{uPressure:{value:null},uVelocity:{value:null},uTexelSize:{value:texel}});
+  fluidSplatMaterial=fluidMaterial(fluidSplatFragmentShader,{
+    uTarget:{value:null},uPoint:{value:new THREE.Vector2(.5,.5)},uValue:{value:new THREE.Vector4()},
+    uRadius:{value:FOG_SPLAT_RADIUS},uAspect:{value:width/height}
+  });
+
+  clearFluidTarget(fluidVelocity.read);clearFluidTarget(fluidVelocity.write);
+  clearFluidTarget(fluidPressure.read);clearFluidTarget(fluidPressure.write);
+  renderFluidPass(fluidSeedMaterial,fluidDensity.read);
+  renderFluidPass(fluidSeedMaterial,fluidDensity.write);
+  renderer.setRenderTarget(null);
+  fluidReady=true;
+}
+
+function splatFluidTarget(doubleTarget,point,value,radius){
+  fluidSplatMaterial.uniforms.uTarget.value=doubleTarget.read.texture;
+  fluidSplatMaterial.uniforms.uPoint.value.set(point.x,point.y);
+  fluidSplatMaterial.uniforms.uValue.value.copy(value);
+  fluidSplatMaterial.uniforms.uRadius.value=radius;
+  renderFluidPass(fluidSplatMaterial,doubleTarget.write);
+  doubleTarget.swap();
+}
+
+function updateFluidFog(dt,elapsed){
+  if(!fluidReady)return;
+  const step=Math.min(dt,.025);
+
+  /* Apply all pointer events received since the previous animation frame. */
+  while(pendingFogSplats.length){
+    const s=pendingFogSplats.shift();
+    splatFluidTarget(fluidVelocity,s.point,new THREE.Vector4(s.force.x,s.force.y,0,0),s.radius);
+    if(FOG_CLEAR_STRENGTH>0){
+      splatFluidTarget(fluidDensity,s.point,new THREE.Vector4(-FOG_CLEAR_STRENGTH*s.strength,0,0,0),s.radius*.72);
+    }
+  }
+
+  fluidAdvectVelocityMaterial.uniforms.uVelocity.value=fluidVelocity.read.texture;
+  fluidAdvectVelocityMaterial.uniforms.uDt.value=step;
+  fluidAdvectVelocityMaterial.uniforms.uDissipation.value=Math.pow(FOG_VELOCITY_DISSIPATION,step*60);
+  renderFluidPass(fluidAdvectVelocityMaterial,fluidVelocity.write);fluidVelocity.swap();
+
+  fluidCurlMaterial.uniforms.uVelocity.value=fluidVelocity.read.texture;
+  renderFluidPass(fluidCurlMaterial,fluidCurl);
+
+  fluidVorticityMaterial.uniforms.uVelocity.value=fluidVelocity.read.texture;
+  fluidVorticityMaterial.uniforms.uCurl.value=fluidCurl.texture;
+  fluidVorticityMaterial.uniforms.uDt.value=step;
+  renderFluidPass(fluidVorticityMaterial,fluidVelocity.write);fluidVelocity.swap();
+
+  fluidDivergenceMaterial.uniforms.uVelocity.value=fluidVelocity.read.texture;
+  renderFluidPass(fluidDivergenceMaterial,fluidDivergence);
+
+  clearFluidTarget(fluidPressure.read);clearFluidTarget(fluidPressure.write);
+  fluidPressureMaterial.uniforms.uDivergence.value=fluidDivergence.texture;
+  for(let i=0;i<FOG_PRESSURE_ITERATIONS;i++){
+    fluidPressureMaterial.uniforms.uPressure.value=fluidPressure.read.texture;
+    renderFluidPass(fluidPressureMaterial,fluidPressure.write);fluidPressure.swap();
+  }
+
+  fluidGradientMaterial.uniforms.uPressure.value=fluidPressure.read.texture;
+  fluidGradientMaterial.uniforms.uVelocity.value=fluidVelocity.read.texture;
+  renderFluidPass(fluidGradientMaterial,fluidVelocity.write);fluidVelocity.swap();
+
+  fluidAdvectDensityMaterial.uniforms.uVelocity.value=fluidVelocity.read.texture;
+  fluidAdvectDensityMaterial.uniforms.uSource.value=fluidDensity.read.texture;
+  fluidAdvectDensityMaterial.uniforms.uDt.value=step;
+  fluidAdvectDensityMaterial.uniforms.uTime.value=elapsed;
+  fluidAdvectDensityMaterial.uniforms.uDissipation.value=Math.pow(FOG_DENSITY_DISSIPATION,step*60);
+  fluidAdvectDensityMaterial.uniforms.uRestore.value=1-Math.exp(-FOG_DENSITY_RESTORE_RATE*step);
+  renderFluidPass(fluidAdvectDensityMaterial,fluidDensity.write);fluidDensity.swap();
+
+  fogMaterial.uniforms.uDensityTex.value=fluidDensity.read.texture;
+  fogMaterial.uniforms.uVelocityTex.value=fluidVelocity.read.texture;
+  fogMaterial.uniforms.uFluidMix.value=1;
+  renderer.setRenderTarget(null);
+}
 
 function initPanorama(){
 
+  panoramaScene=new THREE.Scene();
 
+  camera=new THREE.PerspectiveCamera(PANORAMA_FOV,viewportWidth/viewportHeight,.1,200);
 
-  panoramaScene=new THREE.Scene();
+  camera.position.set(0,0,0);
 
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
 
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
 
-  camera=new THREE.PerspectiveCamera(PANORAMA_FOV,viewportWidth/viewportHeight,.1,200);
+  renderer.setSize(viewportWidth,viewportHeight,false);
 
+  renderer.setClearColor(0x000000,0);
 
+  panoramaElement.insertBefore(renderer.domElement,panoramaElement.firstChild);
 
-  camera.position.set(0,0,0);
+  return new Promise((resolve,reject)=>{
 
+    new THREE.TextureLoader().load(PANORAMA_IMAGE,texture=>{
 
+      texture.colorSpace=THREE.SRGBColorSpace;
 
-  renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+      texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
 
+      panoramaScene.add(new THREE.Mesh(new THREE.SphereGeometry(100,64,40),new THREE.MeshBasicMaterial({map:texture,side:THREE.BackSide})));
 
+      /* The paint-over is embedded as a texture so fog placement follows the
+         user's actual map rather than a few broad mathematical bands. */
+      fogDistributionTexture=new THREE.TextureLoader().load(FOG_DISTRIBUTION_MASK_PATH);
+      fogDistributionTexture.wrapS=THREE.ClampToEdgeWrapping;
+      fogDistributionTexture.wrapT=THREE.ClampToEdgeWrapping;
+      fogDistributionTexture.minFilter=THREE.LinearFilter;
+      fogDistributionTexture.magFilter=THREE.LinearFilter;
+      fogDistributionTexture.generateMipmaps=false;
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+      try{
+        initFluidFog();
+      }catch(error){
+        console.warn('Fluid fog could not initialize. Panorama will continue without interactive fog.',error);
+        fluidReady=false;
+      }
 
+      /* If the GPU cannot provide the half-float targets, keep the panorama alive
+         instead of breaking the whole experience. */
+      const neutralPixel=new Uint8Array([0,0,0,255]);
+      const emptyDensity=new THREE.DataTexture(neutralPixel,1,1,THREE.RGBAFormat,THREE.UnsignedByteType);
+      emptyDensity.needsUpdate=true;
+      emptyDensity.minFilter=emptyDensity.magFilter=THREE.NearestFilter;
 
+      fogMaterial=new THREE.ShaderMaterial({
 
-  renderer.setSize(viewportWidth,viewportHeight,false);
+        vertexShader:fogVertexShader,fragmentShader:fogFragmentShader,
 
+        uniforms:{
+          uTime:{value:0},
+          /* Never zero this just because the solver failed: the procedural
+             atmospheric layer is also our graceful visual fallback. */
+          uDensity:{value:FOG_DENSITY},
+          uFluidMix:{value:fluidReady?1:0},
+          uDensityTex:{value:fluidReady?fluidDensity.read.texture:emptyDensity},
+          uVelocityTex:{value:fluidReady?fluidVelocity.read.texture:emptyDensity},
+          uFogMask:{value:fogDistributionTexture}
+        },
 
+        side:THREE.BackSide,transparent:true,depthWrite:false,depthTest:false
 
-  panoramaElement.insertBefore(renderer.domElement,panoramaElement.firstChild);
+      });
 
+      const fogMesh=new THREE.Mesh(new THREE.SphereGeometry(99.2,64,40),fogMaterial);
+      fogMesh.renderOrder=10;
+      panoramaScene.add(fogMesh);
 
+      panoramaLoaded=true;resolve();
 
-  return new Promise((resolve,reject)=>{
+    },null,reject);
 
-
-
-    new THREE.TextureLoader().load(PANORAMA_IMAGE,texture=>{
-
-
-
-      texture.colorSpace=THREE.SRGBColorSpace;
-
-
-
-      texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
-
-
-
-      panoramaScene.add(new THREE.Mesh(new THREE.SphereGeometry(100,64,40),new THREE.MeshBasicMaterial({map:texture,side:THREE.BackSide})));
-
-
-
-      fogMaterial=new THREE.ShaderMaterial({
-
-
-
-        vertexShader:fogVertexShader,fragmentShader:fogFragmentShader,
-
-
-
-        uniforms:{uTime:{value:0},uDensity:{value:FOG_DENSITY},uInteractionUV:{value:fogInteractionUV},
-
-
-
-          uInteractionVelocity:{value:fogInteractionVelocity},uInteractionStrength:{value:0}},
-
-
-
-        side:THREE.BackSide,transparent:true,depthWrite:false,depthTest:false
-
-
-
-      });
-
-
-
-      panoramaScene.add(new THREE.Mesh(new THREE.SphereGeometry(99.2,48,32),fogMaterial));
-
-
-
-      panoramaLoaded=true;resolve();
-
-
-
-    },null,reject);
-
-
-
-  });
-
-
+  });
 
 }
-
-
 
 function getCameraScrollProgress(){return smootherstep01(smoothScrollFrame/PANORAMA_FADE_END_FRAME);}
 
@@ -1904,7 +2293,9 @@ function renderPanorama(){
 
 
 
-  renderer.render(panoramaScene,camera);
+  renderer.setRenderTarget(null);
+
+  renderer.render(panoramaScene,camera);
 
 
 
@@ -1914,47 +2305,34 @@ function renderPanorama(){
 
 function screenPointToPanoramaUV(clientX,clientY){
 
+  if(!camera)return null;
 
+  const bounds=stage.getBoundingClientRect();
 
-  if(!camera)return null;
+  /* Use the stage's actual rendered dimensions rather than viewportWidth /
+     viewportHeight. The stage deliberately has a tiny vertical overscan, so
+     using viewport dimensions introduces a small pointer offset. */
+  const ndc=new THREE.Vector2(
+    ((clientX-bounds.left)/bounds.width)*2-1,
+    -(((clientY-bounds.top)/bounds.height)*2-1)
+  );
 
+  const dir=new THREE.Vector3(ndc.x,ndc.y,.5).unproject(camera).sub(camera.position).normalize();
 
+  const origin=camera.position.clone(),b=origin.dot(dir),c=origin.dot(origin)-10000,disc=b*b-c;
 
-  const bounds=stage.getBoundingClientRect();
+  if(disc<0)return null;
 
+  const hit=origin.add(dir.multiplyScalar(-b+Math.sqrt(disc))).normalize();
 
+  const theta=Math.acos(clamp(hit.y,-1,1));let phi=Math.atan2(hit.z,-hit.x);
 
-  const ndc=new THREE.Vector2(((clientX-bounds.left)/viewportWidth)*2-1,-(((clientY-bounds.top)/viewportHeight)*2-1));
+  if(phi<0)phi+=Math.PI*2;
 
-
-
-  const dir=new THREE.Vector3(ndc.x,ndc.y,.5).unproject(camera).sub(camera.position).normalize();
-
-
-
-  const origin=camera.position.clone(),b=origin.dot(dir),c=origin.dot(origin)-10000,disc=b*b-c;
-
-
-
-  if(disc<0)return null;
-
-
-
-  const hit=origin.add(dir.multiplyScalar(-b+Math.sqrt(disc))).normalize();
-
-
-
-  const theta=Math.acos(clamp(hit.y,-1,1));let phi=Math.atan2(hit.z,-hit.x);
-
-
-
-  if(phi<0)phi+=Math.PI*2;
-
-
-
-  return {u:phi/(Math.PI*2),v:theta/Math.PI};
-
-
+  /* SphereGeometry's vertical UV direction is opposite to theta/pi.
+     Without this flip, interaction is mirrored vertically around the middle
+     of the panorama: high mouse movement disturbs low fog and vice versa. */
+  return {u:phi/(Math.PI*2),v:1-(theta/Math.PI)};
 
 }
 
@@ -1962,229 +2340,151 @@ function screenPointToPanoramaUV(clientX,clientY){
 
 function updateFogInteractionFromPointer(event,strengthMultiplier){
 
+  if(!fluidReady)return;
 
+  const uv=screenPointToPanoramaUV(event.clientX,event.clientY);
 
-  const uv=screenPointToPanoramaUV(event.clientX,event.clientY);
+  if(!uv)return;
 
+  const now=performance.now();
 
+  if(lastFogPointerUV){
+    const dt=Math.max(.008,(now-lastFogPointerTime)/1000);
+    let du=uv.u-lastFogPointerUV.x;
+    if(du>.5)du-=1;if(du<-.5)du+=1;
+    const dv=uv.v-lastFogPointerUV.y;
+    const speed=Math.hypot(du,dv)/dt;
+    if(speed>.003){
+      const strength=clamp(speed*1.9,0,1)*strengthMultiplier;
+      let fx=(du/dt)*FOG_FORCE_GAIN*strengthMultiplier;
+      let fy=(dv/dt)*FOG_FORCE_GAIN*strengthMultiplier;
+      const mag=Math.hypot(fx,fy);
+      if(mag>FOG_MAX_FORCE){fx=fx/mag*FOG_MAX_FORCE;fy=fy/mag*FOG_MAX_FORCE;}
 
-  if(uv)fogInteractionUV.set(uv.u,uv.v);
+      /* Browser pointer events arrive with small speed/direction spikes. Low-pass
+         the injected force so the fog rolls away from the cursor instead of
+         reacting with a hard punch on every event. */
+      const forceEase=1-Math.exp(-FOG_POINTER_FORCE_SMOOTHING*dt);
+      smoothedFogForce.x+=(fx-smoothedFogForce.x)*forceEase;
+      smoothedFogForce.y+=(fy-smoothedFogForce.y)*forceEase;
 
+      pendingFogSplats.push({
+        point:new THREE.Vector2(uv.u,uv.v),
+        force:smoothedFogForce.clone(),
+        radius:isDragging?FOG_DRAG_SPLAT_RADIUS:FOG_SPLAT_RADIUS,
+        strength
+      });
+      if(pendingFogSplats.length>8)pendingFogSplats.splice(0,pendingFogSplats.length-8);
+    }
+  }
 
-
-  const now=performance.now(),dt=Math.max(8,now-lastPointerTime);
-
-
-
-  const dx=event.clientX-lastPointerX,dy=event.clientY-lastPointerY;
-
-
-
-  const pixelSpeed=Math.hypot(dx,dy)/dt,strength=clamp(pixelSpeed*2.6,0,1);
-
-
-
-  fogInteractionVelocity.set(clamp(dx*.018,-1,1),clamp(-dy*.018,-1,1));
-
-
-
-  fogTargetInteractionStrength=Math.max(fogTargetInteractionStrength,strength*strengthMultiplier);
-
-
-
-  lastPointerX=event.clientX;lastPointerY=event.clientY;lastPointerTime=now;
-
-
+  if(!lastFogPointerUV)lastFogPointerUV=new THREE.Vector2();
+  lastFogPointerUV.set(uv.u,uv.v);
+  lastFogPointerTime=now;
 
 }
-
-
 
 function updatePanoramaMotion(dt,elapsed){
 
+  if(!panoramaLoaded)return;
 
+  if(fluidReady)updateFluidFog(dt,elapsed);
 
-  if(!panoramaLoaded)return;
+  fogMaterial.uniforms.uTime.value=elapsed;
 
+  if(isDragging){renderPanorama();return;}
 
+  const me=1-Math.exp(-dt*2.25);
 
-  fogMaterial.uniforms.uTime.value=elapsed;
+  smoothMouseX+=(mouseX-smoothMouseX)*me;smoothMouseY+=(mouseY-smoothMouseY)*me;
 
+  const requestedYaw=AUTO_ROTATE_SPEED+smoothMouseX*MOUSE_YAW_SPEED,requestedPitch=smoothMouseY*MOUSE_PITCH_SPEED;
 
+  const ve=1-Math.exp(-dt*CAMERA_VELOCITY_SMOOTHING);
 
-  const ease=1-Math.exp(-dt*7);
+  yawVelocity+=(requestedYaw-yawVelocity)*ve;pitchVelocity+=(requestedPitch-pitchVelocity)*ve;
 
+  const dragDecay=Math.exp(-DRAG_FRICTION*dt);
 
+  inertialYawVelocity*=dragDecay;inertialPitchVelocity*=dragDecay;
 
-  fogInteractionStrength+=(fogTargetInteractionStrength-fogInteractionStrength)*ease;
+  yaw+=(yawVelocity+inertialYawVelocity)*dt;
 
+  pitch=clamp(pitch+(pitchVelocity+inertialPitchVelocity)*dt,-MAX_PITCH,MAX_PITCH);
 
-
-  fogTargetInteractionStrength*=Math.exp(-FOG_INTERACTION_DECAY*dt);
-
-
-
-  fogInteractionVelocity.multiplyScalar(Math.exp(-3.2*dt));
-
-
-
-  fogMaterial.uniforms.uInteractionStrength.value=fogInteractionStrength;
-
-
-
-  if(isDragging){renderPanorama();return;}
-
-
-
-  const me=1-Math.exp(-dt*2.25);
-
-
-
-  smoothMouseX+=(mouseX-smoothMouseX)*me;smoothMouseY+=(mouseY-smoothMouseY)*me;
-
-
-
-  const requestedYaw=AUTO_ROTATE_SPEED+smoothMouseX*MOUSE_YAW_SPEED,requestedPitch=smoothMouseY*MOUSE_PITCH_SPEED;
-
-
-
-  const ve=1-Math.exp(-dt*CAMERA_VELOCITY_SMOOTHING);
-
-
-
-  yawVelocity+=(requestedYaw-yawVelocity)*ve;pitchVelocity+=(requestedPitch-pitchVelocity)*ve;
-
-
-
-  const dragDecay=Math.exp(-DRAG_FRICTION*dt);
-
-
-
-  inertialYawVelocity*=dragDecay;inertialPitchVelocity*=dragDecay;
-
-
-
-  yaw+=(yawVelocity+inertialYawVelocity)*dt;
-
-
-
-  pitch=clamp(pitch+(pitchVelocity+inertialPitchVelocity)*dt,-MAX_PITCH,MAX_PITCH);
-
-
-
-  renderPanorama();
-
-
+  renderPanorama();
 
 }
 
 
 
-
-
-
-
-function setGhostPosition(el,sunX,sunY,cx,cy,factor,opacity,scale){
-
-
-
-  el.style.left=`${sunX+(cx-sunX)*factor}px`;el.style.top=`${sunY+(cy-sunY)*factor}px`;
-
-
-
-  el.style.opacity=String(opacity);el.style.transform=`scale(${scale})`;
-
-
-
+function setGhostPosition(el,sunX,sunY,cx,cy,factor,opacity,scale,rotation=0){
+  el.style.left=`${sunX+(cx-sunX)*factor}px`;
+  el.style.top=`${sunY+(cy-sunY)*factor}px`;
+  el.style.opacity=String(opacity);
+  el.style.transform=`rotate(${rotation}deg) scale(${scale})`;
 }
 
 
 
-function hideLensFlare(){[sunBloom,sunCore,sunStreak,flareGhost1,flareGhost2,flareGhost3,flareGhost4].forEach(el=>el.style.opacity='0');}
+function hideLensFlare(){
+  [sunBloom,sunCore,sunStreak,sunRays,flareGhost1,flareGhost2,flareGhost3,flareGhost4,flareGhostFront2,flareGhostFront4]
+    .forEach(el=>{if(el)el.style.opacity='0';});
+}
 
 
 
 function updateLensFlare(){
+  if(!camera||!panoramaLoaded)return;
 
+  const sunWorldPoint=sunDirection.clone().multiplyScalar(100);
 
+  if(sunWorldPoint.clone().applyMatrix4(camera.matrixWorldInverse).z>=-.01){hideLensFlare();return;}
 
-  if(!camera||!panoramaLoaded)return;
+  const projected=sunWorldPoint.clone().project(camera);
 
+  if(Math.abs(projected.x)>1.62||Math.abs(projected.y)>1.62){hideLensFlare();return;}
 
+  const sunX=(projected.x*.5+.5)*viewportWidth;
+  const sunY=(-projected.y*.5+.5)*viewportHeight;
+  const centerX=viewportWidth/2,centerY=viewportHeight/2;
+  const radial=Math.hypot(projected.x,projected.y);
 
-  const sunWorldPoint=sunDirection.clone().multiplyScalar(100);
+  /* Separate 'approach' from final brightness so the flare visibly grows
+     as the sun enters the frame instead of simply appearing at near-full size. */
+  const approach=clamp((1.62-radial)/.74,0,1);
+  const growth=smootherstep01(approach);
+  const intensity=clamp(1-smootherstep01(clamp((radial-.96)/.62,0,1)),0,1);
+  const raysIntensity=clamp(.12+growth*.88,0,1)*Math.pow(Math.max(intensity,.16),.72);
+  const axisAngle=Math.atan2(centerY-sunY,centerX-sunX)*180/Math.PI;
 
+  [sunBloom,sunCore,sunStreak,sunRays].forEach(el=>{
+    if(!el)return;
+    el.style.left=`${sunX}px`;
+    el.style.top=`${sunY}px`;
+  });
 
+  /* Smaller glow, but with a clearly readable scale-up as the sun approaches. */
+  sunBloom.style.opacity=String(intensity*.66);
+  sunCore.style.opacity=String(intensity*.82);
+  sunBloom.style.transform=`scale(${.46+growth*.48})`;
+  sunCore.style.transform=`scale(${.68+growth*.34})`;
 
-  if(sunWorldPoint.clone().applyMatrix4(camera.matrixWorldInverse).z>=-.01){hideLensFlare();return;}
+  sunStreak.style.opacity=String(clamp(.08+growth*.60,0,.68)*intensity);
+  sunStreak.style.transform=`rotate(${axisAngle*.055}deg) scaleX(${.22+growth*.92}) scaleY(${.72+growth*.28})`;
 
+  if(sunRays){
+    sunRays.style.opacity=String(raysIntensity*.94);
+    sunRays.style.transform=`rotate(${axisAngle*.025}deg) scale(${.10+growth*1.06})`;
+  }
 
-
-  const projected=sunWorldPoint.clone().project(camera);
-
-
-
-  if(Math.abs(projected.x)>1.55||Math.abs(projected.y)>1.55){hideLensFlare();return;}
-
-
-
-  const sunX=(projected.x*.5+.5)*viewportWidth,sunY=(-projected.y*.5+.5)*viewportHeight;
-
-
-
-  const centerX=viewportWidth/2,centerY=viewportHeight/2;
-
-
-
-  const radial=Math.hypot(projected.x,projected.y);
-
-
-
-  const intensity=clamp(1-smootherstep01(clamp((radial-.96)/.50,0,1)),0,1);
-
-
-
-  sunBloom.style.left=sunCore.style.left=sunStreak.style.left=`${sunX}px`;
-
-
-
-  sunBloom.style.top=sunCore.style.top=sunStreak.style.top=`${sunY}px`;
-
-
-
-  sunBloom.style.opacity=sunCore.style.opacity=String(intensity);
-
-
-
-  sunBloom.style.transform=`scale(${1+intensity*.32})`;
-
-
-
-  sunStreak.style.opacity=String(intensity*.98);
-
-
-
-  setGhostPosition(flareGhost1,sunX,sunY,centerX,centerY,.32,intensity,1);
-
-
-
-  setGhostPosition(flareGhost2,sunX,sunY,centerX,centerY,.70,intensity*.92,1);
-
-
-
-  setGhostPosition(flareGhost3,sunX,sunY,centerX,centerY,1.15,intensity,1.18);
-
-
-
-  setGhostPosition(flareGhost4,sunX,sunY,centerX,centerY,1.55,intensity*.72,1);
-
-
-
+  /* Aperture-shaped ghosts travel along the optical axis. Their rotations are
+     intentionally slightly different so they do not read as copied stickers. */
+  setGhostPosition(flareGhost1,sunX,sunY,centerX,centerY,.31,intensity*.92,.84+intensity*.18,axisAngle+7);
+  setGhostPosition(flareGhostFront2,sunX,sunY,centerX,centerY,.68,intensity*.72,.82+intensity*.22,axisAngle-11);
+  setGhostPosition(flareGhost3,sunX,sunY,centerX,centerY,1.08,intensity*.53,.90+intensity*.18,axisAngle+18);
+  setGhostPosition(flareGhostFront4,sunX,sunY,centerX,centerY,1.48,intensity*.34,.80+intensity*.24,axisAngle-5);
 }
-
-
-
-
 
 
 
@@ -2196,11 +2496,9 @@ window.addEventListener('pointermove',event=>{
 
 
 
-  if(panoramaLoaded&&smoothScrollFrame<PANORAMA_FADE_END_FRAME)
+  if(panoramaLoaded&&!isDragging&&smoothScrollFrame<PANORAMA_FADE_END_FRAME)
 
-
-
-    updateFogInteractionFromPointer(event,isDragging?FOG_DRAG_STRENGTH:FOG_MOUSE_STRENGTH);
+    updateFogInteractionFromPointer(event,FOG_MOUSE_STRENGTH);
 
 
 
@@ -2224,7 +2522,7 @@ window.addEventListener('pointermove',event=>{
 
 
 
-document.addEventListener('mouseleave',()=>{if(!isDragging){mouseX=0;mouseY=0;}});
+document.addEventListener('mouseleave',()=>{if(!isDragging){mouseX=0;mouseY=0;lastFogPointerUV=null;smoothedFogForce.set(0,0);}});
 
 
 
@@ -2253,6 +2551,9 @@ panoramaElement.addEventListener('pointerdown',event=>{
 
 
   latestDragYawVelocity=latestDragPitchVelocity=inertialYawVelocity=inertialPitchVelocity=0;
+
+  lastFogPointerUV=null;
+  smoothedFogForce.set(0,0);
 
 
 
@@ -2332,7 +2633,7 @@ function finishDrag(event){
 
 
 
-  dragPointerId=null;mouseX=mouseY=0;
+  dragPointerId=null;mouseX=mouseY=0;lastFogPointerUV=null;
 
 
 
