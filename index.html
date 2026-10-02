@@ -92,6 +92,17 @@
       z-index: 1;
     }
 
+    #holdEnvCanvas {
+      position: absolute;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      opacity: 0;
+      pointer-events: none;
+    }
+
 
 
 
@@ -101,7 +112,7 @@
     #panorama {
       position: absolute;
       inset: 0;
-      z-index: 2;
+      z-index: 3;
       width: 100%;
       height: 100%;
       opacity: 0;
@@ -586,14 +597,16 @@
 
 
 
-    #storyMessage2 {
+    #storyMessage2,
+    #storyMessage3 {
       width: min(1380px, 88vw);
       text-align: center;
     }
 
 
 
-    #storyMessage2 .storyLine {
+    #storyMessage2 .storyLine,
+    #storyMessage3 .storyLine {
       font-size: clamp(19px, 1.8vw, 34px);
       line-height: 1.06;
       font-weight: 600;
@@ -604,7 +617,8 @@
 
 
 
-    #storyMessage2Line2 {
+    #storyMessage2Line2,
+    #storyMessage3Line2 {
       margin-top: .06em;
     }
 
@@ -1147,13 +1161,15 @@
 
 
 
-      #storyMessage2 {
+      #storyMessage2,
+      #storyMessage3 {
         width: 88vw;
       }
 
 
 
-      #storyMessage2 .storyLine {
+      #storyMessage2 .storyLine,
+      #storyMessage3 .storyLine {
         font-size: clamp(20px, 5.2vw, 30px);
         line-height: 1.12;
       }
@@ -1898,6 +1914,7 @@
 
 
           <canvas id="sceneCanvas"></canvas>
+      <canvas id="holdEnvCanvas"></canvas>
 
 
 
@@ -2024,6 +2041,16 @@
 
 
                 </div>
+
+
+
+          <div class="storyMessage" id="storyMessage3">
+
+            <span class="storyLine" id="storyMessage3Line1">A level of non-repeating woodgrain realism unlike anything else in the industry.</span>
+
+            <span class="storyLine" id="storyMessage3Line2">There simply isn’t another metal cladding collection quite like it.</span>
+
+          </div>
 
 
 
@@ -2284,8 +2311,25 @@
 
       const SCROLL_SETTLE_THRESHOLD = .01, STORY_SETTLE_THRESHOLD = .00005, PANORAMA_FADE_END_FRAME = 24;
 
-
-
+      const HOLD_ENV_IMAGE = 'hold-extended.jpg';
+      const HOLD_ENV_FOV = 58;
+      const HOLD_ENV_CURVE_DEPTH = 0.52;
+      const HOLD_ENV_CURVE_SOFTNESS = 1.08;
+      const HOLD_ENV_OUTER_OVERSCAN = 1.28;
+      const HOLD_ENV_SEGMENTS_X = 120, HOLD_ENV_SEGMENTS_Y = 68;
+      const HOLD_ENV_MOUSE_YAW_DEG = 17.5, HOLD_ENV_MOUSE_PITCH_DEG = 8.5;
+      const HOLD_ENV_ROTATION_EASE = 5.2;
+      const HOLD_ENV_MOUSE_DELAY_MS = 900;
+      const HOLD_ENV_MOUSE_RAMP_MS = 1200;
+      const HOLD_ENV_FADE_OUT_MS = 520;
+      /* The final sequence frame is already clamped at raw scroll ~= .74074 because
+         SCROLL_SENSITIVITY is 1.35. The hold environment fades in only after that point,
+         leaving a small scroll runway for perfect alignment on the way back up. */
+      const HOLD_ENV_ACTIVE_START = 0.742;
+      const HOLD_ENV_ACTIVE_FULL = 0.760;
+      const HOLD_SCROLL_START = 1 / SCROLL_SENSITIVITY;
+      const HOLD_SCROLL_END = 0.955;
+      const HOLD_SCROLL_SLOWDOWN = 1.65;
 
 
 
@@ -2376,21 +2420,21 @@
       
          The working scroll engine below is intentionally left unchanged. */
 
-      const MOOD_WHITE_START = .905;
+      const MOOD_WHITE_START = .955;
 
-      const MOOD_SLOWDOWN = 5; // stretch only the final Coastal Sand phase; everything before .905 keeps its existing scroll speed
+      const MOOD_SLOWDOWN = 10.5; // preserve the slow Coastal Sand reveal after extending the interactive hold section
 
-      const MOOD_WHITE_END = .958;
+      const MOOD_WHITE_END = .978;
 
-      const MOOD_VIDEO_START = .948;
+      const MOOD_VIDEO_START = .971;
 
-      const MOOD_VIDEO_END = .992;
+      const MOOD_VIDEO_END = .995;
 
       const MOOD_FOOTER_START = (MOOD_VIDEO_START + MOOD_VIDEO_END) / 2;
 
-      const MOOD_FOOTER_END = .995;
+      const MOOD_FOOTER_END = .997;
 
-      const MOOD_VIEWER_START = .980;
+      const MOOD_VIEWER_START = .988;
 
       const MOOD_VIEWER_END = 1.0;
 
@@ -2509,6 +2553,8 @@
 
       const sceneCanvas = $('sceneCanvas'), sceneCtx = sceneCanvas.getContext('2d', { alpha: false });
 
+      const holdEnvCanvas = $('holdEnvCanvas');
+
 
 
       const maskedTextCanvas = $('maskedTextCanvas'), maskedTextCtx = maskedTextCanvas.getContext('2d');
@@ -2524,6 +2570,7 @@
 
 
       const storyMessage2Line1 = $('storyMessage2Line1'), storyMessage2Line2 = $('storyMessage2Line2');
+      const storyMessage3Line1 = $('storyMessage3Line1'), storyMessage3Line2 = $('storyMessage3Line2');
 
 
 
@@ -2573,6 +2620,12 @@
 
 
       let inertialYawVelocity = 0, inertialPitchVelocity = 0, mouseX = 0, mouseY = 0, smoothMouseX = 0, smoothMouseY = 0;
+      let holdEnvRenderer = null, holdEnvScene = null, holdEnvCamera = null, holdEnvMesh = null, holdEnvTexture = null;
+      let holdEnvLoaded = false, holdEnvAspect = 16 / 9, holdEnvCenterWidth = 16 / 9 * 2, holdEnvCenterHeight = 2;
+      let holdEnvCameraDistance = 1, holdEnvSmoothMouseX = 0, holdEnvSmoothMouseY = 0, holdEnvYaw = 0, holdEnvPitch = 0;
+      let holdEnvBlend = 0, holdEnvMouseBlend = 0, holdEnvEnteredAt = 0;
+      let holdEnvMode = 'inactive'; // inactive | entering | active | realigning | fading-out
+      let holdEnvFadeStartedAt = 0, holdEnvReverseFrameLock = false;
 
 
 
@@ -3020,15 +3073,12 @@
 
         const storyColor = `rgb(${storyTone},${storyTone},${storyTone})`;
 
-        storyMessage2Line1.style.color = storyColor;
-
-        storyMessage2Line2.style.color = storyColor;
+        storyMessage3Line1.style.color = storyColor;
+        storyMessage3Line2.style.color = storyColor;
 
         const shadowAlpha = .26 * (1 - whiteReveal) + .10 * whiteReveal;
-
-        storyMessage2Line1.style.textShadow = `0 2px 6px rgba(0,0,0,${shadowAlpha}),0 6px 20px rgba(0,0,0,${shadowAlpha * .65})`;
-
-        storyMessage2Line2.style.textShadow = storyMessage2Line1.style.textShadow;
+        storyMessage3Line1.style.textShadow = `0 2px 6px rgba(0,0,0,${shadowAlpha}),0 6px 20px rgba(0,0,0,${shadowAlpha * .65})`;
+        storyMessage3Line2.style.textShadow = storyMessage3Line1.style.textShadow;
 
 
 
@@ -3440,13 +3490,14 @@
 
 
 
-        /* Final copy remains in place. It changes from white to black during the white wash, then the MP4 fades over it. */
+        /* The Pacific Northwest copy now exits upward, making room for a final pair of lines
+           while the interactive end-frame environment remains available to explore. */
+        setStoryLineMotion(storyMessage2Line1, p, .825, .875, .890, .920);
+        setStoryLineMotion(storyMessage2Line2, p, .845, .895, .900, .930);
 
-        setStoryLineMotion(storyMessage2Line1, p, .825, .915, null, null);
-
-
-
-        setStoryLineMotion(storyMessage2Line2, p, .850, .940, null, null);
+        /* Final copy remains in place through the white wash, then the Coastal Sand media fades over it. */
+        setStoryLineMotion(storyMessage3Line1, p, .902, .930, null, null);
+        setStoryLineMotion(storyMessage3Line2, p, .916, .944, null, null);
 
 
 
@@ -4567,9 +4618,10 @@ void main(){
 
         scrollingReady = true;
 
+        const extraHoldVH = SCROLL_LENGTH_VH * (HOLD_SCROLL_END - HOLD_SCROLL_START) * (HOLD_SCROLL_SLOWDOWN - 1);
         const extraMoodVH = SCROLL_LENGTH_VH * (1 - MOOD_WHITE_START) * (MOOD_SLOWDOWN - 1);
 
-        experience.style.height = `${SCROLL_LENGTH_VH + extraMoodVH + 100}vh`;
+        experience.style.height = `${SCROLL_LENGTH_VH + extraHoldVH + extraMoodVH + 100}vh`;
 
 
 
@@ -4909,6 +4961,217 @@ void main(){
 
 
 
+
+      function buildHoldEnvironmentGeometry(centerWidth, centerHeight) {
+        const totalWidth = centerWidth * 3;
+        const totalHeight = centerHeight * 3;
+        const geometry = new THREE.PlaneGeometry(totalWidth, totalHeight, HOLD_ENV_SEGMENTS_X, HOLD_ENV_SEGMENTS_Y);
+        const positions = geometry.attributes.position;
+
+        for (let i = 0; i < positions.count; i++) {
+          let x = positions.getX(i);
+          let y = positions.getY(i);
+
+          /* The middle third is kept mathematically flat and at its original size.
+             Only the generated outskirts bend away. Expanding only the OUTER excess
+             gives us extra safety margin so mild mouse movement can never reveal a mesh edge. */
+          const signX = Math.sign(x) || 1;
+          const signY = Math.sign(y) || 1;
+          const absX = Math.abs(x), absY = Math.abs(y);
+          const halfCenterW = centerWidth * .5, halfCenterH = centerHeight * .5;
+          if (absX > halfCenterW) x = signX * (halfCenterW + (absX - halfCenterW) * HOLD_ENV_OUTER_OVERSCAN);
+          if (absY > halfCenterH) y = signY * (halfCenterH + (absY - halfCenterH) * HOLD_ENV_OUTER_OVERSCAN);
+          positions.setX(i, x);
+          positions.setY(i, y);
+
+          const dx = Math.max(0, Math.abs(x) - halfCenterW) / centerWidth;
+          const dy = Math.max(0, Math.abs(y) - halfCenterH) / centerHeight;
+          const sx = smootherstep01(clamp(dx * HOLD_ENV_CURVE_SOFTNESS, 0, 1));
+          const sy = smootherstep01(clamp(dy * HOLD_ENV_CURVE_SOFTNESS, 0, 1));
+          const z = -HOLD_ENV_CURVE_DEPTH * (sx * sx + sy * sy);
+          positions.setZ(i, z);
+        }
+
+        positions.needsUpdate = true;
+        geometry.computeVertexNormals();
+        return geometry;
+      }
+
+      function calibrateHoldEnvironmentCamera() {
+        if (!holdEnvCamera) return;
+        const viewAspect = Math.max(.01, viewportWidth / Math.max(1, viewportHeight));
+        const centerAspect = holdEnvCenterWidth / holdEnvCenterHeight;
+
+        /* This is the important part: sceneCanvas uses object-fit:COVER logic. Match that
+           exact framing rather than always fitting the center panel vertically. On a wide
+           viewport the center must be fitted by WIDTH (cropping top/bottom); on a tall
+           viewport it is fitted by HEIGHT (cropping left/right). */
+        const visibleHeightAtCenter = viewAspect >= centerAspect
+          ? holdEnvCenterWidth / viewAspect
+          : holdEnvCenterHeight;
+        holdEnvCameraDistance = (visibleHeightAtCenter * .5) / Math.tan(THREE.MathUtils.degToRad(HOLD_ENV_FOV * .5));
+        holdEnvCamera.aspect = viewAspect;
+        holdEnvCamera.updateProjectionMatrix();
+        holdEnvCamera.position.set(0, 0, holdEnvCameraDistance);
+      }
+
+      function initHoldEnvironment() {
+        if (holdEnvRenderer) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+          const textureLoader = new THREE.TextureLoader();
+          textureLoader.load(HOLD_ENV_IMAGE, texture => {
+            holdEnvTexture = texture;
+            holdEnvTexture.colorSpace = THREE.SRGBColorSpace;
+            holdEnvTexture.wrapS = THREE.ClampToEdgeWrapping;
+            holdEnvTexture.wrapT = THREE.ClampToEdgeWrapping;
+            holdEnvTexture.minFilter = THREE.LinearFilter;
+            holdEnvTexture.magFilter = THREE.LinearFilter;
+            holdEnvTexture.generateMipmaps = true;
+            holdEnvAspect = texture.image && texture.image.width && texture.image.height
+              ? texture.image.width / texture.image.height
+              : 16 / 9;
+
+            holdEnvRenderer = new THREE.WebGLRenderer({ canvas: holdEnvCanvas, antialias: true, alpha: true, premultipliedAlpha: true });
+            holdEnvRenderer.setClearColor(0x000000, 0);
+            holdEnvRenderer.outputColorSpace = THREE.SRGBColorSpace;
+            holdEnvRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+            holdEnvRenderer.setSize(viewportWidth || window.innerWidth, viewportHeight || window.innerHeight, false);
+
+            holdEnvScene = new THREE.Scene();
+            holdEnvCamera = new THREE.PerspectiveCamera(HOLD_ENV_FOV, 1, 0.1, 100);
+
+            /* Because the source was made as a 3×3 outpaint, its middle third has the
+               same aspect ratio as the whole image and is the untouched final frame. */
+            holdEnvCenterHeight = 2;
+            holdEnvCenterWidth = holdEnvCenterHeight * holdEnvAspect;
+            calibrateHoldEnvironmentCamera();
+
+            const geometry = buildHoldEnvironmentGeometry(holdEnvCenterWidth, holdEnvCenterHeight);
+            const material = new THREE.MeshBasicMaterial({ map: holdEnvTexture, transparent: false, depthWrite: false, side: THREE.FrontSide });
+            holdEnvMesh = new THREE.Mesh(geometry, material);
+            holdEnvScene.add(holdEnvMesh);
+
+            holdEnvLoaded = true;
+            holdEnvRenderer.render(holdEnvScene, holdEnvCamera);
+            resolve();
+          }, undefined, reject);
+        });
+      }
+
+      function getHoldForwardBlend() {
+        const reveal = smootherstep01(rangeProgress(smoothStoryProgress, HOLD_ENV_ACTIVE_START, HOLD_ENV_ACTIVE_FULL));
+        const beforeMoodWash = 1 - smootherstep01(rangeProgress(smoothStoryProgress, MOOD_WHITE_START, MOOD_WHITE_END));
+        return clamp(reveal * beforeMoodWash, 0, 1);
+      }
+
+      function setHoldTextOcclusionVisibility(showSequenceOcclusion) {
+        if (showSequenceOcclusion) {
+          heroText.style.visibility = 'visible';
+          maskedTextCanvas.style.opacity = usingCanvasText ? '1' : '0';
+        } else {
+          /* By the time the sequence has reached frame 108 the opening copy is already
+             completely gone. Do not leave the old foreground-mask canvas above the new
+             environment; that was the square/ghost image visible in the screenshots. */
+          heroText.style.visibility = 'hidden';
+          maskedTextCanvas.style.opacity = '0';
+        }
+      }
+
+      function beginHoldReverseRealign() {
+        if (holdEnvMode === 'realigning' || holdEnvMode === 'fading-out') return;
+        holdEnvMode = 'realigning';
+        holdEnvMouseBlend = 0;
+        holdEnvReverseFrameLock = true;
+      }
+
+      function updateHoldEnvironment(dt, nowMs = performance.now()) {
+        if (!holdEnvLoaded || !holdEnvRenderer || !holdEnvCamera || !holdEnvMesh) return;
+
+        const reversing = targetStoryProgress < smoothStoryProgress - .00008;
+        const forwardBlend = getHoldForwardBlend();
+
+        if (reversing && holdEnvBlend > .02) beginHoldReverseRealign();
+
+        if (!reversing && forwardBlend > .001 && (holdEnvMode === 'inactive' || holdEnvMode === 'fading-out')) {
+          holdEnvMode = 'entering';
+          holdEnvReverseFrameLock = false;
+          holdEnvFadeStartedAt = 0;
+          holdEnvEnteredAt = 0;
+          holdEnvMouseBlend = 0;
+          holdEnvSmoothMouseX = holdEnvSmoothMouseY = 0;
+          holdEnvYaw = holdEnvPitch = 0;
+        }
+
+        if (holdEnvMode === 'entering') {
+          holdEnvBlend += (forwardBlend - holdEnvBlend) * Math.min(1, dt * 8.0);
+          if (forwardBlend >= .995 && holdEnvBlend >= .985) {
+            holdEnvMode = 'active';
+            holdEnvBlend = 1;
+            holdEnvEnteredAt = nowMs;
+            holdEnvSmoothMouseX = holdEnvSmoothMouseY = 0;
+          }
+        } else if (holdEnvMode === 'active') {
+          holdEnvBlend = Math.max(holdEnvBlend, forwardBlend);
+        } else if (holdEnvMode === 'realigning') {
+          /* Hold the interactive environment fully opaque and keep the sequence frozen
+             on frame 108 until the camera has returned to the exact zero pose. */
+          holdEnvBlend = 1;
+          const k = 1 - Math.exp(-HOLD_ENV_ROTATION_EASE * dt);
+          holdEnvYaw += (0 - holdEnvYaw) * k;
+          holdEnvPitch += (0 - holdEnvPitch) * k;
+          holdEnvSmoothMouseX += (0 - holdEnvSmoothMouseX) * k;
+          holdEnvSmoothMouseY += (0 - holdEnvSmoothMouseY) * k;
+
+          if (Math.abs(holdEnvYaw) < THREE.MathUtils.degToRad(.035) && Math.abs(holdEnvPitch) < THREE.MathUtils.degToRad(.035)) {
+            holdEnvYaw = holdEnvPitch = 0;
+            holdEnvMode = 'fading-out';
+            holdEnvFadeStartedAt = nowMs;
+          }
+        } else if (holdEnvMode === 'fading-out') {
+          const t = clamp((nowMs - holdEnvFadeStartedAt) / HOLD_ENV_FADE_OUT_MS, 0, 1);
+          holdEnvBlend = 1 - smootherstep01(t);
+          holdEnvYaw = holdEnvPitch = 0;
+          if (t >= 1) {
+            holdEnvBlend = 0;
+            holdEnvMode = 'inactive';
+            holdEnvReverseFrameLock = false;
+          }
+        } else {
+          holdEnvBlend = forwardBlend;
+          if (forwardBlend <= .001) holdEnvBlend = 0;
+        }
+
+        if (holdEnvMode === 'active') {
+          const elapsedAfterEntry = Math.max(0, nowMs - holdEnvEnteredAt - HOLD_ENV_MOUSE_DELAY_MS);
+          const desiredMouseBlend = smootherstep01(elapsedAfterEntry / HOLD_ENV_MOUSE_RAMP_MS);
+          holdEnvMouseBlend += (desiredMouseBlend - holdEnvMouseBlend) * Math.min(1, dt * 5.5);
+        } else if (holdEnvMode !== 'entering') {
+          holdEnvMouseBlend += (0 - holdEnvMouseBlend) * Math.min(1, dt * 7.0);
+        }
+
+        if (holdEnvMode === 'active' || holdEnvMode === 'entering') {
+          const pointerEase = 1 - Math.exp(-4.5 * dt);
+          holdEnvSmoothMouseX += (mouseX - holdEnvSmoothMouseX) * pointerEase;
+          holdEnvSmoothMouseY += (mouseY - holdEnvSmoothMouseY) * pointerEase;
+          const targetYaw = THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_YAW_DEG) * holdEnvSmoothMouseX * holdEnvMouseBlend;
+          const targetPitch = THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_PITCH_DEG) * holdEnvSmoothMouseY * holdEnvMouseBlend;
+          const cameraEase = 1 - Math.exp(-HOLD_ENV_ROTATION_EASE * dt);
+          holdEnvYaw += (targetYaw - holdEnvYaw) * cameraEase;
+          holdEnvPitch += (targetPitch - holdEnvPitch) * cameraEase;
+        }
+
+        holdEnvCanvas.style.opacity = String(clamp(holdEnvBlend, 0, 1));
+        setHoldTextOcclusionVisibility(holdEnvBlend <= .001);
+
+        if (holdEnvBlend > .001 || holdEnvMode === 'realigning' || holdEnvMode === 'fading-out') {
+          holdEnvCamera.position.set(0, 0, holdEnvCameraDistance);
+          holdEnvCamera.rotation.order = 'YXZ';
+          holdEnvCamera.rotation.y = holdEnvYaw;
+          holdEnvCamera.rotation.x = holdEnvPitch;
+          holdEnvRenderer.render(holdEnvScene, holdEnvCamera);
+        }
+      }
+
       function updatePanoramaOpacity() {
 
 
@@ -4935,50 +5198,34 @@ void main(){
 
       function calculateRawScrollProgress() {
 
-
-
         const travelled = Math.max(0, -experience.getBoundingClientRect().top);
-
-
-
-        /*
-      
-           Preserve the exact working scroll distance from 0 -> MOOD_WHITE_START.
-      
-           Only the final Coastal Sand section is stretched by MOOD_SLOWDOWN.
-      
-        */
-
         const baseActiveDistance = window.innerHeight * (SCROLL_LENGTH_VH / 100);
 
-        const moodStartDistance = baseActiveDistance * MOOD_WHITE_START;
+        /* Keep the sequence itself at the exact existing speed. Once the final JPG frame is
+           reached, stretch only this interactive reading / looking section. */
+        const holdStartDistance = baseActiveDistance * HOLD_SCROLL_START;
+        const originalHoldDistance = baseActiveDistance * (HOLD_SCROLL_END - HOLD_SCROLL_START);
+        const stretchedHoldDistance = originalHoldDistance * HOLD_SCROLL_SLOWDOWN;
 
-        const originalMoodDistance = baseActiveDistance * (1 - MOOD_WHITE_START);
-
-        const stretchedMoodDistance = originalMoodDistance * MOOD_SLOWDOWN;
-
-
-
-        if (travelled <= moodStartDistance) {
-
-          return baseActiveDistance <= 0 ? 0 : clamp(travelled / baseActiveDistance, 0, MOOD_WHITE_START);
-
+        if (travelled <= holdStartDistance) {
+          return baseActiveDistance <= 0 ? 0 : clamp(travelled / baseActiveDistance, 0, HOLD_SCROLL_START);
         }
 
+        const holdTravel = travelled - holdStartDistance;
+        if (holdTravel <= stretchedHoldDistance) {
+          const holdLocal = stretchedHoldDistance <= 0 ? 1 : clamp(holdTravel / stretchedHoldDistance, 0, 1);
+          return HOLD_SCROLL_START + (HOLD_SCROLL_END - HOLD_SCROLL_START) * holdLocal;
+        }
 
-
-        const moodTravel = travelled - moodStartDistance;
-
+        /* Preserve the intentionally slow Coastal Sand reveal after the extended hold. */
+        const originalMoodDistance = baseActiveDistance * (1 - MOOD_WHITE_START);
+        const stretchedMoodDistance = originalMoodDistance * MOOD_SLOWDOWN;
+        const moodTravel = holdTravel - stretchedHoldDistance;
         const moodLocal = stretchedMoodDistance <= 0 ? 1 : clamp(moodTravel / stretchedMoodDistance, 0, 1);
-
-
 
         return MOOD_WHITE_START + (1 - MOOD_WHITE_START) * moodLocal;
 
-
-
       }
-
 
 
       const calculateTargetFrame = raw => clamp(raw * SCROLL_SENSITIVITY, 0, 1) * (SCROLL_FRAME_COUNT - 1);
@@ -5040,9 +5287,12 @@ void main(){
 
         const fd = targetScrollFrame - smoothScrollFrame, sd = targetStoryProgress - smoothStoryProgress;
 
-
-
-        smoothScrollFrame += fd * SCROLL_EASE; smoothStoryProgress += sd * STORY_SCROLL_EASE;
+        /* On reverse from the interactive hold scene, camera alignment happens FIRST.
+           Keep the underlying sequence pinned to its exact last frame until the hold
+           environment has fully faded out; only then resume reversing the JPG sequence. */
+        if (holdEnvReverseFrameLock) smoothScrollFrame = SCROLL_FRAME_COUNT - 1;
+        else smoothScrollFrame += fd * SCROLL_EASE;
+        smoothStoryProgress += sd * STORY_SCROLL_EASE;
 
 
 
@@ -5070,11 +5320,10 @@ void main(){
 
 
 
-          smoothScrollFrame = targetScrollFrame; smoothStoryProgress = targetStoryProgress;
+          smoothScrollFrame = holdEnvReverseFrameLock ? (SCROLL_FRAME_COUNT - 1) : targetScrollFrame;
+          smoothStoryProgress = targetStoryProgress;
 
-
-
-          const finalFrame = clamp(Math.round(targetScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
+          const finalFrame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
 
 
 
@@ -5168,22 +5417,19 @@ void main(){
 
         if (renderer) {
 
-
-
           const resizeFogProfile = getFogQualityProfile();
           renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, resizeFogProfile.pixelRatio));
-
-
-
           renderer.setSize(viewportWidth, viewportHeight, false);
-
-
 
         }
 
-
+        if (holdEnvRenderer) {
+          holdEnvRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+          holdEnvRenderer.setSize(viewportWidth, viewportHeight, false);
+        }
 
         if (camera) { camera.aspect = viewportWidth / viewportHeight; camera.updateProjectionMatrix(); }
+        if (holdEnvCamera) calibrateHoldEnvironmentCamera();
 
 
 
@@ -5326,8 +5572,7 @@ void main(){
 
 
         updateWoodStripLoop(dt);
-
-
+        updateHoldEnvironment(dt, time);
 
         requestAnimationFrame(masterAnimationLoop);
 
@@ -5366,6 +5611,7 @@ void main(){
 
 
           await initPanorama();
+          await initHoldEnvironment();
 
 
 
@@ -5386,8 +5632,7 @@ void main(){
 
 
           buildTextSnapshot(); renderFrame(0); renderPanorama(); updateStoryTextMotion(); updateMoodSectionMotion();
-
-
+          updateHoldEnvironment(1 / 60);
 
           heroText.style.visibility = 'visible'; maskedTextCanvas.style.opacity = '0'; updatePanoramaOpacity();
 
