@@ -76,6 +76,17 @@
       height: calc(100vh + 6px);
       overflow: hidden;
       background: #000;
+      /* Keep vertical page scrolling native while reserving horizontal gestures for panorama panning. */
+      touch-action: pan-y;
+    }
+
+
+    /* Once a hotspot is deliberately acquired, hide the hardware cursor while the
+       sticky-hover camera move is active. The hotspot becomes the visual focus and the
+       stationary OS cursor can no longer create the illusion that the pointer is drifting. */
+    #stage.hotspot-cursor-hidden,
+    #stage.hotspot-cursor-hidden * {
+      cursor: none !important;
     }
 
     /* Tiny vertical overscan prevents a black seam from appearing when the sticky
@@ -101,6 +112,158 @@
       z-index: 2;
       opacity: 0;
       pointer-events: none;
+    }
+
+
+    #holdEnvHotspots {
+      position: absolute;
+      inset: 0;
+      z-index: 12;
+      pointer-events: none;
+    }
+
+    .holdHotspot {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 78px;
+      height: 78px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      border-radius: 999px;
+      transform: translate3d(-50%, -50%, 0) scale(.92);
+      pointer-events: none;
+      cursor: default;
+      will-change: transform, opacity;
+      transition: opacity .34s ease, transform .56s cubic-bezier(.22,1,.36,1);
+    }
+
+    .holdHotspot::before {
+      content: '';
+      position: absolute;
+      inset: -10px;
+      border-radius: 999px;
+    }
+
+    .holdHotspotDot,
+    .holdHotspotPulse {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 999px;
+      pointer-events: none;
+    }
+
+    .holdHotspotDot {
+      width: 12px;
+      height: 12px;
+      background: #fff;
+      opacity: 0;
+      transition: opacity .34s ease;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.18), 0 0 14px rgba(255,255,255,.44);
+    }
+
+    .holdHotspotPulse {
+      width: 18px;
+      height: 18px;
+      border: 1.6px solid rgba(255,255,255,.78);
+      visibility: hidden;
+      animation: holdHotspotPulse 2.35s ease-out infinite;
+    }
+
+    .holdHotspotLabel {
+      position: absolute;
+      left: 50%;
+      /* Position from the visible 12px dot, not the larger invisible hit target. */
+      bottom: calc(50% + 14px);
+      transform: translate(-50%, 7px) scale(.88);
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: .14em;
+      line-height: 1;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition:
+        opacity .78s cubic-bezier(.22,1,.36,1),
+        transform 1.15s cubic-bezier(.22,1,.36,1);
+      text-shadow: 0 2px 5px rgba(0,0,0,.54), 0 5px 16px rgba(0,0,0,.34);
+    }
+
+
+    .holdHotspotCard {
+      position: absolute;
+      left: 50%;
+      top: calc(50% + 22px);
+      width: min(390px, 78vw);
+      transform: translate(-50%, -8px) scale(.94);
+      transform-origin: 50% 0%;
+      padding: 18px 20px 19px;
+      border-radius: 18px;
+      background: rgba(0, 0, 0, .30);
+      -webkit-backdrop-filter: blur(18px) saturate(1.10);
+      backdrop-filter: blur(18px) saturate(1.10);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 400;
+      letter-spacing: .004em;
+      line-height: 1.48;
+      text-align: left;
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: 0 14px 38px rgba(0,0,0,.14);
+      transition:
+        opacity .68s cubic-bezier(.22,1,.36,1),
+        transform .92s cubic-bezier(.22,1,.36,1);
+    }
+
+    .holdHotspotCard strong {
+      font-weight: 800;
+    }
+
+    .holdHotspot.is-visible {
+      transform: translate3d(-50%, -50%, 0) scale(1);
+    }
+
+    .holdHotspot.is-visible .holdHotspotDot {
+      opacity: .98;
+    }
+
+    .holdHotspot.is-visible .holdHotspotPulse {
+      visibility: visible;
+    }
+
+    .holdHotspot.is-active {
+      transform: translate3d(-50%, -50%, 0) scale(1.04);
+    }
+
+    .holdHotspot.is-active .holdHotspotLabel,
+    .holdHotspot:focus-visible .holdHotspotLabel {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+
+    .holdHotspot.is-active .holdHotspotCard,
+    .holdHotspot:focus-visible .holdHotspotCard {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+
+    .holdHotspot:focus-visible {
+      outline: none;
+    }
+
+    @keyframes holdHotspotPulse {
+      0% { transform: translate(-50%, -50%) scale(.58); opacity: .82; }
+      68% { transform: translate(-50%, -50%) scale(2.15); opacity: 0; }
+      100% { transform: translate(-50%, -50%) scale(2.15); opacity: 0; }
     }
 
 
@@ -443,9 +606,11 @@
     .eyebrow {
       color: #be2925;
       font-size: clamp(13px, 1.08vw, 21px);
-      font-weight: 400;
+      font-weight: 700;
       margin-bottom: .55vh;
       text-align: center;
+      transform-origin: 50% 50%;
+      will-change: transform;
     }
 
 
@@ -465,6 +630,8 @@
       letter-spacing: -.052em;
       margin-bottom: 1.05vh;
       text-align: center;
+      transform-origin: 50% 50%;
+      will-change: transform, letter-spacing;
     }
 
 
@@ -476,6 +643,8 @@
       line-height: 1.2;
       font-weight: 400;
       text-align: center;
+      transform-origin: 50% 0%;
+      will-change: transform;
     }
 
 
@@ -501,14 +670,16 @@
     }
 
 
+    /* Text must never intercept touch panning. */
+    #heroText,
+    #heroText *,
+    #storyLayer,
+    #storyLayer *,
+    #maskedTextCanvas {
+      pointer-events: none !important;
+    }
 
-
-
-
-
-    /* Story text */
-
-
+    /* Scroll-driven story image sequence */
 
     #storyLayer {
       position: absolute;
@@ -518,113 +689,17 @@
       pointer-events: none;
     }
 
-
-
-    .storyMessage {
+    #storySequenceCanvas {
       position: absolute;
-      left: 50%;
-      top: 59%;
-      width: min(1500px, 92vw);
-      transform: translate(-50%, -50%);
-
-
-
-      text-align: center;
-      color: #fff;
-      pointer-events: none;
-    }
-
-
-
-    .storyLine {
+      inset: 0;
       display: block;
       width: 100%;
+      height: 100%;
       opacity: 0;
-      text-align: center;
-      will-change: opacity, transform, color;
-
-
-
-      text-shadow: 0 2px 6px rgba(0, 0, 0, .26), 0 6px 20px rgba(0, 0, 0, .18);
+      pointer-events: none !important;
+      will-change: opacity;
+      transition: opacity .6s cubic-bezier(.22,1,.36,1);
     }
-
-
-
-    #storyMessage1 {
-      width: min(1460px, 92vw);
-    }
-
-
-
-    #storyMessage1 .storyHeadline {
-      display: block;
-      width: 100%;
-      font-size: clamp(26px, 3.7vw, 72px);
-      line-height: 1.02;
-
-
-
-      letter-spacing: -.045em;
-      white-space: nowrap;
-    }
-
-
-
-    .storyRegular {
-      font-weight: 300;
-    }
-
-
-
-    .storyBold {
-      font-weight: 800;
-    }
-
-
-
-    #storyMessage1 .storyHeadline {
-      text-shadow: 0 2px 5px rgba(0, 0, 0, .34), 0 6px 18px rgba(0, 0, 0, .22);
-    }
-
-    #storyMessage1 .storySubtitle {
-      margin-top: .18em;
-      font-size: clamp(15px, 1.35vw, 25px);
-      line-height: 1.10;
-      font-weight: 700;
-      letter-spacing: .01em;
-      text-shadow: 0 2px 5px rgba(0, 0, 0, .34), 0 6px 18px rgba(0, 0, 0, .22);
-    }
-
-
-
-    #storyMessage2,
-    #storyMessage3 {
-      width: min(1380px, 88vw);
-      text-align: center;
-    }
-
-
-
-    #storyMessage2 .storyLine,
-    #storyMessage3 .storyLine {
-      font-size: clamp(19px, 1.8vw, 34px);
-      line-height: 1.06;
-      font-weight: 600;
-      letter-spacing: -.02em;
-      text-align: center;
-      text-shadow: 0 2px 5px rgba(0, 0, 0, .34), 0 6px 18px rgba(0, 0, 0, .22);
-    }
-
-
-
-    #storyMessage2Line2,
-    #storyMessage3Line2 {
-      margin-top: .06em;
-    }
-
-
-
-
 
 
 
@@ -1129,54 +1204,7 @@
         margin-left: -240px;
         margin-top: -240px;
       }
-
-
-
-      .storyMessage {
-        top: 52%;
-      }
-
-
-
-      #storyMessage1 {
-        width: 90vw;
-      }
-
-
-
-      #storyMessage1 .storyHeadline {
-        font-size: clamp(30px, 9vw, 52px);
-        line-height: .98;
-        white-space: normal;
-        text-wrap: balance;
-      }
-
-
-
-      #storyMessage1 .storySubtitle {
-        font-size: clamp(16px, 4.4vw, 23px);
-        line-height: 1.18;
-        margin-top: .8em;
-      }
-
-
-
-      #storyMessage2,
-      #storyMessage3 {
-        width: 88vw;
-      }
-
-
-
-      #storyMessage2 .storyLine,
-      #storyMessage3 .storyLine {
-        font-size: clamp(20px, 5.2vw, 30px);
-        line-height: 1.12;
-      }
-
-
-
-      #woodViewerCluster {
+#woodViewerCluster {
         top: 15.2vh;
         width: 100%;
         gap: 12px;
@@ -1884,6 +1912,30 @@
       will-change: opacity, transform;
     }
 
+    /* Subtle mouse movement for all bottom-section mood backgrounds. The transform is
+       updated in JS; the permanent overscale gives enough bleed to keep every edge covered. */
+    #moodVideo,
+    #moodImage {
+      transform-origin: 50% 50%;
+      transform: translate3d(0,0,0) scale(1.075);
+      will-change: opacity, transform;
+      backface-visibility: hidden;
+    }
+
+    /* Faster overstate response on the eight bottom profile buttons. */
+    .productThumbButton {
+      transition:
+        transform .28s cubic-bezier(.16, 1, .3, 1),
+        opacity .20s ease-out,
+        filter .28s cubic-bezier(.16, 1, .3, 1) !important;
+    }
+
+    .productThumbName {
+      transition:
+        opacity .20s ease-out,
+        transform .28s cubic-bezier(.16, 1, .3, 1) !important;
+    }
+
   </style>
 
 
@@ -1915,6 +1967,26 @@
 
           <canvas id="sceneCanvas"></canvas>
       <canvas id="holdEnvCanvas"></canvas>
+      <div id="holdEnvHotspots" aria-label="Woodgrain hotspots">
+        <button class="holdHotspot" type="button" data-hotspot-index="0" aria-label="HEMLOCK">
+          <span class="holdHotspotPulse"></span>
+          <span class="holdHotspotDot"></span>
+          <span class="holdHotspotLabel">HEMLOCK</span>
+          <span class="holdHotspotCard"><strong>HEMLOCK</strong> soffit installation using 6-inch V-groove <strong>LUXLAP</strong> panels. The narrow linear profile creates a clean architectural ceiling finish while letting the natural woodgrain character remain the visual focus.</span>
+        </button>
+        <button class="holdHotspot" type="button" data-hotspot-index="1" aria-label="CHARWOOD">
+          <span class="holdHotspotPulse"></span>
+          <span class="holdHotspotDot"></span>
+          <span class="holdHotspotLabel">CHARWOOD</span>
+          <span class="holdHotspotCard"><strong>CHARWOOD</strong> wall application using 6-inch V-groove <strong>LUXLAP</strong> cladding. The crisp, continuous profile emphasizes long architectural lines while showcasing the deeper contrast and texture of the Charwood finish.</span>
+        </button>
+        <button class="holdHotspot" type="button" data-hotspot-index="2" aria-label="COASTAL SAND">
+          <span class="holdHotspotPulse"></span>
+          <span class="holdHotspotDot"></span>
+          <span class="holdHotspotLabel">COASTAL SAND</span>
+          <span class="holdHotspotCard"><strong>COASTAL SAND</strong> wall application using 6-inch V-groove <strong>LUXLAP</strong> cladding. The slim profile keeps the elevation refined and modern while the lighter woodgrain brings a soft, natural warmth to the façade.</span>
+        </button>
+      </div>
 
 
 
@@ -2005,60 +2077,10 @@
 
 
           <div id="storyLayer">
+        <canvas id="storySequenceCanvas" aria-hidden="true"></canvas>
+      </div>
 
-
-
-              <div class="storyMessage" id="storyMessage1">
-
-
-
-                  <span class="storyLine storyHeadline" id="storyMessage1Line1"><span class="storyRegular">100 SQUARE
-              FEET OF </span><span class="storyBold">NON-REPEATING WOODGRAIN.</span></span>
-
-
-
-                  <span class="storyLine storySubtitle" id="storyMessage1Line2">A more natural look, without visible
-            repetition.</span>
-
-
-
-                </div>
-
-
-
-              <div class="storyMessage" id="storyMessage2">
-
-
-
-                  <span class="storyLine" id="storyMessage2Line1">Inspired by the forests of the Pacific North West,
-            this series provides the availability</span>
-
-
-
-                  <span class="storyLine" id="storyMessage2Line2">of rich, warm woodgrain as a metal cladding solution
-            in impressive realism</span>
-
-
-
-                </div>
-
-
-
-          <div class="storyMessage" id="storyMessage3">
-
-            <span class="storyLine" id="storyMessage3Line1">A level of non-repeating woodgrain realism unlike anything else in the industry.</span>
-
-            <span class="storyLine" id="storyMessage3Line2">There simply isn’t another metal cladding collection quite like it.</span>
-
-          </div>
-
-
-
-            </div>
-
-
-
-          <div id="moodSection" aria-label="Coastal Sand Section">
+      <div id="moodSection" aria-label="Coastal Sand Section">
 
 
 
@@ -2272,7 +2294,8 @@
 
 
       const PANORAMA_IMAGE = '360.jpg', PANORAMA_IMAGE_MOBILE = '360-mobile.jpg',
-        SCROLL_FOLDER = 'Scroll_01', MASK_FOLDER = 'Mask_01', SCROLL_FRAME_COUNT = 109;
+        SCROLL_FOLDER = 'Scroll_01', MASK_FOLDER = 'Mask_01', SCROLL_FRAME_COUNT = 109,
+        STORY_SEQUENCE_FOLDER = 'text sequence', STORY_SEQUENCE_FRAME_COUNT = 369;
 
       function isMobilePanoramaDevice() {
         return window.matchMedia('(pointer: coarse)').matches || Math.min(window.innerWidth, window.innerHeight) <= 900;
@@ -2305,19 +2328,41 @@
 
 
 
-      const SCROLL_LENGTH_VH = 350, SCROLL_SENSITIVITY = 1.35, SCROLL_EASE = .10, STORY_SCROLL_EASE = .085;
+      const SCROLL_LENGTH_VH = 350, SCROLL_SENSITIVITY = 1.35, STORY_SCROLL_EASE = .085;
 
 
 
       const SCROLL_SETTLE_THRESHOLD = .01, STORY_SETTLE_THRESHOLD = .00005, PANORAMA_FADE_END_FRAME = 24;
 
+      /* Replaces all three former story-copy beats with text000.png through text368.png.
+         The PNG sequence begins when the background JPG sequence reaches frame 60.
+         At that same moment, Scroll_01 stops being scroll-scrubbed and plays frames
+         60 -> 108 automatically, allowing the semi-panorama to arrive much earlier. */
+      const STORY_SEQUENCE_START_FRAME = 60;
+      const STORY_SEQUENCE_START = STORY_SEQUENCE_START_FRAME / ((SCROLL_FRAME_COUNT - 1) * SCROLL_SENSITIVITY);
+      const STORY_SEQUENCE_END = .955;
+      const STORY_SEQUENCE_HOLD_END = .978;
+      const BACKGROUND_AUTOPLAY_FPS = 24;
+      const BACKGROUND_RETURN_FPS = 24;
+      const BACKGROUND_AUTOPLAY_END_FRAME = SCROLL_FRAME_COUNT - 1;
+      const HOLD_ENV_AUTOPLAY_FADE_START_FRAME = 101;
+
+      /* Opening typography choreography. Transform-only scaling avoids reflow and keeps
+         the exact line wrapping that the foreground masking system is calibrated against. */
+      const HERO_TYPE_MOTION_END_FRAME = 58;
+      const HERO_TITLE_MAX_SCALE = 1.215;
+      const HERO_SUPPORTING_MIN_SCALE = 0.565;
+      const HERO_TITLE_START_TRACKING_EM = -0.052;
+      const HERO_TITLE_END_TRACKING_EM = 0.004;
+
       const HOLD_ENV_IMAGE = 'hold-extended.jpg';
-      const HOLD_ENV_FOV = 58;
-      const HOLD_ENV_CURVE_DEPTH = 0.52;
-      const HOLD_ENV_CURVE_SOFTNESS = 1.08;
-      const HOLD_ENV_OUTER_OVERSCAN = 1.28;
+      const HOLD_ENV_FOV = 50;
+      const HOLD_ENV_CURVE_DEPTH = 0.18;
+      const HOLD_ENV_CURVE_SOFTNESS = 0.58;
+      const HOLD_ENV_OUTER_OVERSCAN = 2.15;
       const HOLD_ENV_SEGMENTS_X = 120, HOLD_ENV_SEGMENTS_Y = 68;
-      const HOLD_ENV_MOUSE_YAW_DEG = 17.5, HOLD_ENV_MOUSE_PITCH_DEG = 8.5;
+      const HOLD_ENV_MOUSE_YAW_DEG = 27.0, HOLD_ENV_MOUSE_PITCH_DEG = 8.5;
+      const HOLD_ENV_DIAGONAL_LOOK_LIMIT = 1.0;
       const HOLD_ENV_ROTATION_EASE = 5.2;
       const HOLD_ENV_MOUSE_DELAY_MS = 900;
       const HOLD_ENV_MOUSE_RAMP_MS = 1200;
@@ -2327,9 +2372,36 @@
          leaving a small scroll runway for perfect alignment on the way back up. */
       const HOLD_ENV_ACTIVE_START = 0.742;
       const HOLD_ENV_ACTIVE_FULL = 0.760;
+      /* On the way back up, keep the extended environment fully alive through the
+         later story / mood section. Only start camera realignment when we are actually
+         approaching the point where frame 108 needs to hand back to the JPG sequence. */
+      const HOLD_ENV_REVERSE_ALIGN_START = 0.778;
       const HOLD_SCROLL_START = 1 / SCROLL_SENSITIVITY;
       const HOLD_SCROLL_END = 0.955;
-      const HOLD_SCROLL_SLOWDOWN = 1.65;
+      /* The PNG sequence begins at STORY_SEQUENCE_START (frame 60), well before the old
+         hold-only slowdown point. Slow the ENTIRE authored PNG range instead of only
+         its final portion. This is the correction that makes text000 -> text368 genuinely
+         require much more wheel travel. */
+      const STORY_SEQUENCE_SCROLL_SLOWDOWN = 4.2;
+
+      const HOLD_ENV_HOTSPOT_IMAGE_WIDTH = 2048, HOLD_ENV_HOTSPOT_IMAGE_HEIGHT = 1152;
+      const HOLD_ENV_HOTSPOTS = [
+        { name: 'HEMLOCK', u: 922.6153846153846 / HOLD_ENV_HOTSPOT_IMAGE_WIDTH, v: 478.38461538461536 / HOLD_ENV_HOTSPOT_IMAGE_HEIGHT },
+        { name: 'CHARWOOD', u: 1134.3846153846155 / HOLD_ENV_HOTSPOT_IMAGE_WIDTH, v: 428.61538461538464 / HOLD_ENV_HOTSPOT_IMAGE_HEIGHT },
+        { name: 'COASTAL SAND', u: 1204.8666666666666 / HOLD_ENV_HOTSPOT_IMAGE_WIDTH, v: 465.53333333333336 / HOLD_ENV_HOTSPOT_IMAGE_HEIGHT }
+      ];
+      const HOLD_ENV_HOTSPOT_SLOW_RADIUS_PX = 220;
+      const HOLD_ENV_HOTSPOT_SLOW_STRENGTH = 0.76;
+      const HOLD_ENV_HOTSPOT_RANGE_REDUCTION = 0.13;
+      const HOLD_ENV_HOTSPOT_REVEAL_EASE = 7.5;
+      const HOLD_ENV_HOVER_ZOOM = 0.18;
+      const HOLD_ENV_HOVER_CENTERING = 0.72; // pull the hovered hotspot most of the way toward screen center
+      const HOLD_ENV_HOVER_MAX_LOOK_X = 0.52;
+      const HOLD_ENV_HOVER_MAX_LOOK_Y = 0.42;
+      const HOLD_ENV_HOVER_IN_MS = 1450;
+      const HOLD_ENV_HOVER_OUT_MS = 1150;
+      const HOLD_ENV_HOVER_STICK_RADIUS_PX = 34;
+      const HOLD_ENV_HOVER_RELEASE_RADIUS_PX = 96;
 
 
 
@@ -2375,6 +2447,15 @@
       ];
 
       const MOOD_CHANGE_EASE = 'cubic-bezier(.45,0,.55,1)';
+
+      /* Bottom mood backgrounds are not full panoramas. Give them only a restrained
+         camera-like drift: a small overscale protects the edges while the image/video
+         slides a few pixels opposite the mouse. This works for MP4 and static images,
+         and will keep working when the remaining mood stills are replaced by MP4s. */
+      const MOOD_BG_PARALLAX_SCALE = 1.075;
+      const MOOD_BG_PARALLAX_X = 0.012;
+      const MOOD_BG_PARALLAX_Y = 0.009;
+      const MOOD_BG_PARALLAX_EASE = 4.2;
 
       /* Panorama bird flocks: tweak these controls as needed. Higher layers stay smaller
          and always travel slower than the nearer ones, even when master speed changes. */
@@ -2437,6 +2518,8 @@
       const MOOD_VIEWER_START = .988;
 
       const MOOD_VIEWER_END = 1.0;
+      const FINAL_VIEWER_AUTOPLAY_START = MOOD_VIEWER_START;
+      const FINAL_VIEWER_AUTOPLAY_DURATION = 1.05;
 
       const PRODUCT_THUMBS = [
 
@@ -2554,6 +2637,8 @@
       const sceneCanvas = $('sceneCanvas'), sceneCtx = sceneCanvas.getContext('2d', { alpha: false });
 
       const holdEnvCanvas = $('holdEnvCanvas');
+      const holdEnvHotspots = $('holdEnvHotspots');
+      const holdHotspotButtons = Array.from(document.querySelectorAll('.holdHotspot'));
 
 
 
@@ -2562,15 +2647,7 @@
 
 
       const scrollIndicator = $('scrollIndicator'), loader = $('loader'), loaderProgress = $('loaderProgress');
-
-
-
-      const storyMessage1Line1 = $('storyMessage1Line1'), storyMessage1Line2 = $('storyMessage1Line2');
-
-
-
-      const storyMessage2Line1 = $('storyMessage2Line1'), storyMessage2Line2 = $('storyMessage2Line2');
-      const storyMessage3Line1 = $('storyMessage3Line1'), storyMessage3Line2 = $('storyMessage3Line2');
+      const storySequenceCanvas = $('storySequenceCanvas'), storySequenceCtx = storySequenceCanvas.getContext('2d', { alpha: true });
 
 
 
@@ -2625,12 +2702,25 @@
       let holdEnvCameraDistance = 1, holdEnvSmoothMouseX = 0, holdEnvSmoothMouseY = 0, holdEnvYaw = 0, holdEnvPitch = 0;
       let holdEnvBlend = 0, holdEnvMouseBlend = 0, holdEnvEnteredAt = 0;
       let holdEnvMode = 'inactive'; // inactive | entering | active | realigning | fading-out
-      let holdEnvFadeStartedAt = 0, holdEnvReverseFrameLock = false;
+      let holdEnvFadeStartedAt = 0, holdEnvReverseFrameLock = false, holdEnvReverseSuppressed = false;
+      let holdEnvHotspotReveal = 0, activeHoldHotspotIndex = -1;
+      let holdEnvHoverZoomBlend = 0, holdEnvHoverBiasX = 0, holdEnvHoverBiasY = 0;
+      let holdEnvHoverTransitionStartedAt = 0, holdEnvHoverTransitionDuration = HOLD_ENV_HOVER_OUT_MS;
+      let holdEnvHoverTransitionFrom = 0, holdEnvHoverTransitionTo = 0;
+      let holdEnvHoverBiasFromX = 0, holdEnvHoverBiasFromY = 0, holdEnvHoverBiasToX = 0, holdEnvHoverBiasToY = 0;
+      let holdEnvHoverAnchorX = 0, holdEnvHoverAnchorY = 0;
+      let holdPointerClientX = -99999, holdPointerClientY = -99999, holdPointerIsMouse = false;
+      let holdHoverLockPointerX = -99999, holdHoverLockPointerY = -99999;
+      const holdEnvHotspotProjectedPositions = HOLD_ENV_HOTSPOTS.map(() => ({ x: 0, y: 0, visible: false }));
 
 
 
       let isDragging = false, dragPointerId = null, previousDragX = 0, previousDragY = 0, previousDragTime = 0;
       let touchGestureMode = 'none', touchStartX = 0, touchStartY = 0;
+
+      let holdTouchPointerId = null, holdTouchGestureMode = 'none';
+      let holdTouchStartX = 0, holdTouchStartY = 0, holdTouchPreviousX = 0, holdTouchPreviousY = 0;
+      let holdTouchLookUnlocked = false;
       let activeFogPressureIterations = FOG_PRESSURE_ITERATIONS;
 
 
@@ -2661,14 +2751,22 @@
 
 
       const scrollFrames = [], maskFrames = [];
+      const storySequenceFrames = [];
+      let storySequenceLoadedCount = 0, currentStorySequenceFrame = -1;
 
 
 
       let scrollingReady = false, currentScrollFrame = -1, targetScrollFrame = 0, smoothScrollFrame = 0;
+      let backgroundAutoplayActive = false, backgroundAutoplayComplete = false;
+      let backgroundAutoplayFrame = 0, holdEnvAutoplayBlend = 0;
+      let lastUserScrollProgress = 0, userScrollDirection = 0, lastUserTravelledPx = 0;
+      let finalViewerAutoplayActive = false, finalViewerAutoplayComplete = false, finalViewerAutoplayProgress = 0;
 
 
 
-      let targetStoryProgress = 0, smoothStoryProgress = 0, scrollAnimationRunning = false, usingCanvasText = false;
+      let targetStoryProgress = 0, smoothStoryProgress = 0;
+      let targetStorySequenceProgress = 0, smoothStorySequenceProgress = 0;
+      let scrollAnimationRunning = false, usingCanvasText = false;
 
 
 
@@ -2693,6 +2791,7 @@
       let moodTransitioning = false;
       const moodWoodWidths = MOOD_ITEMS.map(() => 1600);
       const moodPreloadedImages = new Map();
+      let moodBgParallaxX = 0, moodBgParallaxY = 0;
 
       /* Once the large Coastal Sand viewer is fully visible, wait 0.6 seconds and then
          darken only the MP4 to 45% black over 2 seconds. Scrolling away resets it. */
@@ -2729,57 +2828,225 @@
       const maskImagePath = f => `${MASK_FOLDER}/Mask${padFrame(f)}.jpg`;
 
 
+      function setActiveHoldHotspot(index) {
+        if (activeHoldHotspotIndex === index) return;
 
+        const now = performance.now();
+        holdEnvHoverTransitionFrom = holdEnvHoverZoomBlend;
+        holdEnvHoverTransitionTo = index >= 0 ? 1 : 0;
+        holdEnvHoverTransitionStartedAt = now;
+        holdEnvHoverTransitionDuration = index >= 0 ? HOLD_ENV_HOVER_IN_MS : HOLD_ENV_HOVER_OUT_MS;
 
+        holdEnvHoverBiasFromX = holdEnvHoverBiasX;
+        holdEnvHoverBiasFromY = holdEnvHoverBiasY;
+        holdEnvHoverBiasToX = 0;
+        holdEnvHoverBiasToY = 0;
 
-
-
-      /* Keep the main headline on one line where practical; measure the actual
-      
-      
-      
-         rendered width instead of allowing white-space:nowrap to clip it. */
-
-
-
-      function fitStoryHeadline() {
-
-
-
-        const headline = storyMessage1Line1;
-
-
-
-        headline.style.fontSize = '';
-
-
-
-        if (viewportWidth <= 800) return; // mobile is allowed to wrap neatly
-
-
-
-        let size = parseFloat(getComputedStyle(headline).fontSize);
-
-
-
-        while (headline.scrollWidth > headline.clientWidth + 1 && size > 22) {
-
-
-
-          size -= .75;
-
-
-
-          headline.style.fontSize = `${size}px`;
-
-
-
+        if (index >= 0) {
+          const projected = holdEnvHotspotProjectedPositions[index];
+          /* Calculate the camera move from the hotspot's ACTUAL on-screen position at
+             hover entry. This makes the move feel like a real push toward the selected
+             detail instead of a center-only zoom. We intentionally correct only part of
+             the screen offset so the hotspot approaches center without exhausting the
+             limited expanded image area. */
+          if (projected && projected.visible && viewportWidth > 0 && viewportHeight > 0) {
+            const ndcX = (projected.x / viewportWidth) * 2 - 1;
+            const ndcY = -((projected.y / viewportHeight) * 2 - 1);
+            const fovY = THREE.MathUtils.degToRad(HOLD_ENV_FOV);
+            const tanHalfY = Math.tan(fovY * .5);
+            const tanHalfX = tanHalfY * (viewportWidth / viewportHeight);
+            const yawDelta = Math.atan(ndcX * tanHalfX) * HOLD_ENV_HOVER_CENTERING;
+            const pitchDelta = Math.atan(ndcY * tanHalfY) * HOLD_ENV_HOVER_CENTERING;
+            holdEnvHoverBiasToX = clamp(yawDelta / THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_YAW_DEG), -HOLD_ENV_HOVER_MAX_LOOK_X, HOLD_ENV_HOVER_MAX_LOOK_X);
+            holdEnvHoverBiasToY = clamp(pitchDelta / THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_PITCH_DEG), -HOLD_ENV_HOVER_MAX_LOOK_Y, HOLD_ENV_HOVER_MAX_LOOK_Y);
+          }
+          /* Freeze the camera's current mouse-follow direction as the starting tangent.
+             The timed hover tween then bends away from this direction gradually rather
+             than abruptly replacing it with a new hotspot target. */
+          holdEnvHoverAnchorX = holdEnvSmoothMouseX;
+          holdEnvHoverAnchorY = holdEnvSmoothMouseY;
         }
 
+        activeHoldHotspotIndex = index;
+        if (index >= 0) {
+          holdHoverLockPointerX = holdPointerClientX;
+          holdHoverLockPointerY = holdPointerClientY;
+        } else {
+          holdHoverLockPointerX = holdHoverLockPointerY = -99999;
+        }
+        holdHotspotButtons.forEach((button, buttonIndex) => {
+          button.classList.toggle('is-active', buttonIndex === index);
+        });
 
+        /* Do not try to make the real OS cursor chase a camera-projected hotspot. While
+           a mouse hover is sticky/active, hide the cursor instead. It returns the instant
+           the hotspot releases, so normal page interaction is unaffected. */
+        stage.classList.toggle('hotspot-cursor-hidden', index >= 0 && holdPointerIsMouse);
 
+        /* If the scroll-controlled PNG story is still visible, clear it gently while
+           a hotspot is being explored, then restore it if the pointer leaves. */
+        updateStoryTextMotion();
       }
 
+      holdHotspotButtons.forEach((button, index) => {
+        button.addEventListener('focus', () => setActiveHoldHotspot(index));
+        button.addEventListener('blur', () => setActiveHoldHotspot(-1));
+      });
+
+      function getHoldEnvironmentLocalPoint(u, v) {
+        const totalWidth = holdEnvCenterWidth * 3;
+        const totalHeight = holdEnvCenterHeight * 3;
+        let x = (u - .5) * totalWidth;
+        let y = (.5 - v) * totalHeight;
+
+        const signX = Math.sign(x) || 1;
+        const signY = Math.sign(y) || 1;
+        const absX = Math.abs(x), absY = Math.abs(y);
+        const halfCenterW = holdEnvCenterWidth * .5, halfCenterH = holdEnvCenterHeight * .5;
+
+        if (absX > halfCenterW) x = signX * (halfCenterW + (absX - halfCenterW) * HOLD_ENV_OUTER_OVERSCAN);
+        if (absY > halfCenterH) y = signY * (halfCenterH + (absY - halfCenterH) * HOLD_ENV_OUTER_OVERSCAN);
+
+        const dx = Math.max(0, Math.abs(x) - halfCenterW) / holdEnvCenterWidth;
+        const dy = Math.max(0, Math.abs(y) - halfCenterH) / holdEnvCenterHeight;
+        const sx = smootherstep01(clamp(dx * HOLD_ENV_CURVE_SOFTNESS, 0, 1));
+        const sy = smootherstep01(clamp(dy * HOLD_ENV_CURVE_SOFTNESS, 0, 1));
+        const z = -HOLD_ENV_CURVE_DEPTH * (sx * sx + sy * sy);
+        return new THREE.Vector3(x, y, z);
+      }
+
+      function updateHoldHotspotHoverState() {
+        if (!holdPointerIsMouse || holdEnvHotspotReveal <= .08 || holdEnvMode === 'realigning' || holdEnvMode === 'fading-out') {
+          if (activeHoldHotspotIndex !== -1) setActiveHoldHotspot(-1);
+          return;
+        }
+
+        const ENTER_RADIUS = 43;
+
+        if (activeHoldHotspotIndex >= 0) {
+          const activePos = holdEnvHotspotProjectedPositions[activeHoldHotspotIndex];
+
+          /* Sticky hover intent: the camera is allowed to move the hotspot away from the
+             physical cursor without cancelling the overstate. Browsers cannot move the OS
+             cursor, so we preserve the user's hover intent instead. If the mouse remains
+             within a small radius of where the hotspot was acquired, keep the hover locked
+             regardless of how far the projected hotspot travels during the camera move. */
+          const intentDrift = Math.hypot(
+            holdPointerClientX - holdHoverLockPointerX,
+            holdPointerClientY - holdHoverLockPointerY
+          );
+          if (intentDrift <= HOLD_ENV_HOVER_STICK_RADIUS_PX) return;
+
+          /* If the user does move, still keep the hotspot active while the pointer is
+             reasonably close to its new projected position. This lets someone naturally
+             follow the moving dot without flicker. */
+          if (activePos && activePos.visible) {
+            const projectedDistance = Math.hypot(holdPointerClientX - activePos.x, holdPointerClientY - activePos.y);
+            if (projectedDistance <= HOLD_ENV_HOVER_RELEASE_RADIUS_PX) {
+              holdHoverLockPointerX = holdPointerClientX;
+              holdHoverLockPointerY = holdPointerClientY;
+              return;
+            }
+          }
+
+          setActiveHoldHotspot(-1);
+        }
+
+        let nearest = -1, nearestDistance = Infinity;
+        holdEnvHotspotProjectedPositions.forEach((pos, index) => {
+          if (!pos.visible) return;
+          const distance = Math.hypot(holdPointerClientX - pos.x, holdPointerClientY - pos.y);
+          if (distance < ENTER_RADIUS && distance < nearestDistance) {
+            nearest = index;
+            nearestDistance = distance;
+          }
+        });
+        if (nearest >= 0) setActiveHoldHotspot(nearest);
+      }
+
+      function getHoldHotspotAssistAmount() {
+        if (holdEnvHotspotReveal <= .01) return 0;
+        if (!holdPointerIsMouse) return 0;
+        const pointerX = holdPointerClientX;
+        const pointerY = holdPointerClientY;
+        let assist = 0;
+
+        holdEnvHotspotProjectedPositions.forEach(pos => {
+          if (!pos.visible) return;
+          const d = Math.hypot(pointerX - pos.x, pointerY - pos.y);
+          if (d >= HOLD_ENV_HOTSPOT_SLOW_RADIUS_PX) return;
+          assist = Math.max(assist, smootherstep01(1 - d / HOLD_ENV_HOTSPOT_SLOW_RADIUS_PX));
+        });
+
+        return assist;
+      }
+
+      function updateHoldHotspots(dt) {
+        if (!holdEnvHotspots || holdHotspotButtons.length !== HOLD_ENV_HOTSPOTS.length) return;
+        const visibleTarget = (holdEnvLoaded && holdEnvBlend > .12 && (holdEnvMode === 'active' || holdEnvMode === 'entering') && smoothStoryProgress < MOOD_WHITE_START) ? 1 : 0;
+        holdEnvHotspotReveal += (visibleTarget - holdEnvHotspotReveal) * Math.min(1, dt * HOLD_ENV_HOTSPOT_REVEAL_EASE);
+        /* Keep both the overlay and hotspot button ancestors fully opaque. CSS opacity
+           creates a backdrop root, which prevents the info card's backdrop-filter from
+           sampling the WebGL semi-panorama beneath it. Reveal only the dot/label/card. */
+        holdEnvHotspots.style.pointerEvents = 'none';
+
+        if (holdEnvHotspotReveal <= .02 || !holdEnvLoaded || !holdEnvCamera || !holdEnvMesh) {
+          if (activeHoldHotspotIndex !== -1) setActiveHoldHotspot(-1);
+          holdHotspotButtons.forEach((button, index) => {
+            button.classList.remove('is-visible');
+            holdEnvHotspotProjectedPositions[index].visible = false;
+          });
+          return;
+        }
+
+        holdHotspotButtons.forEach((button, index) => {
+          const hotspot = HOLD_ENV_HOTSPOTS[index];
+          const localPoint = getHoldEnvironmentLocalPoint(hotspot.u, hotspot.v);
+          const projected = localPoint.clone().applyMatrix4(holdEnvMesh.matrixWorld).project(holdEnvCamera);
+          const visible = projected.z > -1 && projected.z < 1 && projected.x > -1.18 && projected.x < 1.18 && projected.y > -1.18 && projected.y < 1.18;
+
+          if (!visible) {
+            button.classList.remove('is-visible');
+            holdEnvHotspotProjectedPositions[index].visible = false;
+            return;
+          }
+
+          const x = (projected.x * .5 + .5) * viewportWidth;
+          const y = (-projected.y * .5 + .5) * viewportHeight;
+          holdEnvHotspotProjectedPositions[index] = { x, y, visible: true };
+          button.style.left = `${x}px`;
+          button.style.top = `${y}px`;
+          button.classList.toggle('is-visible', holdEnvHotspotReveal > .05);
+        });
+
+        if (activeHoldHotspotIndex >= 0 && !holdEnvHotspotProjectedPositions[activeHoldHotspotIndex].visible) {
+          setActiveHoldHotspot(-1);
+        }
+        updateHoldHotspotHoverState();
+      }
+
+      function updateFinalViewerAutoplay(dt) {
+        if (!scrollingReady || !finalViewerAutoplayActive) return;
+        finalViewerAutoplayProgress = Math.max(finalViewerAutoplayProgress, smoothStoryProgress, targetStoryProgress, FINAL_VIEWER_AUTOPLAY_START);
+        targetStorySequenceProgress = Math.max(targetStorySequenceProgress, 1);
+        smoothStorySequenceProgress += (1 - smoothStorySequenceProgress) * Math.min(1, dt * 8);
+        finalViewerAutoplayProgress = Math.min(1, finalViewerAutoplayProgress + ((1 - FINAL_VIEWER_AUTOPLAY_START) / FINAL_VIEWER_AUTOPLAY_DURATION) * dt);
+        smoothStoryProgress = Math.max(smoothStoryProgress, finalViewerAutoplayProgress);
+        updateStoryTextMotion();
+        updateMoodSectionMotion();
+
+        if (finalViewerAutoplayProgress >= 1 - .0001) {
+          finalViewerAutoplayProgress = 1;
+          smoothStoryProgress = 1;
+          finalViewerAutoplayActive = false;
+          finalViewerAutoplayComplete = true;
+          updateMoodSectionMotion();
+        }
+      }
+
+      const storySequenceImagePath = f => `${STORY_SEQUENCE_FOLDER}/text${padFrame(f)}.png`;
+
+      
 
 
 
@@ -3014,6 +3281,25 @@
       }
 
 
+      function updateMoodBackgroundParallax(dt) {
+        /* Mouse only: touch users keep the background steady so vertical page gestures
+           and the existing mobile panorama controls remain completely predictable. */
+        const allowPointerDrift = !window.matchMedia('(pointer: coarse)').matches;
+        const moodVisible = smoothStoryProgress >= MOOD_VIDEO_START - .01;
+
+        const targetX = (allowPointerDrift && moodVisible ? -mouseX * viewportWidth * MOOD_BG_PARALLAX_X : 0);
+        const targetY = (allowPointerDrift && moodVisible ?  mouseY * viewportHeight * MOOD_BG_PARALLAX_Y : 0);
+        const ease = 1 - Math.exp(-MOOD_BG_PARALLAX_EASE * dt);
+
+        moodBgParallaxX += (targetX - moodBgParallaxX) * ease;
+        moodBgParallaxY += (targetY - moodBgParallaxY) * ease;
+
+        const transform = `translate3d(${moodBgParallaxX.toFixed(2)}px,${moodBgParallaxY.toFixed(2)}px,0) scale(${MOOD_BG_PARALLAX_SCALE})`;
+        moodVideo.style.transform = transform;
+        moodImage.style.transform = transform;
+      }
+
+
       function updateMoodSectionMotion() {
 
         const p = smoothStoryProgress;
@@ -3064,21 +3350,6 @@
           moodVideo.style.opacity = activeMoodIndex === 0 ? String(videoOpacity) : '0';
           moodImage.style.opacity = activeMoodIndex !== 0 ? String(videoOpacity) : '0';
         }
-
-
-
-        /* Keep the final copy exactly where it settled and transition it to black as white takes over. */
-
-        const storyTone = Math.round(255 * (1 - whiteReveal));
-
-        const storyColor = `rgb(${storyTone},${storyTone},${storyTone})`;
-
-        storyMessage3Line1.style.color = storyColor;
-        storyMessage3Line2.style.color = storyColor;
-
-        const shadowAlpha = .26 * (1 - whiteReveal) + .10 * whiteReveal;
-        storyMessage3Line1.style.textShadow = `0 2px 6px rgba(0,0,0,${shadowAlpha}),0 6px 20px rgba(0,0,0,${shadowAlpha * .65})`;
-        storyMessage3Line2.style.textShadow = storyMessage3Line1.style.textShadow;
 
 
 
@@ -3419,92 +3690,56 @@
 
 
       }
-
-
-
-
-
-
-
-      function setStoryLineMotion(element, progress, enterStart, enterEnd, exitStart, exitEnd) {
-
-
-
-        const enterRaw = rangeProgress(progress, enterStart, enterEnd);
-
-
-
-        let translateY = (1 - easeOutExpo(enterRaw)) * viewportHeight * .48;
-
-
-
-        let opacity = smootherstep01(enterRaw);
-
-
-
-        if (exitStart !== null && exitEnd !== null) {
-
-
-
-          const exitRaw = rangeProgress(progress, exitStart, exitEnd);
-
-
-
-          translateY -= easeInExpo(exitRaw) * viewportHeight * .42;
-
-
-
-          opacity *= 1 - smootherstep01(exitRaw);
-
-
-
+      function findNearestLoadedStoryFrame(frame) {
+        if (storySequenceFrames[frame]) return storySequenceFrames[frame];
+        for (let d = 1; d < STORY_SEQUENCE_FRAME_COUNT; d++) {
+          const before = frame - d, after = frame + d;
+          if (before >= 0 && storySequenceFrames[before]) return storySequenceFrames[before];
+          if (after < STORY_SEQUENCE_FRAME_COUNT && storySequenceFrames[after]) return storySequenceFrames[after];
         }
-
-
-
-        element.style.transform = `translate3d(0,${translateY}px,0)`;
-
-
-
-        element.style.opacity = String(clamp(opacity, 0, 1));
-
-
-
+        return null;
       }
 
+      function drawStorySequenceFrame(frame) {
+        if (!storySequenceCanvas.width || !storySequenceCanvas.height) return;
+        const image = findNearestLoadedStoryFrame(frame);
+        if (!image) return;
 
+        const cw = storySequenceCanvas.width;
+        const ch = storySequenceCanvas.height;
+        storySequenceCtx.setTransform(1, 0, 0, 1, 0, 0);
+        storySequenceCtx.clearRect(0, 0, cw, ch);
+
+        /* "contain" keeps the complete authored text composition visible on mobile,
+           portrait and unusual aspect ratios instead of cropping words at the edges. */
+        /* About 30% smaller than the previous version, while remaining centered. */
+        const scale = Math.min(cw / image.naturalWidth, ch / image.naturalHeight) * .70;
+        const dw = image.naturalWidth * scale;
+        const dh = image.naturalHeight * scale;
+        const dx = (cw - dw) * .5;
+        const dy = (ch - dh) * .5;
+        storySequenceCtx.drawImage(image, dx, dy, dw, dh);
+      }
 
       function updateStoryTextMotion() {
-
-
-
         const p = smoothStoryProgress;
+        /* Gate visibility from the actual rendered background frame so the first PNG
+           cannot appear before Scroll_01 reaches frame 60. Story progress continues
+           to drive the PNG sequence after that exact handoff point. */
+        const hasReachedStartFrame = smoothScrollFrame >= STORY_SEQUENCE_START_FRAME;
+        const active = hasReachedStartFrame && p <= STORY_SEQUENCE_HOLD_END;
+        storySequenceCanvas.style.opacity = active && activeHoldHotspotIndex < 0 ? '1' : '0';
+        if (!active) return;
 
-
-
-        setStoryLineMotion(storyMessage1Line1, p, .290, .405, .755, .835);
-
-
-
-        setStoryLineMotion(storyMessage1Line2, p, .325, .445, .775, .855);
-
-
-
-        /* The Pacific Northwest copy now exits upward, making room for a final pair of lines
-           while the interactive end-frame environment remains available to explore. */
-        setStoryLineMotion(storyMessage2Line1, p, .825, .875, .890, .920);
-        setStoryLineMotion(storyMessage2Line2, p, .845, .895, .900, .930);
-
-        /* Final copy remains in place through the white wash, then the Coastal Sand media fades over it. */
-        setStoryLineMotion(storyMessage3Line1, p, .902, .930, null, null);
-        setStoryLineMotion(storyMessage3Line2, p, .916, .944, null, null);
-
-
-
+        /* The PNG frame position has its own directional scrub value. Forward uses the
+           deliberately slowed story distance; reverse uses the original 1x scroll rate. */
+        const sequenceProgress = clamp(smoothStorySequenceProgress, 0, 1);
+        const frame = clamp(Math.round(sequenceProgress * (STORY_SEQUENCE_FRAME_COUNT - 1)), 0, STORY_SEQUENCE_FRAME_COUNT - 1);
+        if (frame !== currentStorySequenceFrame) {
+          currentStorySequenceFrame = frame;
+          drawStorySequenceFrame(frame);
+        }
       }
-
-
-
 
 
       function loadImage(src) {
@@ -4347,7 +4582,11 @@ void main(){
 
       window.addEventListener('pointermove', event => {
 
-
+        if (event.pointerType !== 'touch') {
+          holdPointerClientX = event.clientX;
+          holdPointerClientY = event.clientY;
+          holdPointerIsMouse = true;
+        }
 
         if (panoramaLoaded && !isDragging && event.pointerType !== 'touch' && smoothScrollFrame < PANORAMA_FADE_END_FRAME)
 
@@ -4375,11 +4614,11 @@ void main(){
 
 
 
-      document.addEventListener('mouseleave', () => { if (!isDragging) { mouseX = 0; mouseY = 0; lastFogPointerUV = null; smoothedFogForce.set(0, 0); } });
+      document.addEventListener('mouseleave', () => { holdPointerIsMouse = false; setActiveHoldHotspot(-1); if (!isDragging) { mouseX = 0; mouseY = 0; lastFogPointerUV = null; smoothedFogForce.set(0, 0); } });
 
 
 
-      panoramaElement.addEventListener('pointerdown', event => {
+      stage.addEventListener('pointerdown', event => {
 
         if (smoothScrollFrame >= PANORAMA_FADE_END_FRAME) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -4403,13 +4642,13 @@ void main(){
         touchGestureMode = 'pan';
         isDragging = true;
         panoramaElement.classList.add('dragging');
-        try { panoramaElement.setPointerCapture(event.pointerId); } catch (e) { }
+        try { stage.setPointerCapture(event.pointerId); } catch (e) { }
 
       });
 
 
 
-      panoramaElement.addEventListener('pointermove', event => {
+      stage.addEventListener('pointermove', event => {
 
         if (event.pointerId !== dragPointerId) return;
 
@@ -4443,7 +4682,7 @@ void main(){
               previousDragY = event.clientY;
               previousDragTime = performance.now();
 
-              try { panoramaElement.setPointerCapture(event.pointerId); } catch (e) { }
+              try { stage.setPointerCapture(event.pointerId); } catch (e) { }
               event.preventDefault();
               return;
             }
@@ -4483,7 +4722,8 @@ void main(){
 
       function finishDrag(event) {
 
-        if (event && dragPointerId !== null && event.pointerId !== dragPointerId) return;
+        if (event && dragPointerId === null) return;
+        if (event && event.pointerId !== dragPointerId) return;
 
         const wasDragging = isDragging;
 
@@ -4505,7 +4745,80 @@ void main(){
 
 
 
-      ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => panoramaElement.addEventListener(type, finishDrag));
+      ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => stage.addEventListener(type, finishDrag));
+
+
+      /* Touch panning for the generated half-panorama / extended hold image.
+         The whole stage receives the gesture, so panning also works when the finger
+         starts directly on top of the story text. */
+      stage.addEventListener('pointerdown', event => {
+        if (event.pointerType !== 'touch') return;
+        if (smoothScrollFrame < PANORAMA_FADE_END_FRAME) return;
+        if (!holdEnvLoaded || holdEnvBlend <= .02) return;
+        if (!(holdEnvMode === 'active' || holdEnvMode === 'entering')) return;
+        if (smoothStoryProgress >= MOOD_WHITE_START) return;
+
+        holdTouchPointerId = event.pointerId;
+        holdTouchGestureMode = 'pending';
+        holdTouchStartX = holdTouchPreviousX = event.clientX;
+        holdTouchStartY = holdTouchPreviousY = event.clientY;
+      }, { passive: true });
+
+      stage.addEventListener('pointermove', event => {
+        if (event.pointerType !== 'touch' || event.pointerId !== holdTouchPointerId) return;
+        if (holdTouchGestureMode === 'scroll') return;
+
+        if (holdTouchGestureMode === 'pending') {
+          const totalX = event.clientX - holdTouchStartX;
+          const totalY = event.clientY - holdTouchStartY;
+          const ax = Math.abs(totalX), ay = Math.abs(totalY);
+
+          if (Math.max(ax, ay) < TOUCH_PAN_THRESHOLD) return;
+
+          if (ay > ax * TOUCH_PAN_DOMINANCE) {
+            holdTouchGestureMode = 'scroll';
+            holdTouchPointerId = null;
+            return;
+          }
+
+          if (ax > ay * TOUCH_PAN_DOMINANCE) {
+            holdTouchGestureMode = 'pan';
+            holdTouchLookUnlocked = true;
+            holdEnvMouseBlend = 1;
+            holdTouchPreviousX = event.clientX;
+            holdTouchPreviousY = event.clientY;
+            try { stage.setPointerCapture(event.pointerId); } catch (e) { }
+            event.preventDefault();
+            return;
+          }
+
+          return;
+        }
+
+        if (holdTouchGestureMode !== 'pan') return;
+        event.preventDefault();
+
+        const dx = event.clientX - holdTouchPreviousX;
+        const dy = event.clientY - holdTouchPreviousY;
+        const panWidth = Math.max(260, viewportWidth * .46);
+        const panHeight = Math.max(340, viewportHeight * .62);
+
+        mouseX = clamp(mouseX + dx / panWidth, -1, 1);
+        mouseY = clamp(mouseY + dy / panHeight, -1, 1);
+        holdEnvMouseBlend = 1;
+
+        holdTouchPreviousX = event.clientX;
+        holdTouchPreviousY = event.clientY;
+      }, { passive: false });
+
+      function finishHoldTouch(event) {
+        if (event && holdTouchPointerId !== null && event.pointerId !== holdTouchPointerId) return;
+        holdTouchPointerId = null;
+        holdTouchGestureMode = 'none';
+      }
+
+      ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => stage.addEventListener(type, finishHoldTouch));
+
 
 
 
@@ -4572,6 +4885,27 @@ void main(){
 
 
 
+      async function loadStorySequenceAssets() {
+        /* Start immediately but do not block the opening loader. Browser request
+           scheduling handles the queue while the user is still in the earlier scene. */
+        const promises = [];
+        for (let frame = 0; frame < STORY_SEQUENCE_FRAME_COUNT; frame++) {
+          promises.push(
+            loadImage(storySequenceImagePath(frame))
+              .then(image => {
+                storySequenceFrames[frame] = image;
+                storySequenceLoadedCount++;
+                if (frame === currentStorySequenceFrame) drawStorySequenceFrame(frame);
+              })
+              .catch(error => {
+                console.warn(`[West Coast Naturals] Could not load story sequence frame ${frame}.`, error);
+              })
+          );
+        }
+        await Promise.all(promises);
+      }
+
+
       async function loadScrollAssets() {
 
 
@@ -4618,10 +4952,10 @@ void main(){
 
         scrollingReady = true;
 
-        const extraHoldVH = SCROLL_LENGTH_VH * (HOLD_SCROLL_END - HOLD_SCROLL_START) * (HOLD_SCROLL_SLOWDOWN - 1);
+        const extraStoryVH = SCROLL_LENGTH_VH * (STORY_SEQUENCE_END - STORY_SEQUENCE_START) * (STORY_SEQUENCE_SCROLL_SLOWDOWN - 1);
         const extraMoodVH = SCROLL_LENGTH_VH * (1 - MOOD_WHITE_START) * (MOOD_SLOWDOWN - 1);
 
-        experience.style.height = `${SCROLL_LENGTH_VH + extraHoldVH + extraMoodVH + 100}vh`;
+        experience.style.height = `${SCROLL_LENGTH_VH + extraStoryVH + extraMoodVH + 100}vh`;
 
 
 
@@ -4839,7 +5173,7 @@ void main(){
 
 
 
-        const padding = 35, left = Math.max(0, Math.min(...rects.map(r => r.left)) - padding);
+        const padding = 90, left = Math.max(0, Math.min(...rects.map(r => r.left)) - padding);
 
 
 
@@ -5059,9 +5393,13 @@ void main(){
       }
 
       function getHoldForwardBlend() {
-        const reveal = smootherstep01(rangeProgress(smoothStoryProgress, HOLD_ENV_ACTIVE_START, HOLD_ENV_ACTIVE_FULL));
-        const beforeMoodWash = 1 - smootherstep01(rangeProgress(smoothStoryProgress, MOOD_WHITE_START, MOOD_WHITE_END));
-        return clamp(reveal * beforeMoodWash, 0, 1);
+        /* The semi-panorama can now be revealed by either route:
+           1) the automatic frame-60 -> frame-108 background playback, or
+           2) the original scroll-position fallback.
+           The autoplay route wins as soon as the last few JPG frames begin, so by the
+           time frame 108 lands the live semi-panorama is already fully established. */
+        const scrollBlend = smootherstep01(rangeProgress(smoothStoryProgress, HOLD_ENV_ACTIVE_START, HOLD_ENV_ACTIVE_FULL));
+        return Math.max(scrollBlend, holdEnvAutoplayBlend);
       }
 
       function setHoldTextOcclusionVisibility(showSequenceOcclusion) {
@@ -5088,18 +5426,37 @@ void main(){
         if (!holdEnvLoaded || !holdEnvRenderer || !holdEnvCamera || !holdEnvMesh) return;
 
         const reversing = targetStoryProgress < smoothStoryProgress - .00008;
+        const movingForward = targetStoryProgress > smoothStoryProgress + .00008;
         const forwardBlend = getHoldForwardBlend();
 
-        if (reversing && holdEnvBlend > .02) beginHoldReverseRealign();
+        /* Do NOT realign merely because the user starts scrolling upward somewhere in
+           Coastal Sand or the later story. Keep the extended image active underneath
+           those layers. Realignment begins only when we approach the true frame-108
+           handoff zone. */
+        if (reversing && smoothStoryProgress <= HOLD_ENV_REVERSE_ALIGN_START && holdEnvBlend > .02) {
+          beginHoldReverseRealign();
+        }
 
-        if (!reversing && forwardBlend > .001 && (holdEnvMode === 'inactive' || holdEnvMode === 'fading-out')) {
+        /* Once a reverse handoff has completed, keep the hold canvas suppressed until
+           we have genuinely returned below the hold zone or deliberately move forward
+           into it again. This prevents a second fade-in while hovering near the boundary. */
+        if (holdEnvReverseSuppressed && smoothStoryProgress <= HOLD_SCROLL_START + .001) {
+          holdEnvReverseSuppressed = false;
+        }
+
+        if (!holdEnvReverseSuppressed && !reversing && forwardBlend > .001 && (holdEnvMode === 'inactive' || holdEnvMode === 'fading-out')) {
           holdEnvMode = 'entering';
           holdEnvReverseFrameLock = false;
           holdEnvFadeStartedAt = 0;
           holdEnvEnteredAt = 0;
           holdEnvMouseBlend = 0;
+          holdTouchLookUnlocked = false;
           holdEnvSmoothMouseX = holdEnvSmoothMouseY = 0;
           holdEnvYaw = holdEnvPitch = 0;
+        }
+
+        if (holdEnvReverseSuppressed && movingForward && smoothStoryProgress >= HOLD_ENV_ACTIVE_START) {
+          holdEnvReverseSuppressed = false;
         }
 
         if (holdEnvMode === 'entering') {
@@ -5135,27 +5492,78 @@ void main(){
             holdEnvBlend = 0;
             holdEnvMode = 'inactive';
             holdEnvReverseFrameLock = false;
+            holdEnvReverseSuppressed = true;
+            if (targetStoryProgress < HOLD_ENV_REVERSE_ALIGN_START) holdEnvAutoplayBlend = 0;
           }
         } else {
-          holdEnvBlend = forwardBlend;
+          holdEnvBlend = holdEnvReverseSuppressed ? 0 : forwardBlend;
           if (forwardBlend <= .001) holdEnvBlend = 0;
         }
 
         if (holdEnvMode === 'active') {
           const elapsedAfterEntry = Math.max(0, nowMs - holdEnvEnteredAt - HOLD_ENV_MOUSE_DELAY_MS);
-          const desiredMouseBlend = smootherstep01(elapsedAfterEntry / HOLD_ENV_MOUSE_RAMP_MS);
+          const desiredMouseBlend = holdTouchLookUnlocked
+            ? 1
+            : smootherstep01(elapsedAfterEntry / HOLD_ENV_MOUSE_RAMP_MS);
           holdEnvMouseBlend += (desiredMouseBlend - holdEnvMouseBlend) * Math.min(1, dt * 5.5);
+        } else if (holdEnvMode === 'entering' && holdTouchLookUnlocked) {
+          holdEnvMouseBlend += (1 - holdEnvMouseBlend) * Math.min(1, dt * 9.0);
         } else if (holdEnvMode !== 'entering') {
           holdEnvMouseBlend += (0 - holdEnvMouseBlend) * Math.min(1, dt * 7.0);
         }
 
+        /* A true timed ease-in/ease-out for hotspot camera motion. Unlike the old
+           exponential chase, smootherstep starts with zero velocity, accelerates through
+           the middle, and returns to zero velocity at the end. This removes the initial
+           lurch while keeping the final settle polished. */
+        const hoverTransitionT = holdEnvHoverTransitionDuration <= 0
+          ? 1
+          : clamp((nowMs - holdEnvHoverTransitionStartedAt) / holdEnvHoverTransitionDuration, 0, 1);
+        const hoverTransitionEase = smootherstep01(hoverTransitionT);
+        holdEnvHoverZoomBlend = holdEnvHoverTransitionFrom + (holdEnvHoverTransitionTo - holdEnvHoverTransitionFrom) * hoverTransitionEase;
+        holdEnvHoverBiasX = holdEnvHoverBiasFromX + (holdEnvHoverBiasToX - holdEnvHoverBiasFromX) * hoverTransitionEase;
+        holdEnvHoverBiasY = holdEnvHoverBiasFromY + (holdEnvHoverBiasToY - holdEnvHoverBiasFromY) * hoverTransitionEase;
+
         if (holdEnvMode === 'active' || holdEnvMode === 'entering') {
-          const pointerEase = 1 - Math.exp(-4.5 * dt);
+          const hotspotAssist = getHoldHotspotAssistAmount();
+          const basePointerRate = activeHoldHotspotIndex >= 0 ? 1.25 : 4.5;
+          const pointerEase = 1 - Math.exp(-(basePointerRate * (1 - hotspotAssist * HOLD_ENV_HOTSPOT_SLOW_STRENGTH)) * dt);
           holdEnvSmoothMouseX += (mouseX - holdEnvSmoothMouseX) * pointerEase;
           holdEnvSmoothMouseY += (mouseY - holdEnvSmoothMouseY) * pointerEase;
-          const targetYaw = THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_YAW_DEG) * holdEnvSmoothMouseX * holdEnvMouseBlend;
-          const targetPitch = THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_PITCH_DEG) * holdEnvSmoothMouseY * holdEnvMouseBlend;
-          const cameraEase = 1 - Math.exp(-HOLD_ENV_ROTATION_EASE * dt);
+          /* Horizontal look direction is intentionally inverted relative to THREE's
+             positive Y-axis rotation so the scene follows the pointer naturally:
+             mouse left looks left, mouse right looks right. Vertical was already correct. */
+          /* Keep the full horizontal / vertical look range, but do not let a screen corner
+             request 100% yaw AND 100% pitch at the same time. That diagonal extreme was
+             exposing the most curved part of the outpaint and making the corners warp. */
+          let holdLookX = holdEnvSmoothMouseX;
+          let holdLookY = holdEnvSmoothMouseY;
+          const diagonalLook = Math.hypot(holdLookX, holdLookY);
+          if (diagonalLook > HOLD_ENV_DIAGONAL_LOOK_LIMIT) {
+            const cornerScale = HOLD_ENV_DIAGONAL_LOOK_LIMIT / diagonalLook;
+            holdLookX *= cornerScale;
+            holdLookY *= cornerScale;
+          }
+
+          const rangeAttenuation = 1 - hotspotAssist * HOLD_ENV_HOTSPOT_RANGE_REDUCTION;
+          holdLookX *= rangeAttenuation;
+          holdLookY *= rangeAttenuation;
+
+          /* While the hover tween comes in, progressively leave the live mouse trajectory
+             and bend from the camera's captured entry direction toward the hotspot. On
+             exit the same blend hands control gently back to the live mouse direction. */
+          const hoverBlend = holdEnvHoverZoomBlend;
+          const guidedLookX = holdEnvHoverAnchorX + holdEnvHoverBiasX;
+          const guidedLookY = holdEnvHoverAnchorY + holdEnvHoverBiasY;
+          holdLookX = holdLookX * (1 - hoverBlend) + guidedLookX * hoverBlend;
+          holdLookY = holdLookY * (1 - hoverBlend) + guidedLookY * hoverBlend;
+
+          const targetYaw = -THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_YAW_DEG) * holdLookX * holdEnvMouseBlend;
+          const targetPitch = THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_PITCH_DEG) * holdLookY * holdEnvMouseBlend;
+          /* The target path itself now owns the ease-in/ease-out, so the camera only needs
+             a light stabilizing follow. This avoids the old hard-start / endless-settle feel. */
+          const cameraRate = activeHoldHotspotIndex >= 0 || holdEnvHoverZoomBlend > .001 ? 4.0 : HOLD_ENV_ROTATION_EASE;
+          const cameraEase = 1 - Math.exp(-cameraRate * dt);
           holdEnvYaw += (targetYaw - holdEnvYaw) * cameraEase;
           holdEnvPitch += (targetPitch - holdEnvPitch) * cameraEase;
         }
@@ -5164,7 +5572,7 @@ void main(){
         setHoldTextOcclusionVisibility(holdEnvBlend <= .001);
 
         if (holdEnvBlend > .001 || holdEnvMode === 'realigning' || holdEnvMode === 'fading-out') {
-          holdEnvCamera.position.set(0, 0, holdEnvCameraDistance);
+          holdEnvCamera.position.set(0, 0, holdEnvCameraDistance * (1 - HOLD_ENV_HOVER_ZOOM * holdEnvHoverZoomBlend));
           holdEnvCamera.rotation.order = 'YXZ';
           holdEnvCamera.rotation.y = holdEnvYaw;
           holdEnvCamera.rotation.x = holdEnvPitch;
@@ -5201,26 +5609,28 @@ void main(){
         const travelled = Math.max(0, -experience.getBoundingClientRect().top);
         const baseActiveDistance = window.innerHeight * (SCROLL_LENGTH_VH / 100);
 
-        /* Keep the sequence itself at the exact existing speed. Once the final JPG frame is
-           reached, stretch only this interactive reading / looking section. */
-        const holdStartDistance = baseActiveDistance * HOLD_SCROLL_START;
-        const originalHoldDistance = baseActiveDistance * (HOLD_SCROLL_END - HOLD_SCROLL_START);
-        const stretchedHoldDistance = originalHoldDistance * HOLD_SCROLL_SLOWDOWN;
+        /* The first 60 background frames retain their original physical scroll speed.
+           From the exact point text000 appears onward, stretch the ENTIRE PNG sequence
+           interval. The previous builds only stretched HOLD_SCROLL_START -> .955, which
+           left roughly the first 60% of the PNG frames at the original very fast rate. */
+        const storyStartDistance = baseActiveDistance * STORY_SEQUENCE_START;
+        const originalStoryDistance = baseActiveDistance * (STORY_SEQUENCE_END - STORY_SEQUENCE_START);
+        const stretchedStoryDistance = originalStoryDistance * STORY_SEQUENCE_SCROLL_SLOWDOWN;
 
-        if (travelled <= holdStartDistance) {
-          return baseActiveDistance <= 0 ? 0 : clamp(travelled / baseActiveDistance, 0, HOLD_SCROLL_START);
+        if (travelled <= storyStartDistance) {
+          return baseActiveDistance <= 0 ? 0 : clamp(travelled / baseActiveDistance, 0, STORY_SEQUENCE_START);
         }
 
-        const holdTravel = travelled - holdStartDistance;
-        if (holdTravel <= stretchedHoldDistance) {
-          const holdLocal = stretchedHoldDistance <= 0 ? 1 : clamp(holdTravel / stretchedHoldDistance, 0, 1);
-          return HOLD_SCROLL_START + (HOLD_SCROLL_END - HOLD_SCROLL_START) * holdLocal;
+        const storyTravel = travelled - storyStartDistance;
+        if (storyTravel <= stretchedStoryDistance) {
+          const storyLocal = stretchedStoryDistance <= 0 ? 1 : clamp(storyTravel / stretchedStoryDistance, 0, 1);
+          return STORY_SEQUENCE_START + (STORY_SEQUENCE_END - STORY_SEQUENCE_START) * storyLocal;
         }
 
-        /* Preserve the intentionally slow Coastal Sand reveal after the extended hold. */
+        /* Preserve the intentionally slow final mood / animated-thumbnail reveal. */
         const originalMoodDistance = baseActiveDistance * (1 - MOOD_WHITE_START);
         const stretchedMoodDistance = originalMoodDistance * MOOD_SLOWDOWN;
-        const moodTravel = holdTravel - stretchedHoldDistance;
+        const moodTravel = storyTravel - stretchedStoryDistance;
         const moodLocal = stretchedMoodDistance <= 0 ? 1 : clamp(moodTravel / stretchedMoodDistance, 0, 1);
 
         return MOOD_WHITE_START + (1 - MOOD_WHITE_START) * moodLocal;
@@ -5240,7 +5650,83 @@ void main(){
 
 
 
-        const raw = calculateRawScrollProgress(); targetStoryProgress = raw; targetScrollFrame = calculateTargetFrame(raw);
+        const travelled = Math.max(0, -experience.getBoundingClientRect().top);
+        const travelDeltaPx = travelled - lastUserTravelledPx;
+        const raw = calculateRawScrollProgress();
+        const rawDelta = raw - lastUserScrollProgress;
+        userScrollDirection = travelDeltaPx > .25 ? 1 : travelDeltaPx < -.25 ? -1 : (rawDelta > .000025 ? 1 : rawDelta < -.000025 ? -1 : 0);
+        lastUserScrollProgress = raw;
+        lastUserTravelledPx = travelled;
+        targetStoryProgress = raw;
+        targetScrollFrame = calculateTargetFrame(raw);
+
+        /* PNG STORY SCRUB SPEED
+           Forward: use the intentionally stretched story distance.
+           Reverse: scrub the PNG sequence at the ORIGINAL 1x speed requested, without
+           changing the slower physical layout/timing of the rest of the experience. */
+        const baseActiveDistance = Math.max(1, window.innerHeight * (SCROLL_LENGTH_VH / 100));
+        const originalStoryDistance = Math.max(1, baseActiveDistance * (STORY_SEQUENCE_END - STORY_SEQUENCE_START));
+        const stretchedStoryDistance = originalStoryDistance * STORY_SEQUENCE_SCROLL_SLOWDOWN;
+
+        if (travelDeltaPx > .25) {
+          if (targetStoryProgress >= STORY_SEQUENCE_START || targetStorySequenceProgress > 0) {
+            targetStorySequenceProgress = clamp(targetStorySequenceProgress + travelDeltaPx / stretchedStoryDistance, 0, 1);
+          }
+        } else if (travelDeltaPx < -.25) {
+          if (targetStorySequenceProgress <= 0 && targetStoryProgress >= STORY_SEQUENCE_END) targetStorySequenceProgress = 1;
+          if (targetStorySequenceProgress > 0 || targetStoryProgress >= STORY_SEQUENCE_START) {
+            targetStorySequenceProgress = clamp(targetStorySequenceProgress + travelDeltaPx / originalStoryDistance, 0, 1);
+          }
+        }
+
+        if (targetStoryProgress < STORY_SEQUENCE_START - .002 && userScrollDirection <= 0) targetStorySequenceProgress = 0;
+        if (targetStoryProgress >= STORY_SEQUENCE_END && userScrollDirection >= 0) targetStorySequenceProgress = 1;
+
+        /* Crossing frame 60 in the FORWARD direction launches the remaining Scroll_01
+           frames automatically. Crucially, autoplay being ahead of the physical scroll
+           position is not treated as a reverse gesture; only actual upward scroll input is. */
+        if (targetScrollFrame >= STORY_SEQUENCE_START_FRAME &&
+            !backgroundAutoplayActive && !backgroundAutoplayComplete &&
+            !holdEnvReverseFrameLock && userScrollDirection >= 0) {
+          backgroundAutoplayActive = true;
+          backgroundAutoplayFrame = STORY_SEQUENCE_START_FRAME;
+          smoothScrollFrame = STORY_SEQUENCE_START_FRAME;
+          holdEnvAutoplayBlend = 0;
+        }
+
+        /* If the user genuinely scrolls upward while autoplay is running, stop the
+           forward run at its current frame. The existing sequential reverse path below
+           then walks every frame back once the semi-panorama has realigned and faded. */
+        if (backgroundAutoplayActive && userScrollDirection < 0) {
+          backgroundAutoplayActive = false;
+          backgroundAutoplayComplete = true;
+          backgroundAutoplayFrame = smoothScrollFrame;
+        }
+
+        /* If the user changes their mind during the sequential return and scrolls down
+           again before crossing back below frame 60, resume the same automatic forward
+           journey from the current frame instead of jumping. */
+        if (!holdEnvReverseFrameLock && userScrollDirection > 0 &&
+            backgroundAutoplayComplete && smoothScrollFrame >= STORY_SEQUENCE_START_FRAME &&
+            smoothScrollFrame < BACKGROUND_AUTOPLAY_END_FRAME - .01) {
+          backgroundAutoplayComplete = false;
+          backgroundAutoplayActive = true;
+          backgroundAutoplayFrame = smoothScrollFrame;
+        }
+
+        if (targetStoryProgress >= FINAL_VIEWER_AUTOPLAY_START &&
+            !finalViewerAutoplayActive && !finalViewerAutoplayComplete &&
+            targetStoryProgress >= smoothStoryProgress - .00008) {
+          finalViewerAutoplayActive = true;
+          finalViewerAutoplayProgress = Math.max(targetStoryProgress, FINAL_VIEWER_AUTOPLAY_START);
+        }
+
+        if (targetStoryProgress < smoothStoryProgress - .00008 &&
+            (finalViewerAutoplayActive || finalViewerAutoplayComplete)) {
+          finalViewerAutoplayActive = false;
+          finalViewerAutoplayComplete = false;
+          finalViewerAutoplayProgress = targetStoryProgress;
+        }
 
 
 
@@ -5250,6 +5736,22 @@ void main(){
 
       }
 
+
+
+      function updateHeroScrollTypography() {
+        const raw = clamp(smoothScrollFrame / HERO_TYPE_MOTION_END_FRAME, 0, 1);
+        const progress = smootherstep01(raw);
+
+        const titleScale = 1 + (HERO_TITLE_MAX_SCALE - 1) * progress;
+        const supportingScale = 1 + (HERO_SUPPORTING_MIN_SCALE - 1) * progress;
+        const tracking = HERO_TITLE_START_TRACKING_EM +
+          (HERO_TITLE_END_TRACKING_EM - HERO_TITLE_START_TRACKING_EM) * progress;
+
+        titleElement.style.transform = `scale(${titleScale})`;
+        titleElement.style.letterSpacing = `${tracking}em`;
+        eyebrowElement.style.transform = `scale(${supportingScale})`;
+        copyElement.style.transform = `scale(${supportingScale})`;
+      }
 
 
       function updateTextMode() {
@@ -5286,13 +5788,16 @@ void main(){
 
 
         const fd = targetScrollFrame - smoothScrollFrame, sd = targetStoryProgress - smoothStoryProgress;
+        const qd = targetStorySequenceProgress - smoothStorySequenceProgress;
 
         /* On reverse from the interactive hold scene, camera alignment happens FIRST.
            Keep the underlying sequence pinned to its exact last frame until the hold
            environment has fully faded out; only then resume reversing the JPG sequence. */
         if (holdEnvReverseFrameLock) smoothScrollFrame = SCROLL_FRAME_COUNT - 1;
-        else smoothScrollFrame += fd * SCROLL_EASE;
+        else if (backgroundAutoplayActive || backgroundAutoplayComplete) { /* master loop owns the JPG frame */ }
+        else smoothScrollFrame = targetScrollFrame;
         smoothStoryProgress += sd * STORY_SCROLL_EASE;
+        smoothStorySequenceProgress += qd * STORY_SCROLL_EASE;
 
 
 
@@ -5304,11 +5809,11 @@ void main(){
 
 
 
-        updatePanoramaOpacity(); updateTextMode(); updateStoryTextMotion(); updateMoodSectionMotion();
+        updatePanoramaOpacity(); updateHeroScrollTypography(); updateTextMode(); updateStoryTextMotion(); updateMoodSectionMotion();
 
 
 
-        if (Math.abs(fd) > SCROLL_SETTLE_THRESHOLD || Math.abs(sd) > STORY_SETTLE_THRESHOLD) {
+        if (Math.abs(sd) > STORY_SETTLE_THRESHOLD || Math.abs(qd) > STORY_SETTLE_THRESHOLD) {
 
 
 
@@ -5320,8 +5825,11 @@ void main(){
 
 
 
-          smoothScrollFrame = holdEnvReverseFrameLock ? (SCROLL_FRAME_COUNT - 1) : targetScrollFrame;
-          smoothStoryProgress = targetStoryProgress;
+          if (holdEnvReverseFrameLock) smoothScrollFrame = SCROLL_FRAME_COUNT - 1;
+          else if (backgroundAutoplayActive || backgroundAutoplayComplete) { /* master loop owns the JPG frame */ }
+          else smoothScrollFrame = targetScrollFrame;
+          smoothStoryProgress = finalViewerAutoplayActive ? Math.max(targetStoryProgress, smoothStoryProgress) : targetStoryProgress;
+          smoothStorySequenceProgress = targetStorySequenceProgress;
 
           const finalFrame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
 
@@ -5331,7 +5839,7 @@ void main(){
 
 
 
-          updatePanoramaOpacity(); updateTextMode(); updateStoryTextMotion(); updateMoodSectionMotion(); scrollAnimationRunning = false;
+          updatePanoramaOpacity(); updateHeroScrollTypography(); updateTextMode(); updateStoryTextMotion(); updateMoodSectionMotion(); scrollAnimationRunning = false;
 
 
 
@@ -5413,6 +5921,13 @@ void main(){
 
         sceneCanvas.style.height = `${viewportHeight}px`;
 
+        const storySequenceScale = Math.min(window.devicePixelRatio || 1, 1.5);
+        storySequenceCanvas.width = Math.round(viewportWidth * storySequenceScale);
+        storySequenceCanvas.height = Math.round(viewportHeight * storySequenceScale);
+        storySequenceCanvas.style.width = `${viewportWidth}px`;
+        storySequenceCanvas.style.height = `${viewportHeight}px`;
+        if (currentStorySequenceFrame >= 0) drawStorySequenceFrame(currentStorySequenceFrame);
+
 
 
         if (renderer) {
@@ -5433,7 +5948,7 @@ void main(){
 
 
 
-        fitStoryHeadline(); buildTextSnapshot(); updateStoryTextMotion(); updateMoodSectionMotion();
+        updateHeroScrollTypography(); buildTextSnapshot(); updateStoryTextMotion(); updateMoodSectionMotion();
 
 
 
@@ -5488,6 +6003,7 @@ void main(){
 
 
             targetStoryProgress = calculateRawScrollProgress();
+            lastUserTravelledPx = Math.max(0, -experience.getBoundingClientRect().top);
 
 
 
@@ -5528,6 +6044,84 @@ void main(){
 
 
 
+
+
+
+      function updateBackgroundSequenceAutoplay(dt) {
+        if (!scrollingReady) return;
+
+        if (backgroundAutoplayActive) {
+          backgroundAutoplayFrame = Math.min(
+            BACKGROUND_AUTOPLAY_END_FRAME,
+            backgroundAutoplayFrame + BACKGROUND_AUTOPLAY_FPS * dt
+          );
+          smoothScrollFrame = backgroundAutoplayFrame;
+
+          /* Begin replacing the last few JPG frames with the live semi-panorama. */
+          holdEnvAutoplayBlend = smootherstep01(rangeProgress(
+            backgroundAutoplayFrame,
+            HOLD_ENV_AUTOPLAY_FADE_START_FRAME,
+            BACKGROUND_AUTOPLAY_END_FRAME
+          ));
+
+          const frame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
+          if (frame !== currentScrollFrame) {
+            currentScrollFrame = frame;
+            renderFrame(frame);
+          }
+
+          updatePanoramaOpacity();
+          updateHeroScrollTypography();
+          updateTextMode();
+          updateStoryTextMotion();
+          updateMoodSectionMotion();
+
+          if (backgroundAutoplayFrame >= BACKGROUND_AUTOPLAY_END_FRAME - .0001) {
+            backgroundAutoplayFrame = BACKGROUND_AUTOPLAY_END_FRAME;
+            smoothScrollFrame = BACKGROUND_AUTOPLAY_END_FRAME;
+            backgroundAutoplayActive = false;
+            backgroundAutoplayComplete = true;
+            holdEnvAutoplayBlend = 1;
+          }
+          return;
+        }
+
+        /* After autoplay has completed, never remap 108 -> 60 from scroll progress in
+           one jump. Once the semi-panorama has finished its reverse realignment/fade,
+           walk the JPG sequence frame-by-frame toward the current scroll target. This
+           preserves every frame in both reverse and direction-change cases. */
+        if (backgroundAutoplayComplete && !holdEnvReverseFrameLock) {
+          const desiredFrame = targetScrollFrame;
+          const delta = desiredFrame - smoothScrollFrame;
+
+          if (Math.abs(delta) > .001) {
+            const maxStep = BACKGROUND_RETURN_FPS * dt;
+            smoothScrollFrame += clamp(delta, -maxStep, maxStep);
+            backgroundAutoplayFrame = smoothScrollFrame;
+
+            const frame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
+            if (frame !== currentScrollFrame) {
+              currentScrollFrame = frame;
+              renderFrame(frame);
+            }
+
+            updatePanoramaOpacity();
+            updateHeroScrollTypography();
+            updateTextMode();
+            updateStoryTextMotion();
+            updateMoodSectionMotion();
+          }
+
+          /* Normal scroll scrubbing resumes only after the sequential return has
+             genuinely crossed back below the frame-60 autoplay trigger. */
+          if (targetScrollFrame < STORY_SEQUENCE_START_FRAME - .01 &&
+              smoothScrollFrame <= STORY_SEQUENCE_START_FRAME + .08) {
+            backgroundAutoplayComplete = false;
+            backgroundAutoplayFrame = smoothScrollFrame;
+            holdEnvAutoplayBlend = 0;
+          }
+        }
+      }
 
 
 
@@ -5572,7 +6166,11 @@ void main(){
 
 
         updateWoodStripLoop(dt);
+        updateBackgroundSequenceAutoplay(dt);
+        updateFinalViewerAutoplay(dt);
         updateHoldEnvironment(dt, time);
+        updateHoldHotspots(dt);
+        updateMoodBackgroundParallax(dt);
 
         requestAnimationFrame(masterAnimationLoop);
 
@@ -5607,6 +6205,7 @@ void main(){
 
 
           const scrollPromise = loadScrollAssets();
+          loadStorySequenceAssets().catch(error => console.warn('[West Coast Naturals] Story sequence preload failed.', error));
 
 
 
@@ -5624,15 +6223,22 @@ void main(){
 
 
           currentScrollFrame = 0; targetScrollFrame = smoothScrollFrame = 0;
+          backgroundAutoplayActive = backgroundAutoplayComplete = false;
+          backgroundAutoplayFrame = holdEnvAutoplayBlend = 0;
+          lastUserScrollProgress = 0; userScrollDirection = 0; lastUserTravelledPx = 0;
+          finalViewerAutoplayActive = finalViewerAutoplayComplete = false;
+          finalViewerAutoplayProgress = 0;
 
 
 
           targetStoryProgress = smoothStoryProgress = 0;
+          targetStorySequenceProgress = smoothStorySequenceProgress = 0;
 
 
 
-          buildTextSnapshot(); renderFrame(0); renderPanorama(); updateStoryTextMotion(); updateMoodSectionMotion();
+          buildTextSnapshot(); updateHeroScrollTypography(); renderFrame(0); renderPanorama(); updateStoryTextMotion(); updateMoodSectionMotion();
           updateHoldEnvironment(1 / 60);
+          updateHoldHotspots(1 / 60);
 
           heroText.style.visibility = 'visible'; maskedTextCanvas.style.opacity = '0'; updatePanoramaOpacity();
 
