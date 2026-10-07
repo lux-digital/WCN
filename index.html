@@ -2343,7 +2343,7 @@
       const STORY_SEQUENCE_END = .955;
       const STORY_SEQUENCE_HOLD_END = .978;
       const BACKGROUND_AUTOPLAY_FPS = 24;
-      const BACKGROUND_RETURN_FPS = 24;
+      const BACKGROUND_RETURN_FPS = 48;
       const BACKGROUND_AUTOPLAY_END_FRAME = SCROLL_FRAME_COUNT - 1;
       const HOLD_ENV_AUTOPLAY_FADE_START_FRAME = 101;
 
@@ -2378,10 +2378,9 @@
       const HOLD_ENV_REVERSE_ALIGN_START = 0.778;
       const HOLD_SCROLL_START = 1 / SCROLL_SENSITIVITY;
       const HOLD_SCROLL_END = 0.955;
-      /* The PNG sequence begins at STORY_SEQUENCE_START (frame 60), well before the old
-         hold-only slowdown point. Slow the ENTIRE authored PNG range instead of only
-         its final portion. This is the correction that makes text000 -> text368 genuinely
-         require much more wheel travel. */
+      /* The PNG sequence begins at STORY_SEQUENCE_START (frame 60). Forward scrolling
+         deliberately stretches this authored range; reverse wheel movement is compensated
+         later so the whole experience returns at the original logical speed. */
       const STORY_SEQUENCE_SCROLL_SLOWDOWN = 4.2;
 
       const HOLD_ENV_HOTSPOT_IMAGE_WIDTH = 2048, HOLD_ENV_HOTSPOT_IMAGE_HEIGHT = 1152;
@@ -5660,27 +5659,11 @@ void main(){
         targetStoryProgress = raw;
         targetScrollFrame = calculateTargetFrame(raw);
 
-        /* PNG STORY SCRUB SPEED
-           Forward: use the intentionally stretched story distance.
-           Reverse: scrub the PNG sequence at the ORIGINAL 1x speed requested, without
-           changing the slower physical layout/timing of the rest of the experience. */
-        const baseActiveDistance = Math.max(1, window.innerHeight * (SCROLL_LENGTH_VH / 100));
-        const originalStoryDistance = Math.max(1, baseActiveDistance * (STORY_SEQUENCE_END - STORY_SEQUENCE_START));
-        const stretchedStoryDistance = originalStoryDistance * STORY_SEQUENCE_SCROLL_SLOWDOWN;
-
-        if (travelDeltaPx > .25) {
-          if (targetStoryProgress >= STORY_SEQUENCE_START || targetStorySequenceProgress > 0) {
-            targetStorySequenceProgress = clamp(targetStorySequenceProgress + travelDeltaPx / stretchedStoryDistance, 0, 1);
-          }
-        } else if (travelDeltaPx < -.25) {
-          if (targetStorySequenceProgress <= 0 && targetStoryProgress >= STORY_SEQUENCE_END) targetStorySequenceProgress = 1;
-          if (targetStorySequenceProgress > 0 || targetStoryProgress >= STORY_SEQUENCE_START) {
-            targetStorySequenceProgress = clamp(targetStorySequenceProgress + travelDeltaPx / originalStoryDistance, 0, 1);
-          }
-        }
-
-        if (targetStoryProgress < STORY_SEQUENCE_START - .002 && userScrollDirection <= 0) targetStorySequenceProgress = 0;
-        if (targetStoryProgress >= STORY_SEQUENCE_END && userScrollDirection >= 0) targetStorySequenceProgress = 1;
+        /* The PNG sequence follows the same logical story progress as the rest of the
+           experience. Forward motion is slow because the page is physically stretched.
+           Reverse motion is restored to the original logical speed by the upward-scroll
+           distance compensation below, so PNG + background + semi-panorama stay together. */
+        targetStorySequenceProgress = rangeProgress(targetStoryProgress, STORY_SEQUENCE_START, STORY_SEQUENCE_END);
 
         /* Crossing frame 60 in the FORWARD direction launches the remaining Scroll_01
            frames automatically. Crucially, autoplay being ahead of the physical scroll
@@ -5850,6 +5833,34 @@ void main(){
       }
 
 
+
+
+      /* FORWARD-ONLY SLOWDOWN / NORMAL-SPEED REVERSE
+         The authored story and mood sections are physically stretched so scrolling down
+         can scrub them slowly. On the way back up, compensate the wheel distance by the
+         same stretch factor. This restores the original logical reverse speed for the
+         entire experience—not just the PNG frames—so the JPG background, semi-panorama,
+         text sequence and page position remain synchronized. */
+      window.addEventListener('wheel', event => {
+        if (event.deltaY >= 0 || event.ctrlKey || !scrollingReady) return;
+
+        const experienceBounds = experience.getBoundingClientRect();
+        const experienceActive = experienceBounds.top <= 1 && experienceBounds.bottom > Math.min(window.innerHeight, stage.getBoundingClientRect().height) * .15;
+        if (!experienceActive) return;
+
+        const p = calculateRawScrollProgress();
+        let reverseMultiplier = 1;
+        if (p > MOOD_WHITE_START + .0005) reverseMultiplier = MOOD_SLOWDOWN;
+        else if (p > STORY_SEQUENCE_START + .0005) reverseMultiplier = STORY_SEQUENCE_SCROLL_SLOWDOWN;
+        if (reverseMultiplier <= 1.001) return;
+
+        let deltaPx = event.deltaY;
+        if (event.deltaMode === 1) deltaPx *= 16;
+        else if (event.deltaMode === 2) deltaPx *= window.innerHeight;
+
+        event.preventDefault();
+        window.scrollBy(0, deltaPx * reverseMultiplier);
+      }, { passive: false });
 
       window.addEventListener('scroll', updateScrollTarget, { passive: true });
 
