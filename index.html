@@ -867,32 +867,87 @@
     .woodDot {
       -webkit-appearance: none !important;
       appearance: none !important;
+      position: relative;
       box-sizing: border-box !important;
-      flex: 0 0 12px !important;
-
-      width: 12px !important;
-      height: 12px !important;
-      min-width: 12px !important;
-      min-height: 12px !important;
-      max-width: 12px !important;
-      max-height: 12px !important;
-
-      aspect-ratio: 1/1 !important;
+      flex: 0 0 36px !important;
+      width: 36px !important;
+      height: 36px !important;
+      min-width: 36px !important;
+      min-height: 36px !important;
+      max-width: 36px !important;
+      max-height: 36px !important;
       padding: 0 !important;
-      margin: 0 !important;
+      margin: -12px !important;
       border: 0 !important;
       border-radius: 999px !important;
       line-height: 0 !important;
-
       cursor: pointer;
-      background: rgba(255, 255, 255, .30) !important;
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, .06);
+      background: transparent !important;
+      box-shadow: none !important;
+      overflow: visible;
     }
 
+    .woodDot::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      transform: translate(-50%, -50%) scale(1);
+      background: rgba(255,255,255,.30);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.08);
+      transition:
+        transform .48s cubic-bezier(.22,1,.36,1),
+        background-color .38s ease,
+        box-shadow .38s ease;
+      pointer-events: none;
+    }
 
+    .woodDot::after {
+      content: attr(data-label);
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 2px);
+      transform: translate3d(-50%, 8px, 0) scale(.94);
+      transform-origin: 50% 100%;
+      white-space: nowrap;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .035em;
+      line-height: 1;
+      text-transform: uppercase;
+      text-shadow: 0 2px 7px rgba(0,0,0,.45);
+      opacity: 0;
+      transition:
+        opacity .32s ease,
+        transform .48s cubic-bezier(.22,1,.36,1);
+      pointer-events: none;
+    }
 
-    .woodDot.is-active {
-      background: rgba(255, 255, 255, 1) !important;
+    .woodDot:hover::before,
+    .woodDot:focus-visible::before {
+      transform: translate(-50%, -50%) scale(1.42);
+      background: rgba(255,255,255,.72);
+      box-shadow: 0 0 0 5px rgba(255,255,255,.08);
+    }
+
+    .woodDot:hover::after,
+    .woodDot:focus-visible::after {
+      opacity: 1;
+      transform: translate3d(-50%, 0, 0) scale(1);
+    }
+
+    .woodDot.is-active::before {
+      background: rgba(255,255,255,1);
+      transform: translate(-50%, -50%) scale(1.10);
+      box-shadow: 0 0 0 3px rgba(255,255,255,.10);
+    }
+
+    .woodDot:focus-visible {
+      outline: none;
     }
 
 
@@ -1679,7 +1734,7 @@
     /* When any profile is being explored, clear the central copy out of the way.
        It fades back gently when the pointer/focus leaves the thumbnails. */
     #moodFooter:has(.productThumbButton:hover) #moodLabelBlock,
-    #moodFooter:focus-within #moodLabelBlock {
+    #moodFooter:has(.productThumbButton:focus-visible) #moodLabelBlock {
       opacity: 0 !important;
       transform: translate3d(0, -10px, 0) scale(.975) !important;
     }
@@ -1879,6 +1934,40 @@
       pointer-events: none;
     }
 
+    #woodViewerOverlay {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -10%;
+      right: -10%;
+      z-index: 2;
+      background-repeat: repeat-x;
+      background-size: auto 100%;
+      background-position: 0 0;
+      opacity: 0;
+      pointer-events: none;
+      will-change: opacity, transform, background-position;
+    }
+
+    #activeProductName {
+      position: absolute;
+      left: 50%;
+      top: calc(100% + 12px);
+      transform: translateX(-50%);
+      z-index: 4;
+      color: rgba(255,255,255,.96);
+      font-size: clamp(12px, .95vw, 17px);
+      font-weight: 700;
+      letter-spacing: .07em;
+      line-height: 1;
+      white-space: nowrap;
+      text-align: center;
+      text-transform: uppercase;
+      text-shadow: 0 2px 7px rgba(0,0,0,.42), 0 8px 22px rgba(0,0,0,.24);
+      pointer-events: none;
+      will-change: opacity, transform;
+    }
+
     #woodViewerStripIncoming::after {
       content: "";
       position: absolute;
@@ -1894,7 +1983,7 @@
     }
 
     .woodDot.is-active {
-      transform: scale(1.06);
+      transform: none;
     }
 
     .woodNavButton {
@@ -1936,7 +2025,88 @@
         transform .28s cubic-bezier(.16, 1, .3, 1) !important;
     }
 
-  </style>
+
+    /* FINAL PRODUCT THUMB OVERSTATE
+       Keep every thumbnail physically pinned to the bottom edge. Hover grows upward
+       from the bottom pivot instead of translating the whole button away from the edge. */
+    .productThumbButton {
+      transform-origin: 50% 100% !important;
+      transition:
+        transform .58s cubic-bezier(.22, 1, .36, 1),
+        opacity .40s ease,
+        filter .58s cubic-bezier(.22, 1, .36, 1) !important;
+    }
+
+    .productThumbButton img {
+      transform-origin: 50% 100% !important;
+    }
+
+    .productThumbName {
+      transition:
+        opacity .44s ease,
+        transform .58s cubic-bezier(.22, 1, .36, 1) !important;
+    }
+
+    @media (hover:hover) and (pointer:fine) {
+      .productThumbButton:hover {
+        transform: translate3d(0, 0, 0) scale(1.18) !important;
+        opacity: 1 !important;
+        filter: brightness(1.055) !important;
+      }
+    }
+
+
+    .productThumbButton.is-selected {
+      opacity: 1 !important;
+      filter: brightness(1.04) !important;
+      transform: translate3d(0, 0, 0) scale(1.06);
+    }
+
+    /* The selected product stays visually active, but its small-button title is NOT
+       permanently shown above the row. The active product name now lives centered below
+       the large animated thumbnail, so it cannot collide with the mood copy. */
+    .productThumbButton.is-selected .productThumbName {
+      opacity: 0 !important;
+      transform: translate3d(-50%, 14px, 0) scale(.90) !important;
+    }
+
+    @media (hover:hover) and (pointer:fine) {
+      .productThumbButton.is-selected:hover .productThumbName {
+        opacity: 1 !important;
+        transform: translate3d(-50%, -2px, 0) scale(1) !important;
+      }
+    }
+
+    .productThumbButton.is-selected:focus-visible .productThumbName {
+      opacity: 1 !important;
+      transform: translate3d(-50%, -2px, 0) scale(1) !important;
+    }
+
+    .productThumbButton:focus-visible {
+      transform: translate3d(0, 0, 0) scale(1.18) !important;
+    }
+
+  
+
+    /* FINAL VISUAL POLISH — no timeline/scroll behavior changes. */
+    #woodViewerShell {
+      box-shadow:
+        0 38px 96px rgba(0, 0, 0, .34),
+        0 16px 42px rgba(0, 0, 0, .22),
+        0 4px 14px rgba(0, 0, 0, .13) !important;
+    }
+
+    #woodDotButtons {
+      gap: 18px !important;
+    }
+
+    @media (max-width: 800px) {
+      #woodDotButtons {
+        gap: 10px !important;
+      }
+    }
+
+</style>
 
 
 
@@ -2137,54 +2307,17 @@
                           <div id="woodViewerStrip"></div>
 
                 <div id="woodViewerStripIncoming" aria-hidden="true"></div>
+                <div id="woodViewerOverlay" aria-hidden="true"></div>
 
 
 
-                          <div id="woodDotButtons" aria-label="Woodgrain options">
-
-
-
-                              <button class="woodDot is-active" type="button" aria-label="Woodgrain 1"></button>
-
-
-
-                              <button class="woodDot" type="button" aria-label="Woodgrain 2"></button>
-
-
-
-                              <button class="woodDot" type="button" aria-label="Woodgrain 3"></button>
-
-
-
-                              <button class="woodDot" type="button" aria-label="Woodgrain 4"></button>
-
-
-
-                              <button class="woodDot" type="button" aria-label="Woodgrain 5"></button>
-
-
-
-                              <button class="woodDot" type="button" aria-label="Woodgrain 6"></button>
-
-
-
-                              <button class="woodDot" type="button" aria-label="Woodgrain 7"></button>
-
-
-
-                              <button class="woodDot" type="button" aria-label="Woodgrain 8"></button>
-
-
-
-                              <button class="woodDot" type="button" aria-label="Woodgrain 9"></button>
-
-
-
-                            </div>
+                          <div id="woodDotButtons" aria-label="Woodgrain options"></div>
 
 
 
                         </div>
+
+                <div id="activeProductName" aria-live="polite">LUX LAP</div>
 
 
 
@@ -2329,15 +2462,18 @@
 
 
       const SCROLL_LENGTH_VH = 350, SCROLL_SENSITIVITY = 1.35, STORY_SCROLL_EASE = .085;
+      const PANORAMA_START_YAW_DEG = -20.874;
+      const PANORAMA_START_PITCH_DEG = 5.261;
 
 
 
       const SCROLL_SETTLE_THRESHOLD = .01, STORY_SETTLE_THRESHOLD = .00005, PANORAMA_FADE_END_FRAME = 24;
 
-      /* Replaces all three former story-copy beats with text000.png through text368.png.
-         The PNG sequence begins when the background JPG sequence reaches frame 60.
-         At that same moment, Scroll_01 stops being scroll-scrubbed and plays frames
-         60 -> 108 automatically, allowing the semi-panorama to arrive much earlier. */
+      /* text000.png through text368.png still begins at the same VISUAL point: Scroll060.
+         Scroll_01 now leaves scroll-scrubbing at Scroll052 — halfway between the original
+         frame-60 trigger and the more aggressive frame-45 experiment — then its timed
+         autoplay crossing frame 60 triggers the PNG sequence. */
+      const BACKGROUND_AUTOPLAY_START_FRAME = 52;
       const STORY_SEQUENCE_START_FRAME = 60;
       const STORY_SEQUENCE_START = STORY_SEQUENCE_START_FRAME / ((SCROLL_FRAME_COUNT - 1) * SCROLL_SENSITIVITY);
       const STORY_SEQUENCE_END = .955;
@@ -2350,10 +2486,26 @@
       /* Opening typography choreography. Transform-only scaling avoids reflow and keeps
          the exact line wrapping that the foreground masking system is calibrated against. */
       const HERO_TYPE_MOTION_END_FRAME = 58;
-      const HERO_TITLE_MAX_SCALE = 1.215;
-      const HERO_SUPPORTING_MIN_SCALE = 0.565;
+      const HERO_TITLE_MAX_SCALE = 1.30;
+      const HERO_SUPPORTING_MIN_SCALE = 0.53;
       const HERO_TITLE_START_TRACKING_EM = -0.052;
-      const HERO_TITLE_END_TRACKING_EM = 0.004;
+      const HERO_TITLE_END_TRACKING_EM = 0.034;
+      const HERO_TYPE_EASE = 0.045; // retained as a legacy tuning reference
+      const HERO_TYPE_INPUT_ACCEL = 9.0;
+      const HERO_TYPE_INPUT_MAX_VELOCITY = 0.58;
+      /* After wheel input ends, match the incoming velocity into one continuous AE-like
+         ease-out curve instead of switching from a coast phase to a spring phase. */
+      const HERO_TYPE_RELEASE_IDLE_MS = 82;
+      const HERO_TYPE_MOMENTUM_MIN_MS = 1050;
+      const HERO_TYPE_MOMENTUM_MAX_MS = 2100;
+      const HERO_TYPE_MOMENTUM_EASE_POWER = 5.0;
+      const SCROLL_FRAME_VISUAL_EASE = 0.22;
+      const SCROLL_FRAME_MAX_STEP = 0.95;
+      const PANORAMA_RETURN_TRIGGER_FRAME = PANORAMA_FADE_END_FRAME + 0.35;
+      const PANORAMA_RETURN_MIN_DURATION = 1700;
+      const PANORAMA_RETURN_MAX_DURATION = 2850;
+      const PANORAMA_RETURN_CAMERA_EASE_RATE = 1.18;
+      const PANORAMA_NORMAL_CAMERA_EASE_RATE = 7.5;
 
       const HOLD_ENV_IMAGE = 'hold-extended.jpg';
       const HOLD_ENV_FOV = 50;
@@ -2381,7 +2533,31 @@
       /* The PNG sequence begins at STORY_SEQUENCE_START (frame 60). Forward scrolling
          deliberately stretches this authored range; reverse wheel movement is compensated
          later so the whole experience returns at the original logical speed. */
-      const STORY_SEQUENCE_SCROLL_SLOWDOWN = 4.2;
+      const STORY_SEQUENCE_SCROLL_SLOWDOWN = 2.2;
+      const STORY_SEQUENCE_AUTOPLAY_FPS = 38;
+      const STORY_FIRST_AUTOPLAY_END_FRAME = 72; // text000 -> text072
+      const STORY_MID_AUTOPLAY_START_FRAME = 80;
+      const STORY_MID_AUTOPLAY_END_FRAME = 144;
+      const STORY_THIRD_AUTOPLAY_START_FRAME = 150;
+      const STORY_THIRD_AUTOPLAY_END_FRAME = 265;
+      const STORY_FOURTH_AUTOPLAY_START_FRAME = 270;
+      const STORY_FOURTH_AUTOPLAY_END_FRAME = 320;
+      const STORY_FIFTH_AUTOPLAY_START_FRAME = 328;
+      const STORY_LAST_FRAME = STORY_SEQUENCE_FRAME_COUNT - 1;
+      const STORY_FIFTH_AUTOPLAY_END_FRAME = STORY_LAST_FRAME;
+
+      /* Only the manually scrubbed frame ranges consume scroll distance. Authored autoplay
+         clips are time-based and lock the sticky page at their trigger boundary. The final
+         manual range ends at text328; text328 -> the final PNG is then fully automatic. */
+      const STORY_MANUAL_SPAN_1 = STORY_MID_AUTOPLAY_START_FRAME - STORY_FIRST_AUTOPLAY_END_FRAME;
+      const STORY_MANUAL_SPAN_2 = STORY_THIRD_AUTOPLAY_START_FRAME - STORY_MID_AUTOPLAY_END_FRAME;
+      const STORY_MANUAL_SPAN_3 = STORY_FOURTH_AUTOPLAY_START_FRAME - STORY_THIRD_AUTOPLAY_END_FRAME;
+      const STORY_MANUAL_SPAN_4 = STORY_FIFTH_AUTOPLAY_START_FRAME - STORY_FOURTH_AUTOPLAY_END_FRAME;
+      const STORY_MANUAL_TOTAL_SPAN = STORY_MANUAL_SPAN_1 + STORY_MANUAL_SPAN_2 + STORY_MANUAL_SPAN_3 + STORY_MANUAL_SPAN_4;
+      const STORY_MID_TRIGGER_LOCAL = STORY_MANUAL_SPAN_1 / STORY_MANUAL_TOTAL_SPAN;
+      const STORY_THIRD_TRIGGER_LOCAL = (STORY_MANUAL_SPAN_1 + STORY_MANUAL_SPAN_2) / STORY_MANUAL_TOTAL_SPAN;
+      const STORY_FOURTH_TRIGGER_LOCAL = (STORY_MANUAL_SPAN_1 + STORY_MANUAL_SPAN_2 + STORY_MANUAL_SPAN_3) / STORY_MANUAL_TOTAL_SPAN;
+      const STORY_FIFTH_TRIGGER_LOCAL = 1;
 
       const HOLD_ENV_HOTSPOT_IMAGE_WIDTH = 2048, HOLD_ENV_HOTSPOT_IMAGE_HEIGHT = 1152;
       const HOLD_ENV_HOTSPOTS = [
@@ -2437,12 +2613,18 @@
 
 
 
-      const MOOD_VIDEO_PATH = 'Mood/coastal sand.mp4', WOODGRAIN_STRIP_IMAGE = '01_coastal sand.jpg';
+      const MOOD_VIDEO_PATH = 'Mood/coastal sand.mp4', WOODGRAIN_STRIP_IMAGE = 'COASTAL SAND.jpg';
 
       const MOOD_ITEMS = [
-        { name: 'COASTAL SAND', mediaType: 'video', media: MOOD_VIDEO_PATH, woodgrain: WOODGRAIN_STRIP_IMAGE, dot: 0 },
-        { name: 'TOBACCO', mediaType: 'image', media: 'Mood/Tobacco.jpg', woodgrain: '06_tobacco.jpg', dot: 1 },
-        { name: 'CHARWOOD', mediaType: 'image', media: 'Mood/Charwood.jpg', woodgrain: '09_charwood.jpg', dot: 2 }
+        { name: 'COASTAL SAND', mediaType: 'video', media: MOOD_VIDEO_PATH, woodgrain: 'COASTAL SAND.jpg', dot: 0 },
+        { name: 'TOBACCO', mediaType: 'image', media: 'Mood/Tobacco.jpg', woodgrain: 'TOBACCO.jpg', dot: 1 },
+        { name: 'CHARWOOD', mediaType: 'image', media: 'Mood/Charwood.jpg', woodgrain: 'CHARWOOD.jpg', dot: 2 },
+        { name: 'HEMLOCK', mediaType: 'image', media: 'Mood/HEMLOCK.jpg', woodgrain: 'HEMLOCK.jpg', dot: 3 },
+        { name: 'FAWN', mediaType: 'image', media: 'Mood/FAWN.jpg', woodgrain: 'FAWN.jpg', dot: 4 },
+        { name: 'HEARTWOOD', mediaType: 'image', media: 'Mood/HEARTWOOD.jpg', woodgrain: 'HEARTWOOD.jpg', dot: 5 },
+        { name: 'HICKORY', mediaType: 'image', media: 'Mood/HICKORY.jpg', woodgrain: 'HICKORY.jpg', dot: 6 },
+        { name: 'IRONWOOD', mediaType: 'image', media: 'Mood/IRONWOOD.jpg', woodgrain: 'IRONWOOD.jpg', dot: 7 },
+        { name: 'MAHOGANY', mediaType: 'image', media: 'Mood/MAHOGANY.jpg', woodgrain: 'MAHOGANY.jpg', dot: 8 }
       ];
 
       const MOOD_CHANGE_EASE = 'cubic-bezier(.45,0,.55,1)';
@@ -2502,7 +2684,7 @@
 
       const MOOD_WHITE_START = .955;
 
-      const MOOD_SLOWDOWN = 10.5; // preserve the slow Coastal Sand reveal after extending the interactive hold section
+      const MOOD_SLOWDOWN = 1.0; // final white/mood reveal now plays as a timed clip, not a stretched scroll section
 
       const MOOD_WHITE_END = .978;
 
@@ -2517,8 +2699,7 @@
       const MOOD_VIEWER_START = .988;
 
       const MOOD_VIEWER_END = 1.0;
-      const FINAL_VIEWER_AUTOPLAY_START = MOOD_VIEWER_START;
-      const FINAL_VIEWER_AUTOPLAY_DURATION = 1.05;
+      const MOOD_CLIP_DURATION = 4.0;
 
       const PRODUCT_THUMBS = [
 
@@ -2654,11 +2835,11 @@
 
 
 
-      const woodViewerCluster = $('woodViewerCluster'), moodFooter = $('moodFooter'), woodViewerStrip = $('woodViewerStrip'), woodViewerStripIncoming = $('woodViewerStripIncoming');
+      const woodViewerCluster = $('woodViewerCluster'), moodFooter = $('moodFooter'), woodViewerStrip = $('woodViewerStrip'), woodViewerStripIncoming = $('woodViewerStripIncoming'), woodViewerOverlay = $('woodViewerOverlay');
 
 
 
-      const moodLabelBlock = $('moodLabelBlock'), moodSeriesName = $('moodSeriesName'), productThumbButtons = $('productThumbButtons');
+      const moodLabelBlock = $('moodLabelBlock'), moodSeriesName = $('moodSeriesName'), productThumbButtons = $('productThumbButtons'), activeProductName = $('activeProductName');
 
 
 
@@ -2691,7 +2872,7 @@
 
 
 
-      let yaw = 0, pitch = THREE.MathUtils.degToRad(-2), yawVelocity = AUTO_ROTATE_SPEED, pitchVelocity = 0;
+      let yaw = THREE.MathUtils.degToRad(PANORAMA_START_YAW_DEG), pitch = THREE.MathUtils.degToRad(PANORAMA_START_PITCH_DEG), yawVelocity = AUTO_ROTATE_SPEED, pitchVelocity = 0;
 
 
 
@@ -2758,8 +2939,29 @@
       let scrollingReady = false, currentScrollFrame = -1, targetScrollFrame = 0, smoothScrollFrame = 0;
       let backgroundAutoplayActive = false, backgroundAutoplayComplete = false;
       let backgroundAutoplayFrame = 0, holdEnvAutoplayBlend = 0;
+      let backgroundAutoplayForcedByStoryStart = false;
+      let backgroundReverseActive = false;
+      let heroTypographyVelocity = 0;
+      let heroTypographyLastUpdateTime = performance.now();
+      let heroTypographyLastUserInputTime = performance.now();
+      let heroTypographyMomentumActive = false;
+      let heroTypographyMomentumStartTime = 0;
+      let heroTypographyMomentumDuration = HERO_TYPE_MOMENTUM_MIN_MS;
+      let heroTypographyMomentumFrom = 0;
+      let heroTypographyMomentumTo = 0;
       let lastUserScrollProgress = 0, userScrollDirection = 0, lastUserTravelledPx = 0;
-      let finalViewerAutoplayActive = false, finalViewerAutoplayComplete = false, finalViewerAutoplayProgress = 0;
+
+      let storySequenceAutoplayActive = false;
+      let storySequenceAutoplayFrame = 0, storySequenceAutoplayFrom = 0, storySequenceAutoplayTo = 0;
+      let storySequenceAutoplayKind = '';
+      let storyFirstSegmentComplete = false, storyMidSegmentHigh = false, storyThirdSegmentHigh = false, storyFourthSegmentHigh = false, storyFifthSegmentHigh = false;
+      let storyStartAnchorY = null, storyMidAnchorY = null, storyThirdAnchorY = null, storyFourthAnchorY = null, storyFifthAnchorY = null, storySequenceAutoplayLockY = 0;
+      let heroTypographyProgress = 0;
+      let panoramaReturnActive = false, panoramaReturnStartY = 0, panoramaReturnTargetY = 0, panoramaReturnStartTime = 0, panoramaReturnDuration = 0;
+      let panoramaReturnCameraGlideActive = false, cameraScrollVisualProgress = 0;
+
+      let moodClipActive = false, moodClipComplete = false, moodClipDirection = 0, moodClipProgress = 0;
+      let moodClipLockY = 0, moodClipAnchorY = null, moodClipReverseSuppressed = false;
 
 
 
@@ -2787,9 +2989,11 @@
 
       let woodLoopImageWidth = 1600;
       let activeMoodIndex = 0;
+      let activeProductLabel = 'LUX LAP';
       let moodTransitioning = false;
       const moodWoodWidths = MOOD_ITEMS.map(() => 1600);
       const moodPreloadedImages = new Map();
+      const woodgrainWidthByPath = new Map();
       let moodBgParallaxX = 0, moodBgParallaxY = 0;
 
       /* Once the large Coastal Sand viewer is fully visible, wait 0.6 seconds and then
@@ -2982,7 +3186,12 @@
 
       function updateHoldHotspots(dt) {
         if (!holdEnvHotspots || holdHotspotButtons.length !== HOLD_ENV_HOTSPOTS.length) return;
-        const visibleTarget = (holdEnvLoaded && holdEnvBlend > .12 && (holdEnvMode === 'active' || holdEnvMode === 'entering') && smoothStoryProgress < MOOD_WHITE_START) ? 1 : 0;
+        /* The hotspots belong to the live semi-panorama, not to a particular scroll
+           subsection. Keep the SAME hotspot layer alive whenever that panorama is alive.
+           The mood/thumbnail section can cover it visually on the way down, but we never
+           tear it down and recreate a temporary reverse copy on the way back up. */
+        const visibleTarget = (holdEnvLoaded && holdEnvBlend > .12 &&
+          (holdEnvMode === 'active' || holdEnvMode === 'entering')) ? 1 : 0;
         holdEnvHotspotReveal += (visibleTarget - holdEnvHotspotReveal) * Math.min(1, dt * HOLD_ENV_HOTSPOT_REVEAL_EASE);
         /* Keep both the overlay and hotspot button ancestors fully opaque. CSS opacity
            creates a backdrop root, which prevents the info card's backdrop-filter from
@@ -3024,21 +3233,217 @@
         updateHoldHotspotHoverState();
       }
 
-      function updateFinalViewerAutoplay(dt) {
-        if (!scrollingReady || !finalViewerAutoplayActive) return;
-        finalViewerAutoplayProgress = Math.max(finalViewerAutoplayProgress, smoothStoryProgress, targetStoryProgress, FINAL_VIEWER_AUTOPLAY_START);
-        targetStorySequenceProgress = Math.max(targetStorySequenceProgress, 1);
-        smoothStorySequenceProgress += (1 - smoothStorySequenceProgress) * Math.min(1, dt * 8);
-        finalViewerAutoplayProgress = Math.min(1, finalViewerAutoplayProgress + ((1 - FINAL_VIEWER_AUTOPLAY_START) / FINAL_VIEWER_AUTOPLAY_DURATION) * dt);
-        smoothStoryProgress = Math.max(smoothStoryProgress, finalViewerAutoplayProgress);
+      function getStorySequenceFrameFromScrollLocal(localProgress) {
+        const local = clamp(localProgress, 0, 1);
+        if (!storyFirstSegmentComplete) return 0;
+
+        if (!storyMidSegmentHigh) {
+          const t = STORY_MID_TRIGGER_LOCAL <= 0 ? 1 : clamp(local / STORY_MID_TRIGGER_LOCAL, 0, 1);
+          return lerp(STORY_FIRST_AUTOPLAY_END_FRAME, STORY_MID_AUTOPLAY_START_FRAME, t);
+        }
+
+        if (!storyThirdSegmentHigh) {
+          const t = rangeProgress(local, STORY_MID_TRIGGER_LOCAL, STORY_THIRD_TRIGGER_LOCAL);
+          return lerp(STORY_MID_AUTOPLAY_END_FRAME, STORY_THIRD_AUTOPLAY_START_FRAME, t);
+        }
+
+        if (!storyFourthSegmentHigh) {
+          const t = rangeProgress(local, STORY_THIRD_TRIGGER_LOCAL, STORY_FOURTH_TRIGGER_LOCAL);
+          return lerp(STORY_THIRD_AUTOPLAY_END_FRAME, STORY_FOURTH_AUTOPLAY_START_FRAME, t);
+        }
+
+        if (!storyFifthSegmentHigh) {
+          const t = rangeProgress(local, STORY_FOURTH_TRIGGER_LOCAL, STORY_FIFTH_TRIGGER_LOCAL);
+          return lerp(STORY_FOURTH_AUTOPLAY_END_FRAME, STORY_FIFTH_AUTOPLAY_START_FRAME, t);
+        }
+
+        return STORY_FIFTH_AUTOPLAY_END_FRAME;
+      }
+
+      function isTimelineAutoplayLocked() {
+        return storySequenceAutoplayActive || backgroundAutoplayForcedByStoryStart || moodClipActive;
+      }
+
+      function getTimelineAutoplayLockY() {
+        if (storySequenceAutoplayActive || backgroundAutoplayForcedByStoryStart) return storySequenceAutoplayLockY;
+        if (moodClipActive) return moodClipLockY;
+        return null;
+      }
+
+      function syncScrollTrackingAfterProgrammaticMove() {
+        const travelled = Math.max(0, -experience.getBoundingClientRect().top);
+        lastUserTravelledPx = travelled;
+        lastUserScrollProgress = calculateRawScrollProgress();
+        userScrollDirection = 0;
+      }
+
+      function startStorySequenceAutoplay(fromFrame, toFrame, kind) {
+        if (storySequenceAutoplayActive) return;
+        if (kind === 'first-forward' && !holdEnvReverseFrameLock) {
+          /* Scroll_01 already owns the visual timeline by the time it crosses frame 60.
+             Do NOT restart or snap it here. Just keep the page lock coupled to that same
+             background autoplay until the semi-panorama handoff has completed. */
+          backgroundAutoplayForcedByStoryStart = backgroundAutoplayActive || backgroundAutoplayComplete;
+        }
+        storySequenceAutoplayActive = true;
+        storySequenceAutoplayFrom = fromFrame;
+        storySequenceAutoplayTo = toFrame;
+        storySequenceAutoplayFrame = fromFrame;
+        storySequenceAutoplayKind = kind;
+        storySequenceAutoplayLockY = window.scrollY;
+
+        if (kind === 'first-forward' && storyStartAnchorY === null) storyStartAnchorY = storySequenceAutoplayLockY;
+        if (kind === 'mid-forward' && storyMidAnchorY === null) storyMidAnchorY = storySequenceAutoplayLockY;
+        if (kind === 'third-forward' && storyThirdAnchorY === null) storyThirdAnchorY = storySequenceAutoplayLockY;
+        if (kind === 'fourth-forward' && storyFourthAnchorY === null) storyFourthAnchorY = storySequenceAutoplayLockY;
+        if (kind === 'fifth-forward' && storyFifthAnchorY === null) storyFifthAnchorY = storySequenceAutoplayLockY;
+
+        smoothStorySequenceProgress = clamp(fromFrame / STORY_LAST_FRAME, 0, 1);
+        targetStorySequenceProgress = smoothStorySequenceProgress;
+        currentStorySequenceFrame = -1;
         updateStoryTextMotion();
+      }
+
+      function finishStorySequenceAutoplay() {
+        const kind = storySequenceAutoplayKind;
+        const finalFrame = storySequenceAutoplayTo;
+        storySequenceAutoplayActive = false;
+        storySequenceAutoplayKind = '';
+        storySequenceAutoplayFrame = finalFrame;
+        smoothStorySequenceProgress = clamp(finalFrame / STORY_LAST_FRAME, 0, 1);
+
+        if (kind === 'first-forward') storyFirstSegmentComplete = true;
+        else if (kind === 'mid-forward') storyMidSegmentHigh = true;
+        else if (kind === 'third-forward') storyThirdSegmentHigh = true;
+        else if (kind === 'fourth-forward') storyFourthSegmentHigh = true;
+        else if (kind === 'fifth-forward') storyFifthSegmentHigh = true;
+        else if (kind === 'fifth-reverse') storyFifthSegmentHigh = false;
+        else if (kind === 'fourth-reverse') storyFourthSegmentHigh = false;
+        else if (kind === 'third-reverse') storyThirdSegmentHigh = false;
+        else if (kind === 'mid-reverse') storyMidSegmentHigh = false;
+        else if (kind === 'first-reverse') storyFirstSegmentComplete = false;
+
+        /* A large upward wheel delta can physically overshoot an autoplay boundary.
+           Snap the STICKY page back to the exact boundary after the reverse clip, while
+           the same full-screen stage is still visible. This prevents frame skips. */
+        if (kind === 'fifth-reverse' && storyFifthAnchorY !== null) {
+          window.scrollTo(0, storyFifthAnchorY);
+        } else if (kind === 'fourth-reverse' && storyFourthAnchorY !== null) {
+          window.scrollTo(0, storyFourthAnchorY);
+        } else if (kind === 'third-reverse' && storyThirdAnchorY !== null) {
+          window.scrollTo(0, storyThirdAnchorY);
+        } else if (kind === 'mid-reverse' && storyMidAnchorY !== null) {
+          window.scrollTo(0, storyMidAnchorY);
+        } else if (kind === 'first-reverse' && storyStartAnchorY !== null) {
+          window.scrollTo(0, storyStartAnchorY);
+        }
+
+        /* The final PNG autoplay is authored to flow straight into the existing timed
+           white/mood/animated-thumbnail reveal, with no extra scroll gap at frame 368. */
+        if (kind === 'fifth-forward' && !moodClipActive && !moodClipComplete) {
+          startMoodClip(1);
+        }
+        syncScrollTrackingAfterProgrammaticMove();
+        updateScrollTarget();
+      }
+
+      function updateStorySequenceAutoplay(dt) {
+        if (!storySequenceAutoplayActive) return;
+        const direction = Math.sign(storySequenceAutoplayTo - storySequenceAutoplayFrom) || 1;
+        const next = storySequenceAutoplayFrame + direction * STORY_SEQUENCE_AUTOPLAY_FPS * dt;
+        storySequenceAutoplayFrame = direction > 0
+          ? Math.min(storySequenceAutoplayTo, next)
+          : Math.max(storySequenceAutoplayTo, next);
+
+        smoothStorySequenceProgress = clamp(storySequenceAutoplayFrame / STORY_LAST_FRAME, 0, 1);
+        targetStorySequenceProgress = smoothStorySequenceProgress;
+        updateStoryTextMotion();
+
+        if ((direction > 0 && storySequenceAutoplayFrame >= storySequenceAutoplayTo - .0001) ||
+            (direction < 0 && storySequenceAutoplayFrame <= storySequenceAutoplayTo + .0001)) {
+          finishStorySequenceAutoplay();
+        }
+      }
+
+      function easeOutQuint01(t) {
+        const x = clamp(t, 0, 1);
+        return 1 - Math.pow(1 - x, 5);
+      }
+
+      function startPanoramaReturnAutoplay() {
+        if (panoramaReturnActive || !scrollingReady) return;
+        const experienceTopY = window.scrollY + experience.getBoundingClientRect().top;
+        const targetY = Math.max(0, experienceTopY);
+        const distance = Math.max(0, window.scrollY - targetY);
+        if (distance < 2) return;
+
+        panoramaReturnActive = true;
+        panoramaReturnCameraGlideActive = true;
+        cameraScrollVisualProgress = getCameraScrollProgress();
+        panoramaReturnStartY = window.scrollY;
+        panoramaReturnTargetY = targetY;
+        panoramaReturnStartTime = performance.now();
+        panoramaReturnDuration = clamp(PANORAMA_RETURN_MIN_DURATION + distance * .30, PANORAMA_RETURN_MIN_DURATION, PANORAMA_RETURN_MAX_DURATION);
+        requestAnimationFrame(updatePanoramaReturnAutoplay);
+      }
+
+      function updatePanoramaReturnAutoplay(time) {
+        if (!panoramaReturnActive) return;
+        const t = clamp((time - panoramaReturnStartTime) / Math.max(1, panoramaReturnDuration), 0, 1);
+        const eased = easeOutExpo(t);
+        window.scrollTo(0, lerp(panoramaReturnStartY, panoramaReturnTargetY, eased));
+
+        if (t < 1) {
+          requestAnimationFrame(updatePanoramaReturnAutoplay);
+        } else {
+          panoramaReturnActive = false;
+          window.scrollTo(0, panoramaReturnTargetY);
+          syncScrollTrackingAfterProgrammaticMove();
+          updateScrollTarget();
+        }
+      }
+
+      function startMoodClip(direction) {
+        if (moodClipActive) return;
+        moodClipActive = true;
+        moodClipDirection = direction >= 0 ? 1 : -1;
+        moodClipLockY = window.scrollY;
+
+        if (moodClipDirection > 0) {
+          if (moodClipAnchorY === null) moodClipAnchorY = moodClipLockY;
+          moodClipProgress = clamp(moodClipProgress, 0, 1);
+          moodClipReverseSuppressed = false;
+        } else {
+          moodClipProgress = clamp(moodClipProgress || 1, 0, 1);
+        }
+        updateMoodSectionMotion();
+      }
+
+      function getMoodVisualProgress() {
+        if (moodClipActive || moodClipComplete || moodClipProgress > .0001) {
+          return MOOD_WHITE_START + (1 - MOOD_WHITE_START) * clamp(moodClipProgress, 0, 1);
+        }
+        return Math.min(smoothStoryProgress, MOOD_WHITE_START);
+      }
+
+      function updateMoodClip(dt) {
+        if (!moodClipActive) return;
+        moodClipProgress = clamp(moodClipProgress + moodClipDirection * (dt / MOOD_CLIP_DURATION), 0, 1);
         updateMoodSectionMotion();
 
-        if (finalViewerAutoplayProgress >= 1 - .0001) {
-          finalViewerAutoplayProgress = 1;
-          smoothStoryProgress = 1;
-          finalViewerAutoplayActive = false;
-          finalViewerAutoplayComplete = true;
+        if (moodClipDirection > 0 && moodClipProgress >= 1 - .0001) {
+          moodClipProgress = 1;
+          moodClipActive = false;
+          moodClipComplete = true;
+          updateMoodSectionMotion();
+        } else if (moodClipDirection < 0 && moodClipProgress <= .0001) {
+          moodClipProgress = 0;
+          moodClipActive = false;
+          moodClipComplete = false;
+          moodClipReverseSuppressed = true;
+          if (moodClipAnchorY !== null) window.scrollTo(0, moodClipAnchorY);
+          syncScrollTrackingAfterProgrammaticMove();
+          updateScrollTarget();
           updateMoodSectionMotion();
         }
       }
@@ -3284,7 +3689,7 @@
         /* Mouse only: touch users keep the background steady so vertical page gestures
            and the existing mobile panorama controls remain completely predictable. */
         const allowPointerDrift = !window.matchMedia('(pointer: coarse)').matches;
-        const moodVisible = smoothStoryProgress >= MOOD_VIDEO_START - .01;
+        const moodVisible = getMoodVisualProgress() >= MOOD_VIDEO_START - .01;
 
         const targetX = (allowPointerDrift && moodVisible ? -mouseX * viewportWidth * MOOD_BG_PARALLAX_X : 0);
         const targetY = (allowPointerDrift && moodVisible ?  mouseY * viewportHeight * MOOD_BG_PARALLAX_Y : 0);
@@ -3301,7 +3706,7 @@
 
       function updateMoodSectionMotion() {
 
-        const p = smoothStoryProgress;
+        const p = getMoodVisualProgress();
 
 
 
@@ -3338,8 +3743,11 @@
         moodSection.style.opacity = '1';
 
         moodSection.style.pointerEvents = (videoOpacity > .02 || footerOpacity > .02 || viewerOpacity > .02) ? 'auto' : 'none';
-
-
+        const hideScrollLottie = p >= MOOD_WHITE_START - .0005 || whiteReveal > .001 || videoOpacity > .001 || footerOpacity > .001 || viewerOpacity > .001 || moodClipActive || moodClipComplete;
+        if (scrollIndicator) {
+          scrollIndicator.style.opacity = hideScrollLottie ? '0' : '1';
+          scrollIndicator.style.visibility = hideScrollLottie ? 'hidden' : 'visible';
+        }
 
         moodWhiteFade.style.opacity = String(whiteReveal);
 
@@ -3398,6 +3806,136 @@
         return 0;
       }
 
+      function moodNameToWoodgrainFilename(moodName) {
+        return `${moodName}.jpg`;
+      }
+
+      function resolveWoodgrainPath(productLabel, moodName) {
+        const filename = moodNameToWoodgrainFilename(moodName);
+        if (productLabel === 'LUX LAP' || productLabel === 'SOFFIT') return filename;
+        return `${productLabel}/${filename}`;
+      }
+
+      function resolveWoodgrainOverlayPath(productLabel) {
+        return productLabel === 'SOFFIT' ? 'soffit vents.png' : '';
+      }
+
+      async function preloadWoodgrainPath(src) {
+        const image = await preloadMoodImage(src);
+        woodgrainWidthByPath.set(src, Math.max(1, image.naturalWidth || image.width || 1600));
+        return image;
+      }
+
+      function setWoodViewerOverlay(path) {
+        if (!woodViewerOverlay) return;
+        if (!path) {
+          woodViewerOverlay.style.opacity = '0';
+          woodViewerOverlay.style.backgroundImage = 'none';
+          return;
+        }
+        woodViewerOverlay.style.backgroundImage = `url("${encodeURI(path)}")`;
+        woodViewerOverlay.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        woodViewerOverlay.style.opacity = '1';
+      }
+
+      function setActiveProductButton(label) {
+        document.querySelectorAll('.productThumbButton').forEach(button => {
+          const active = button.dataset.productLabel === label;
+          button.classList.toggle('is-selected', active);
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+      }
+
+      async function setActiveProductName(label) {
+        if (!activeProductName) return;
+        if (activeProductName.textContent === label) return;
+        const out = activeProductName.animate(
+          [
+            { opacity: 1, transform: 'translateX(-50%) translateY(0) scale(1)' },
+            { opacity: 0, transform: 'translateX(-50%) translateY(5px) scale(.98)' }
+          ],
+          { duration: 260, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
+        );
+        try { await out.finished; } catch (e) {}
+        try { out.cancel(); } catch (e) {}
+        activeProductName.textContent = label;
+        const incoming = activeProductName.animate(
+          [
+            { opacity: 0, transform: 'translateX(-50%) translateY(5px) scale(.98)' },
+            { opacity: 1, transform: 'translateX(-50%) translateY(0) scale(1)' }
+          ],
+          { duration: 520, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
+        );
+        try { await incoming.finished; } catch (e) {}
+        try { incoming.cancel(); } catch (e) {}
+      }
+
+      async function transitionWoodgrainProfile(productLabel, direction = 1) {
+        const activeMood = MOOD_ITEMS[activeMoodIndex];
+        const nextPath = resolveWoodgrainPath(productLabel, activeMood.name);
+        const nextOverlay = resolveWoodgrainOverlayPath(productLabel);
+        if (productLabel === activeProductLabel && woodViewerStrip.style.backgroundImage.includes(encodeURI(nextPath))) {
+          setActiveProductButton(productLabel);
+          setWoodViewerOverlay(nextOverlay);
+          setActiveProductName(productLabel);
+          return;
+        }
+
+        try {
+          const woodImage = await preloadWoodgrainPath(nextPath);
+          woodLoopImageWidth = Math.max(1, woodImage.naturalWidth || woodImage.width || 1600);
+          if (nextOverlay) await preloadMoodImage(nextOverlay).catch(() => {});
+        } catch (error) {
+          console.warn('Could not preload product woodgrain:', productLabel, nextPath, error);
+        }
+
+        woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(nextPath)}")`;
+        woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        woodViewerStripIncoming.style.opacity = '0';
+        woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
+
+        const overlayOut = woodViewerOverlay ? woodViewerOverlay.animate(
+          [{ opacity: getComputedStyle(woodViewerOverlay).opacity }, { opacity: 0 }],
+          { duration: 420, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
+        ) : null;
+
+        const woodOut = woodViewerStrip.animate(
+          [
+            { opacity: 1, transform: 'translate3d(0,0,0)' },
+            { opacity: 0, transform: `translate3d(${direction > 0 ? -4 : 4}%,0,0)` }
+          ],
+          { duration: 820, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
+        );
+
+        const woodIn = woodViewerStripIncoming.animate(
+          [
+            { opacity: .08, transform: `translate3d(${direction > 0 ? 4 : -4}%,0,0)` },
+            { opacity: 1, transform: 'translate3d(0,0,0)' }
+          ],
+          { duration: 1080, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
+        );
+
+        await Promise.allSettled([
+          woodOut.finished,
+          woodIn.finished,
+          overlayOut ? overlayOut.finished : Promise.resolve()
+        ]);
+        try { woodOut.cancel(); } catch (e) {}
+        try { woodIn.cancel(); } catch (e) {}
+        try { if (overlayOut) overlayOut.cancel(); } catch (e) {}
+
+        activeProductLabel = productLabel;
+        woodViewerStrip.style.backgroundImage = `url("${encodeURI(nextPath)}")`;
+        woodViewerStrip.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        woodViewerStrip.style.opacity = '1';
+        woodViewerStrip.style.transform = 'translate3d(0,0,0)';
+        woodViewerStripIncoming.style.opacity = '0';
+        woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
+        setWoodViewerOverlay(nextOverlay);
+        setActiveProductButton(productLabel);
+        setActiveProductName(productLabel);
+      }
+
       function freezeMoodShade() {
         resetMoodVideoShade();
         return 0;
@@ -3436,24 +3974,27 @@
       async function transitionMoodItem(targetIndex, direction = 1) {
         if (moodTransitioning || targetIndex === activeMoodIndex) return;
         if (targetIndex < 0 || targetIndex >= MOOD_ITEMS.length) return;
-        if (smoothStoryProgress < MOOD_VIEWER_START - .006) return;
+        if (getMoodVisualProgress() < MOOD_VIEWER_START - .006) return;
 
         moodTransitioning = true;
 
         const fromItem = MOOD_ITEMS[activeMoodIndex];
         const toItem = MOOD_ITEMS[targetIndex];
+        const toWoodgrainPath = resolveWoodgrainPath(activeProductLabel, toItem.name);
+        const activeOverlayPath = resolveWoodgrainOverlayPath(activeProductLabel);
 
         /* Preload the incoming background and woodgrain before anything moves. */
         try {
           if (toItem.mediaType === 'image') await preloadMoodImage(toItem.media);
-          const woodImage = await preloadMoodImage(toItem.woodgrain);
+          const woodImage = await preloadWoodgrainPath(toWoodgrainPath);
           moodWoodWidths[targetIndex] = Math.max(1, woodImage.naturalWidth || woodImage.width || 1600);
+          if (activeOverlayPath) await preloadMoodImage(activeOverlayPath).catch(() => {});
         } catch (error) {
           console.warn('Could not preload mood item:', toItem, error);
         }
 
         /* Prepare the incoming woodgrain at the same live pan position. */
-        woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(toItem.woodgrain)}")`;
+        woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(toWoodgrainPath)}")`;
         woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
         woodViewerStripIncoming.style.opacity = '0';
         woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
@@ -3550,17 +4091,18 @@
         await Promise.allSettled([backgroundPromise, woodOut.finished, woodIn.finished, titlePromise]);
 
         activeMoodIndex = targetIndex;
-        woodLoopImageWidth = moodWoodWidths[targetIndex] || 1600;
+        woodLoopImageWidth = moodWoodWidths[targetIndex] || woodgrainWidthByPath.get(toWoodgrainPath) || 1600;
 
         /* Commit the incoming texture into the base panning layer. */
         try { woodOut.cancel(); } catch (e) { }
         try { woodIn.cancel(); } catch (e) { }
-        woodViewerStrip.style.backgroundImage = `url("${encodeURI(toItem.woodgrain)}")`;
+        woodViewerStrip.style.backgroundImage = `url("${encodeURI(toWoodgrainPath)}")`;
         woodViewerStrip.style.backgroundPosition = `${woodLoopOffset}px 0px`;
         woodViewerStrip.style.opacity = '1';
         woodViewerStrip.style.transform = 'translate3d(0,0,0)';
         woodViewerStripIncoming.style.opacity = '0';
         woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
+        setWoodViewerOverlay(activeOverlayPath);
 
         /* Commit the active background with no full-screen dark overlay. */
         moodVideo.style.opacity = activeMoodIndex === 0 ? '1' : '0';
@@ -3576,15 +4118,34 @@
 
 
         woodViewerStrip.style.backgroundImage = `url("${encodeURI(WOODGRAIN_STRIP_IMAGE)}")`;
-        woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(MOOD_ITEMS[1].woodgrain)}")`;
+        woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(resolveWoodgrainPath(activeProductLabel, MOOD_ITEMS[1].name))}")`;
+        setWoodViewerOverlay(resolveWoodgrainOverlayPath(activeProductLabel));
         moodImage.src = encodeURI(MOOD_ITEMS[1].media);
 
-        /* Preload every non-video mood and its woodgrain so Next/Back feels immediate. */
+        /* Preload every non-video mood and the default-root / button-driven woodgrains. */
         MOOD_ITEMS.forEach((item, itemIndex) => {
           if (item.mediaType === 'image') preloadMoodImage(item.media).catch(() => {});
-          preloadMoodImage(item.woodgrain).then(image => {
+          const defaultWoodPath = resolveWoodgrainPath('LUX LAP', item.name);
+          preloadWoodgrainPath(defaultWoodPath).then(image => {
             moodWoodWidths[itemIndex] = Math.max(1, image.naturalWidth || image.width || 1600);
           }).catch(() => {});
+        });
+
+        const woodDotButtons = $('woodDotButtons');
+        woodDotButtons.innerHTML = '';
+        MOOD_ITEMS.forEach((item, index) => {
+          const dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'woodDot';
+          dot.dataset.label = item.name;
+          dot.dataset.index = String(index);
+          dot.setAttribute('aria-label', `Show ${item.name}`);
+          dot.setAttribute('aria-pressed', index === activeMoodIndex ? 'true' : 'false');
+          dot.addEventListener('click', () => {
+            const direction = index >= activeMoodIndex ? 1 : -1;
+            transitionMoodItem(index, direction);
+          });
+          woodDotButtons.appendChild(dot);
         });
 
         setActiveWoodDot(0);
@@ -3615,14 +4176,13 @@
 
 
 
-          const profileName = file
-            .replace(/^\d+_/, '')
-            .replace(/\.[^.]+$/, '')
-            .replace(/_/g, ' ');
+          const profileName = label;
 
           button.setAttribute('aria-label', profileName);
+          button.setAttribute('aria-pressed', profileName === activeProductLabel ? 'true' : 'false');
 
           button.dataset.index = String(index);
+          button.dataset.productLabel = profileName;
 
           const name = document.createElement('span');
           name.className = 'productThumbName';
@@ -3644,6 +4204,17 @@
         });
 
 
+
+        setActiveProductButton(activeProductLabel);
+        if (activeProductName) activeProductName.textContent = activeProductLabel;
+
+        productThumbButtons.querySelectorAll('.productThumbButton').forEach((button, buttonIndex) => {
+          button.addEventListener('click', () => {
+            const label = button.dataset.productLabel || PRODUCT_THUMBS[buttonIndex]?.label || 'LUX LAP';
+            const direction = (PRODUCT_THUMBS.findIndex(item => item.label === label) >= PRODUCT_THUMBS.findIndex(item => item.label === activeProductLabel)) ? 1 : -1;
+            transitionWoodgrainProfile(label, direction);
+          });
+        });
 
         woodNextButton.addEventListener('click', () => {
           const nextIndex = Math.min(activeMoodIndex + 1, MOOD_ITEMS.length - 1);
@@ -3685,6 +4256,9 @@
 
         woodViewerStrip.style.backgroundPosition = `${woodLoopOffset}px 0px`;
         woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        if (woodViewerOverlay && woodViewerOverlay.style.opacity !== '0') {
+          woodViewerOverlay.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        }
 
 
 
@@ -3726,7 +4300,7 @@
            cannot appear before Scroll_01 reaches frame 60. Story progress continues
            to drive the PNG sequence after that exact handoff point. */
         const hasReachedStartFrame = smoothScrollFrame >= STORY_SEQUENCE_START_FRAME;
-        const active = hasReachedStartFrame && p <= STORY_SEQUENCE_HOLD_END;
+        const active = (storySequenceAutoplayActive || hasReachedStartFrame) && p <= STORY_SEQUENCE_HOLD_END;
         storySequenceCanvas.style.opacity = active && activeHoldHotspotIndex < 0 ? '1' : '0';
         if (!active) return;
 
@@ -4355,7 +4929,7 @@ void main(){
 
 
 
-        const e = getCameraScrollProgress();
+        const e = clamp(cameraScrollVisualProgress, 0, 1);
 
 
 
@@ -4473,6 +5047,17 @@ void main(){
       function updatePanoramaMotion(dt, elapsed) {
 
         if (!panoramaLoaded) return;
+
+        const cameraScrollTarget = getCameraScrollProgress();
+        const cameraEaseRate = panoramaReturnCameraGlideActive
+          ? PANORAMA_RETURN_CAMERA_EASE_RATE
+          : PANORAMA_NORMAL_CAMERA_EASE_RATE;
+        const cameraScrollEase = 1 - Math.exp(-cameraEaseRate * dt);
+        cameraScrollVisualProgress += (cameraScrollTarget - cameraScrollVisualProgress) * cameraScrollEase;
+        if (Math.abs(cameraScrollTarget - cameraScrollVisualProgress) < .00008) {
+          cameraScrollVisualProgress = cameraScrollTarget;
+          if (!panoramaReturnActive && cameraScrollTarget <= .0001) panoramaReturnCameraGlideActive = false;
+        }
 
         if (fluidReady) updateFluidFog(dt, elapsed);
 
@@ -5169,24 +5754,20 @@ void main(){
 
 
         const rects = [eyebrowElement, titleElement, copyElement].map(el => el.getBoundingClientRect());
+        const titleRect = titleElement.getBoundingClientRect();
 
-
-
-        const padding = 90, left = Math.max(0, Math.min(...rects.map(r => r.left)) - padding);
-
-
-
-        const top = Math.max(0, Math.min(...rects.map(r => r.top)) - padding);
-
-
-
-        const right = Math.min(viewportWidth, Math.max(...rects.map(r => r.right)) + padding);
-
-
-
-        const bottom = Math.min(viewportHeight, Math.max(...rects.map(r => r.bottom)) + padding);
-
-
+        /* The title is transform-scaled during scroll. The old foreground-mask crop was
+           based only on the unscaled title width, so once the animated title grew past
+           that crop the outer letters escaped the house/foreground occlusion. Expand the
+           horizontal mask runway for the maximum authored scale while retaining the
+           smaller vertical crop for performance. */
+        const paddingY = 90;
+        const animatedTitleOverflowX = titleRect.width * Math.max(0, HERO_TITLE_MAX_SCALE - 1) * .5;
+        const paddingX = Math.max(110, animatedTitleOverflowX + 150);
+        const left = Math.max(0, Math.min(...rects.map(r => r.left)) - paddingX);
+        const top = Math.max(0, Math.min(...rects.map(r => r.top)) - paddingY);
+        const right = Math.min(viewportWidth, Math.max(...rects.map(r => r.right)) + paddingX);
+        const bottom = Math.min(viewportHeight, Math.max(...rects.map(r => r.bottom)) + paddingY);
 
         textBounds = { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
 
@@ -5654,64 +6235,140 @@ void main(){
         const raw = calculateRawScrollProgress();
         const rawDelta = raw - lastUserScrollProgress;
         userScrollDirection = travelDeltaPx > .25 ? 1 : travelDeltaPx < -.25 ? -1 : (rawDelta > .000025 ? 1 : rawDelta < -.000025 ? -1 : 0);
+        if (userScrollDirection !== 0) heroTypographyLastUserInputTime = performance.now();
         lastUserScrollProgress = raw;
         lastUserTravelledPx = travelled;
         targetStoryProgress = raw;
         targetScrollFrame = calculateTargetFrame(raw);
 
-        /* The PNG sequence follows the same logical story progress as the rest of the
-           experience. Forward motion is slow because the page is physically stretched.
-           Reverse motion is restored to the original logical speed by the upward-scroll
-           distance compensation below, so PNG + background + semi-panorama stay together. */
-        targetStorySequenceProgress = rangeProgress(targetStoryProgress, STORY_SEQUENCE_START, STORY_SEQUENCE_END);
+        /* Scroll only controls the portions of the PNG sequence that are NOT authored
+           autoplay clips. Each autoplay range is bridged by frame-perfect timed playback,
+           and mirrors itself on reverse so no frames are skipped. */
+        const storyLocal = rangeProgress(targetStoryProgress, STORY_SEQUENCE_START, STORY_SEQUENCE_END);
+        const storyTargetFrame = getStorySequenceFrameFromScrollLocal(storyLocal);
+        if (!storySequenceAutoplayActive) targetStorySequenceProgress = clamp(storyTargetFrame / STORY_LAST_FRAME, 0, 1);
 
-        /* Crossing frame 60 in the FORWARD direction launches the remaining Scroll_01
-           frames automatically. Crucially, autoplay being ahead of the physical scroll
-           position is not treated as a reverse gesture; only actual upward scroll input is. */
-        if (targetScrollFrame >= STORY_SEQUENCE_START_FRAME &&
+        if (!storySequenceAutoplayActive && storyFirstSegmentComplete && !storyMidSegmentHigh &&
+            storyLocal >= STORY_MID_TRIGGER_LOCAL - .00015 && userScrollDirection > 0) {
+          smoothStorySequenceProgress = STORY_MID_AUTOPLAY_START_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_MID_AUTOPLAY_START_FRAME, STORY_MID_AUTOPLAY_END_FRAME, 'mid-forward');
+        }
+
+        if (!storySequenceAutoplayActive && storyMidSegmentHigh && !storyThirdSegmentHigh &&
+            storyLocal >= STORY_THIRD_TRIGGER_LOCAL - .00015 && userScrollDirection > 0) {
+          smoothStorySequenceProgress = STORY_THIRD_AUTOPLAY_START_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_THIRD_AUTOPLAY_START_FRAME, STORY_THIRD_AUTOPLAY_END_FRAME, 'third-forward');
+        }
+
+        if (!storySequenceAutoplayActive && storyThirdSegmentHigh && !storyFourthSegmentHigh &&
+            storyLocal >= STORY_FOURTH_TRIGGER_LOCAL - .00015 && userScrollDirection > 0) {
+          smoothStorySequenceProgress = STORY_FOURTH_AUTOPLAY_START_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_FOURTH_AUTOPLAY_START_FRAME, STORY_FOURTH_AUTOPLAY_END_FRAME, 'fourth-forward');
+        }
+
+        if (!storySequenceAutoplayActive && storyFourthSegmentHigh && !storyFifthSegmentHigh &&
+            storyLocal >= STORY_FIFTH_TRIGGER_LOCAL - .00015 && userScrollDirection > 0) {
+          smoothStorySequenceProgress = STORY_FIFTH_AUTOPLAY_START_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_FIFTH_AUTOPLAY_START_FRAME, STORY_FIFTH_AUTOPLAY_END_FRAME, 'fifth-forward');
+        }
+
+        /* Reverse the authored clips at the same boundaries so scrolling upward never
+           jumps over the frame ranges that autoplay on the way down. */
+        if (!storySequenceAutoplayActive && storyFifthSegmentHigh &&
+            storyLocal <= STORY_FIFTH_TRIGGER_LOCAL + .00015 && userScrollDirection < 0) {
+          smoothStorySequenceProgress = STORY_FIFTH_AUTOPLAY_END_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_FIFTH_AUTOPLAY_END_FRAME, STORY_FIFTH_AUTOPLAY_START_FRAME, 'fifth-reverse');
+        }
+
+        if (!storySequenceAutoplayActive && storyFourthSegmentHigh && !storyFifthSegmentHigh &&
+            storyLocal <= STORY_FOURTH_TRIGGER_LOCAL + .00015 && userScrollDirection < 0) {
+          smoothStorySequenceProgress = STORY_FOURTH_AUTOPLAY_END_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_FOURTH_AUTOPLAY_END_FRAME, STORY_FOURTH_AUTOPLAY_START_FRAME, 'fourth-reverse');
+        }
+
+        if (!storySequenceAutoplayActive && storyThirdSegmentHigh && !storyFourthSegmentHigh &&
+            storyLocal <= STORY_THIRD_TRIGGER_LOCAL + .00015 && userScrollDirection < 0) {
+          smoothStorySequenceProgress = STORY_THIRD_AUTOPLAY_END_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_THIRD_AUTOPLAY_END_FRAME, STORY_THIRD_AUTOPLAY_START_FRAME, 'third-reverse');
+        }
+
+        if (!storySequenceAutoplayActive && storyMidSegmentHigh && !storyThirdSegmentHigh &&
+            storyLocal <= STORY_MID_TRIGGER_LOCAL + .00015 && userScrollDirection < 0) {
+          smoothStorySequenceProgress = STORY_MID_AUTOPLAY_END_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_MID_AUTOPLAY_END_FRAME, STORY_MID_AUTOPLAY_START_FRAME, 'mid-reverse');
+        }
+
+        const firstReverseBoundaryReached = storyStartAnchorY !== null
+          ? window.scrollY <= storyStartAnchorY + 3
+          : targetStoryProgress <= STORY_SEQUENCE_START + .00015;
+        if (!storySequenceAutoplayActive && storyFirstSegmentComplete && !storyMidSegmentHigh &&
+            firstReverseBoundaryReached && userScrollDirection < 0) {
+          smoothStorySequenceProgress = STORY_FIRST_AUTOPLAY_END_FRAME / STORY_LAST_FRAME;
+          startStorySequenceAutoplay(STORY_FIRST_AUTOPLAY_END_FRAME, 0, 'first-reverse');
+        }
+
+        /* Scroll_01 now takes over earlier at frame 45. The PNG sequence does NOT begin
+           here; updateBackgroundSequenceAutoplay() launches text000 only when this timed
+           background run visually crosses the original frame-60 story start point. */
+        if (targetScrollFrame >= BACKGROUND_AUTOPLAY_START_FRAME &&
             !backgroundAutoplayActive && !backgroundAutoplayComplete &&
-            !holdEnvReverseFrameLock && userScrollDirection >= 0) {
+            !holdEnvReverseFrameLock && userScrollDirection > 0) {
+          backgroundReverseActive = false;
           backgroundAutoplayActive = true;
-          backgroundAutoplayFrame = STORY_SEQUENCE_START_FRAME;
-          smoothScrollFrame = STORY_SEQUENCE_START_FRAME;
+          backgroundAutoplayFrame = BACKGROUND_AUTOPLAY_START_FRAME;
+          smoothScrollFrame = BACKGROUND_AUTOPLAY_START_FRAME;
           holdEnvAutoplayBlend = 0;
         }
 
         /* If the user genuinely scrolls upward while autoplay is running, stop the
            forward run at its current frame. The existing sequential reverse path below
            then walks every frame back once the semi-panorama has realigned and faded. */
-        if (backgroundAutoplayActive && userScrollDirection < 0) {
+        if (backgroundAutoplayActive && userScrollDirection < 0 && !backgroundAutoplayForcedByStoryStart) {
           backgroundAutoplayActive = false;
           backgroundAutoplayComplete = true;
+          backgroundReverseActive = true;
           backgroundAutoplayFrame = smoothScrollFrame;
+        }
+
+        /* After the timed forward run reaches frame 108, HOLD there indefinitely.
+           The physical page is intentionally still near the earlier autoplay trigger, so
+           its scroll-derived target is behind frame 108. That must NOT be interpreted as
+           a reverse request. Only a genuine upward user gesture arms the sequential return. */
+        if (backgroundAutoplayComplete && !backgroundAutoplayActive && !holdEnvReverseFrameLock &&
+            userScrollDirection < 0) {
+          backgroundReverseActive = true;
         }
 
         /* If the user changes their mind during the sequential return and scrolls down
            again before crossing back below frame 60, resume the same automatic forward
            journey from the current frame instead of jumping. */
-        if (!holdEnvReverseFrameLock && userScrollDirection > 0 &&
-            backgroundAutoplayComplete && smoothScrollFrame >= STORY_SEQUENCE_START_FRAME &&
+        if (!holdEnvReverseFrameLock && !backgroundAutoplayForcedByStoryStart && userScrollDirection > 0 &&
+            backgroundAutoplayComplete && smoothScrollFrame >= BACKGROUND_AUTOPLAY_START_FRAME &&
             smoothScrollFrame < BACKGROUND_AUTOPLAY_END_FRAME - .01) {
+          backgroundReverseActive = false;
           backgroundAutoplayComplete = false;
           backgroundAutoplayActive = true;
           backgroundAutoplayFrame = smoothScrollFrame;
         }
 
-        if (targetStoryProgress >= FINAL_VIEWER_AUTOPLAY_START &&
-            !finalViewerAutoplayActive && !finalViewerAutoplayComplete &&
-            targetStoryProgress >= smoothStoryProgress - .00008) {
-          finalViewerAutoplayActive = true;
-          finalViewerAutoplayProgress = Math.max(targetStoryProgress, FINAL_VIEWER_AUTOPLAY_START);
+        if (moodClipReverseSuppressed && targetStoryProgress < MOOD_WHITE_START - .001) {
+          moodClipReverseSuppressed = false;
         }
 
-        if (targetStoryProgress < smoothStoryProgress - .00008 &&
-            (finalViewerAutoplayActive || finalViewerAutoplayComplete)) {
-          finalViewerAutoplayActive = false;
-          finalViewerAutoplayComplete = false;
-          finalViewerAutoplayProgress = targetStoryProgress;
+        if (!moodClipActive && !moodClipComplete && !moodClipReverseSuppressed &&
+            targetStoryProgress >= MOOD_WHITE_START - .00005 && userScrollDirection > 0) {
+          startMoodClip(1);
         }
 
+        if (!moodClipActive && moodClipComplete && userScrollDirection < 0) {
+          startMoodClip(-1);
+        }
 
+        if (!panoramaReturnActive && !storySequenceAutoplayActive && !moodClipActive &&
+            !backgroundAutoplayActive && !backgroundAutoplayComplete && !holdEnvReverseFrameLock &&
+            userScrollDirection < 0 && targetScrollFrame <= PANORAMA_RETURN_TRIGGER_FRAME && targetScrollFrame > .15) {
+          startPanoramaReturnAutoplay();
+        }
 
         if (!scrollAnimationRunning) { scrollAnimationRunning = true; requestAnimationFrame(animateScrollSequence); }
 
@@ -5721,21 +6378,94 @@ void main(){
 
 
 
-      function updateHeroScrollTypography() {
-        const raw = clamp(smoothScrollFrame / HERO_TYPE_MOTION_END_FRAME, 0, 1);
-        const progress = smootherstep01(raw);
+      function updateHeroScrollTypography(force = false) {
+        /* AE-style momentum: while wheel input is arriving the title develops velocity.
+           When input ends, that exact velocity is carried into one continuous ease-out
+           trajectory. There is no separate "coast, then ease" handoff, so the speed curve
+           begins high and continuously rolls toward zero like the After Effects graph. */
+        const now = performance.now();
+        const dt = clamp((now - heroTypographyLastUpdateTime) / 1000, 1 / 240, .05);
+        heroTypographyLastUpdateTime = now;
 
+        const targetRaw = clamp(targetScrollFrame / HERO_TYPE_MOTION_END_FRAME, 0, 1);
+        const targetProgress = smootherstep01(targetRaw);
+        const idleMs = now - heroTypographyLastUserInputTime;
+        const inputActive = idleMs < HERO_TYPE_RELEASE_IDLE_MS;
+
+        if (force) {
+          heroTypographyProgress = targetProgress;
+          heroTypographyVelocity = 0;
+          heroTypographyMomentumActive = false;
+          heroTypographyLastUserInputTime = now;
+        } else if (inputActive) {
+          /* Wheel is still feeding motion: follow with a small lag and remember the real
+             velocity so release starts at the same speed rather than visibly changing gear. */
+          heroTypographyMomentumActive = false;
+          const diff = targetProgress - heroTypographyProgress;
+          if (Math.abs(diff) < .000012) {
+            heroTypographyProgress = targetProgress;
+            heroTypographyVelocity *= Math.exp(-10 * dt);
+          } else {
+            const desiredVelocity = clamp(diff * 5.2, -HERO_TYPE_INPUT_MAX_VELOCITY, HERO_TYPE_INPUT_MAX_VELOCITY);
+            const accel = 1 - Math.exp(-HERO_TYPE_INPUT_ACCEL * dt);
+            heroTypographyVelocity += (desiredVelocity - heroTypographyVelocity) * accel;
+            let step = heroTypographyVelocity * dt;
+            if (Math.abs(step) > Math.abs(diff)) step = diff;
+            heroTypographyProgress += step;
+          }
+        } else {
+          const diff = targetProgress - heroTypographyProgress;
+
+          /* Start or retarget the release trajectory only when necessary. Retargeting is
+             useful when the physical scroll target changes slightly during the release,
+             but it still begins from the CURRENT position/velocity so there is no kink. */
+          const targetMoved = heroTypographyMomentumActive && Math.abs(targetProgress - heroTypographyMomentumTo) > .0012;
+          if ((!heroTypographyMomentumActive || targetMoved) && Math.abs(diff) > .000012) {
+            heroTypographyMomentumActive = true;
+            heroTypographyMomentumStartTime = now;
+            heroTypographyMomentumFrom = heroTypographyProgress;
+            heroTypographyMomentumTo = targetProgress;
+
+            const distance = Math.max(.00001, Math.abs(heroTypographyMomentumTo - heroTypographyMomentumFrom));
+            const incomingSpeed = Math.max(.018, Math.abs(heroTypographyVelocity));
+            /* easeOutQuint has an initial normalized slope of 5. Choosing duration from
+               distance/speed makes its first instant closely match the incoming motion.
+               Clamps simply keep tiny/huge wheel gestures inside a pleasant range. */
+            const matchedDuration = (HERO_TYPE_MOMENTUM_EASE_POWER * distance / incomingSpeed) * 1000;
+            heroTypographyMomentumDuration = clamp(matchedDuration, HERO_TYPE_MOMENTUM_MIN_MS, HERO_TYPE_MOMENTUM_MAX_MS);
+          }
+
+          if (heroTypographyMomentumActive) {
+            const t = clamp((now - heroTypographyMomentumStartTime) / heroTypographyMomentumDuration, 0, 1);
+            const oneMinus = 1 - t;
+            const eased = 1 - Math.pow(oneMinus, HERO_TYPE_MOMENTUM_EASE_POWER);
+            const previousProgress = heroTypographyProgress;
+            heroTypographyProgress = lerp(heroTypographyMomentumFrom, heroTypographyMomentumTo, eased);
+            heroTypographyVelocity = (heroTypographyProgress - previousProgress) / Math.max(dt, 1 / 240);
+
+            if (t >= 1 || Math.abs(heroTypographyMomentumTo - heroTypographyProgress) < .000012) {
+              heroTypographyProgress = heroTypographyMomentumTo;
+              heroTypographyVelocity = 0;
+              heroTypographyMomentumActive = false;
+            }
+          } else if (Math.abs(diff) <= .000012) {
+            heroTypographyProgress = targetProgress;
+            heroTypographyVelocity = 0;
+          }
+        }
+
+        const progress = clamp(heroTypographyProgress, 0, 1);
         const titleScale = 1 + (HERO_TITLE_MAX_SCALE - 1) * progress;
         const supportingScale = 1 + (HERO_SUPPORTING_MIN_SCALE - 1) * progress;
         const tracking = HERO_TITLE_START_TRACKING_EM +
           (HERO_TITLE_END_TRACKING_EM - HERO_TITLE_START_TRACKING_EM) * progress;
 
+        titleElement.style.whiteSpace = targetScrollFrame > .04 || smoothScrollFrame > .04 ? 'nowrap' : '';
         titleElement.style.transform = `scale(${titleScale})`;
         titleElement.style.letterSpacing = `${tracking}em`;
         eyebrowElement.style.transform = `scale(${supportingScale})`;
         copyElement.style.transform = `scale(${supportingScale})`;
       }
-
 
       function updateTextMode() {
 
@@ -5778,11 +6508,17 @@ void main(){
            environment has fully faded out; only then resume reversing the JPG sequence. */
         if (holdEnvReverseFrameLock) smoothScrollFrame = SCROLL_FRAME_COUNT - 1;
         else if (backgroundAutoplayActive || backgroundAutoplayComplete) { /* master loop owns the JPG frame */ }
-        else smoothScrollFrame = targetScrollFrame;
+        else {
+          /* A deliberately subtle catch-up: never advance more than roughly one source
+             frame per RAF, then ease more gently as the target is approached. This lets
+             motion continue for a moment after wheel input stops without making the
+             109-frame JPG sequence look like it is stuttering through a long dramatic ease. */
+          const frameDelta = targetScrollFrame - smoothScrollFrame;
+          if (Math.abs(frameDelta) <= SCROLL_SETTLE_THRESHOLD) smoothScrollFrame = targetScrollFrame;
+          else smoothScrollFrame += clamp(frameDelta * SCROLL_FRAME_VISUAL_EASE, -SCROLL_FRAME_MAX_STEP, SCROLL_FRAME_MAX_STEP);
+        }
         smoothStoryProgress += sd * STORY_SCROLL_EASE;
-        smoothStorySequenceProgress += qd * STORY_SCROLL_EASE;
-
-
+        if (!storySequenceAutoplayActive) smoothStorySequenceProgress += qd * STORY_SCROLL_EASE;
 
         const frame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
 
@@ -5796,9 +6532,13 @@ void main(){
 
 
 
-        if (Math.abs(sd) > STORY_SETTLE_THRESHOLD || Math.abs(qd) > STORY_SETTLE_THRESHOLD) {
+        const remainingFrameDelta = (backgroundAutoplayActive || backgroundAutoplayComplete || holdEnvReverseFrameLock)
+          ? 0 : Math.abs(targetScrollFrame - smoothScrollFrame);
+        const heroTargetProgress = smootherstep01(clamp(targetScrollFrame / HERO_TYPE_MOTION_END_FRAME, 0, 1));
+        const heroStillSettling = Math.abs(heroTargetProgress - heroTypographyProgress) > .00006 || Math.abs(heroTypographyVelocity) > .00008;
 
-
+        if (Math.abs(sd) > STORY_SETTLE_THRESHOLD || Math.abs(qd) > STORY_SETTLE_THRESHOLD ||
+            remainingFrameDelta > SCROLL_SETTLE_THRESHOLD || heroStillSettling) {
 
           requestAnimationFrame(animateScrollSequence);
 
@@ -5811,8 +6551,8 @@ void main(){
           if (holdEnvReverseFrameLock) smoothScrollFrame = SCROLL_FRAME_COUNT - 1;
           else if (backgroundAutoplayActive || backgroundAutoplayComplete) { /* master loop owns the JPG frame */ }
           else smoothScrollFrame = targetScrollFrame;
-          smoothStoryProgress = finalViewerAutoplayActive ? Math.max(targetStoryProgress, smoothStoryProgress) : targetStoryProgress;
-          smoothStorySequenceProgress = targetStorySequenceProgress;
+          smoothStoryProgress = targetStoryProgress;
+          if (!storySequenceAutoplayActive) smoothStorySequenceProgress = targetStorySequenceProgress;
 
           const finalFrame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
 
@@ -5842,7 +6582,25 @@ void main(){
          entire experience—not just the PNG frames—so the JPG background, semi-panorama,
          text sequence and page position remain synchronized. */
       window.addEventListener('wheel', event => {
-        if (event.deltaY >= 0 || event.ctrlKey || !scrollingReady) return;
+        if (event.ctrlKey || !scrollingReady) return;
+
+        if (panoramaReturnActive) {
+          event.preventDefault();
+          return;
+        }
+
+        if (isTimelineAutoplayLocked()) {
+          event.preventDefault();
+          return;
+        }
+
+        if (event.deltaY < 0 && moodClipComplete && !moodClipActive) {
+          event.preventDefault();
+          startMoodClip(-1);
+          return;
+        }
+
+        if (event.deltaY >= 0) return;
 
         const experienceBounds = experience.getBoundingClientRect();
         const experienceActive = experienceBounds.top <= 1 && experienceBounds.bottom > Math.min(window.innerHeight, stage.getBoundingClientRect().height) * .15;
@@ -5860,6 +6618,10 @@ void main(){
 
         event.preventDefault();
         window.scrollBy(0, deltaPx * reverseMultiplier);
+      }, { passive: false });
+
+      window.addEventListener('touchmove', event => {
+        if (isTimelineAutoplayLocked() || panoramaReturnActive) event.preventDefault();
       }, { passive: false });
 
       window.addEventListener('scroll', updateScrollTarget, { passive: true });
@@ -6062,11 +6824,21 @@ void main(){
         if (!scrollingReady) return;
 
         if (backgroundAutoplayActive) {
+          const previousBackgroundAutoplayFrame = backgroundAutoplayFrame;
           backgroundAutoplayFrame = Math.min(
             BACKGROUND_AUTOPLAY_END_FRAME,
             backgroundAutoplayFrame + BACKGROUND_AUTOPLAY_FPS * dt
           );
           smoothScrollFrame = backgroundAutoplayFrame;
+
+          /* The PNG sequence keeps its original visual start at Scroll060, but that point
+             is now reached by the background autoplay that began at Scroll052. Trigger it
+             from the VISUAL frame crossing rather than from physical scroll position. */
+          if (previousBackgroundAutoplayFrame < STORY_SEQUENCE_START_FRAME &&
+              backgroundAutoplayFrame >= STORY_SEQUENCE_START_FRAME &&
+              !storySequenceAutoplayActive && !storyFirstSegmentComplete) {
+            startStorySequenceAutoplay(0, STORY_FIRST_AUTOPLAY_END_FRAME, 'first-forward');
+          }
 
           /* Begin replacing the last few JPG frames with the live semi-panorama. */
           holdEnvAutoplayBlend = smootherstep01(rangeProgress(
@@ -6092,7 +6864,10 @@ void main(){
             smoothScrollFrame = BACKGROUND_AUTOPLAY_END_FRAME;
             backgroundAutoplayActive = false;
             backgroundAutoplayComplete = true;
+            backgroundReverseActive = false;
             holdEnvAutoplayBlend = 1;
+            backgroundAutoplayForcedByStoryStart = false;
+            syncScrollTrackingAfterProgrammaticMove();
           }
           return;
         }
@@ -6102,12 +6877,20 @@ void main(){
            walk the JPG sequence frame-by-frame toward the current scroll target. This
            preserves every frame in both reverse and direction-change cases. */
         if (backgroundAutoplayComplete && !holdEnvReverseFrameLock) {
-          const desiredFrame = targetScrollFrame;
+          /* REVERSE ONLY. Forward autoplay above is intentionally untouched.
+             On the way back up, never let programmatic page locks / autoplay anchors make
+             the JPG sequence chase a larger frame again. We only accept a target that is
+             behind the frame currently on screen, then walk to it one frame at a time. */
+          const desiredFrame = Math.min(targetScrollFrame, smoothScrollFrame);
           const delta = desiredFrame - smoothScrollFrame;
+          const reverseMayAdvance = backgroundReverseActive && !isTimelineAutoplayLocked() && delta < -.001;
 
-          if (Math.abs(delta) > .001) {
-            const maxStep = BACKGROUND_RETURN_FPS * dt;
-            smoothScrollFrame += clamp(delta, -maxStep, maxStep);
+          if (reverseMayAdvance) {
+            /* Never advance more than one JPG per RAF. Even if the wheel multiplier or a
+               slow frame produces a large target jump, every Scroll_01 frame is rendered
+               in sequence instead of visually skipping. */
+            const maxStep = Math.min(1, BACKGROUND_RETURN_FPS * dt);
+            smoothScrollFrame += Math.max(delta, -maxStep);
             backgroundAutoplayFrame = smoothScrollFrame;
 
             const frame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
@@ -6124,9 +6907,10 @@ void main(){
           }
 
           /* Normal scroll scrubbing resumes only after the sequential return has
-             genuinely crossed back below the frame-60 autoplay trigger. */
-          if (targetScrollFrame < STORY_SEQUENCE_START_FRAME - .01 &&
-              smoothScrollFrame <= STORY_SEQUENCE_START_FRAME + .08) {
+             genuinely crossed back below the frame-45 background autoplay trigger. */
+          if (!isTimelineAutoplayLocked() && targetScrollFrame < BACKGROUND_AUTOPLAY_START_FRAME - .01 &&
+              smoothScrollFrame <= BACKGROUND_AUTOPLAY_START_FRAME + .08) {
+            backgroundReverseActive = false;
             backgroundAutoplayComplete = false;
             backgroundAutoplayFrame = smoothScrollFrame;
             holdEnvAutoplayBlend = 0;
@@ -6176,9 +6960,13 @@ void main(){
 
 
 
+        const lockedY = getTimelineAutoplayLockY();
+        if (lockedY !== null && Math.abs(window.scrollY - lockedY) > .5) window.scrollTo(0, lockedY);
+
         updateWoodStripLoop(dt);
         updateBackgroundSequenceAutoplay(dt);
-        updateFinalViewerAutoplay(dt);
+        updateStorySequenceAutoplay(dt);
+        updateMoodClip(dt);
         updateHoldEnvironment(dt, time);
         updateHoldHotspots(dt);
         updateMoodBackgroundParallax(dt);
@@ -6234,11 +7022,21 @@ void main(){
 
 
           currentScrollFrame = 0; targetScrollFrame = smoothScrollFrame = 0;
+          backgroundAutoplayForcedByStoryStart = false;
           backgroundAutoplayActive = backgroundAutoplayComplete = false;
           backgroundAutoplayFrame = holdEnvAutoplayBlend = 0;
+          heroTypographyVelocity = 0;
+          heroTypographyLastUpdateTime = performance.now();
+          heroTypographyLastUserInputTime = performance.now();
           lastUserScrollProgress = 0; userScrollDirection = 0; lastUserTravelledPx = 0;
-          finalViewerAutoplayActive = finalViewerAutoplayComplete = false;
-          finalViewerAutoplayProgress = 0;
+          storySequenceAutoplayActive = false; storySequenceAutoplayFrame = 0; storySequenceAutoplayKind = '';
+          storyFirstSegmentComplete = false; storyMidSegmentHigh = false; storyThirdSegmentHigh = false; storyFourthSegmentHigh = false; storyFifthSegmentHigh = false;
+          storyStartAnchorY = storyMidAnchorY = storyThirdAnchorY = storyFourthAnchorY = storyFifthAnchorY = null;
+          heroTypographyProgress = 0;
+          cameraScrollVisualProgress = 0; panoramaReturnCameraGlideActive = false;
+          panoramaReturnActive = false;
+          moodClipActive = moodClipComplete = false; moodClipDirection = 0; moodClipProgress = 0;
+          moodClipAnchorY = null; moodClipReverseSuppressed = false;
 
 
 
@@ -6247,7 +7045,7 @@ void main(){
 
 
 
-          buildTextSnapshot(); updateHeroScrollTypography(); renderFrame(0); renderPanorama(); updateStoryTextMotion(); updateMoodSectionMotion();
+          buildTextSnapshot(); updateHeroScrollTypography(true); renderFrame(0); renderPanorama(); updateStoryTextMotion(); updateMoodSectionMotion();
           updateHoldEnvironment(1 / 60);
           updateHoldHotspots(1 / 60);
 
