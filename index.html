@@ -2082,7 +2082,8 @@
     #moodImage {
       transform-origin: 50% 50%;
       transform: translate3d(0,0,0) scale(1.075);
-      will-change: opacity, transform;
+      filter: blur(0px) brightness(1);
+      will-change: opacity, transform, filter;
       backface-visibility: hidden;
     }
 
@@ -2172,15 +2173,20 @@
     }
 
 
-    /* Interactive thumbnail pan. Pointer position steers the existing strip motion;
-       velocity is eased in JS so direction changes feel like the panning hotspot viewer. */
+    /* Interactive thumbnail pan. The viewer is a true grab-and-drag surface; release
+       velocity overshoots and then eases into continuous motion in the dragged direction. */
     #woodViewerShell {
       touch-action: pan-y;
+      cursor: grab;
+    }
+
+    #woodViewerShell.is-dragging {
+      cursor: grabbing !important;
     }
 
     @media (hover:hover) and (pointer:fine) {
       #woodViewerShell {
-        cursor: ew-resize;
+        cursor: grab;
       }
     }
 
@@ -2198,14 +2204,7 @@
 
     /* Background clarity control for the animated-thumbnail / mood section. */
     #moodBackgroundAdjust {
-      position: absolute;
-      inset: 0;
-      z-index: 23;
-      background: rgba(0,0,0,0);
-      -webkit-backdrop-filter: blur(0px);
-      backdrop-filter: blur(0px);
-      pointer-events: none;
-      will-change: background-color, backdrop-filter;
+      display: none !important;
     }
 
     #moodBackgroundControl {
@@ -2278,6 +2277,27 @@
       border: 0;
       box-shadow: 0 2px 8px rgba(0,0,0,.30);
       cursor: pointer;
+    }
+
+
+    @keyframes moodSliderHandlePulse {
+      0% {
+        box-shadow: 0 2px 8px rgba(0,0,0,.30), 0 0 0 0 rgba(255,255,255,.42);
+      }
+      48% {
+        box-shadow: 0 2px 8px rgba(0,0,0,.30), 0 0 0 7px rgba(255,255,255,.16);
+      }
+      100% {
+        box-shadow: 0 2px 8px rgba(0,0,0,.30), 0 0 0 11px rgba(255,255,255,0);
+      }
+    }
+
+    #moodBackgroundSlider.is-pulsing::-webkit-slider-thumb {
+      animation: moodSliderHandlePulse .72s cubic-bezier(.22,1,.36,1) 1;
+    }
+
+    #moodBackgroundSlider.is-pulsing::-moz-range-thumb {
+      animation: moodSliderHandlePulse .72s cubic-bezier(.22,1,.36,1) 1;
     }
 
     #moodBackgroundSliderValue {
@@ -2483,7 +2503,7 @@
           <div id="moodBackgroundControl" aria-label="Background clarity">
             <img id="moodBackgroundControlIcon" src="image.png" alt="" aria-hidden="true">
             <div id="moodBackgroundSliderRow">
-              <input id="moodBackgroundSlider" type="range" min="0" max="100" value="100" step="1" aria-label="Background clarity">
+              <input id="moodBackgroundSlider" type="range" min="0" max="100" value="100" step="0.1" aria-label="Background clarity">
             </div>
           </div>
 
@@ -2689,17 +2709,17 @@
       /* Opening typography choreography. Transform-only scaling avoids reflow and keeps
          the exact line wrapping that the foreground masking system is calibrated against. */
       const HERO_TYPE_MOTION_END_FRAME = 58;
-      const HERO_TITLE_MAX_SCALE = 1.30;
-      const HERO_SUPPORTING_MIN_SCALE = 0.53;
+      /* Stage 1 is the exact opening motion feel that worked before the Scroll_01 slowdown.
+         Stage 2 continues through the second half of that physical scroll distance, but with
+         a much smaller additional change so the title never balloons or over-spreads. */
+      const HERO_TYPE_CONTINUE_END_FRAME = BACKGROUND_AUTOPLAY_START_FRAME * BACKGROUND_SCROLL_SLOWDOWN;
+      const HERO_TITLE_MID_SCALE = 1.27;
+      const HERO_TITLE_FINAL_SCALE = 1.315;
+      const HERO_SUPPORTING_MID_SCALE = 0.55;
+      const HERO_SUPPORTING_FINAL_SCALE = 0.49;
       const HERO_TITLE_START_TRACKING_EM = -0.052;
-      const HERO_TITLE_END_TRACKING_EM = 0.034;
-      /* Scroll_01 now consumes twice the physical distance. Keep the hero typography's
-         original visual rate by applying its authored transform at 2x timeline progress,
-         rather than slowing the motion itself. This preserves the overshoot/momentum feel
-         from the previous half-speed build and simply gives it another half to continue. */
-      const HERO_TYPE_VISUAL_PROGRESS_MULTIPLIER = 2.0;
-      const HERO_TYPE_SECOND_HALF_SCALE_GAIN = 0.22; // preserve first-half motion, strongly soften final scale growth
-      const HERO_TYPE_SECOND_HALF_TRACKING_GAIN = 0.12; // taper letter spacing even more than scale
+      const HERO_TITLE_MID_TRACKING_EM = 0.022;
+      const HERO_TITLE_FINAL_TRACKING_EM = 0.031;
       const HERO_TYPE_EASE = 0.045; // retained as a legacy tuning reference
       const HERO_TYPE_INPUT_ACCEL = 9.0;
       const HERO_TYPE_INPUT_MAX_VELOCITY = 0.58;
@@ -3186,6 +3206,11 @@
 
       let moodClipActive = false, moodClipComplete = false, moodClipDirection = 0, moodClipProgress = 0;
       let moodClipLockY = 0, moodClipAnchorY = null, moodClipReverseSuppressed = false;
+      let moodBackgroundUserInteracted = false;
+      let moodBackgroundUserValue = 100;
+      let moodBackgroundAutoFadeRaf = 0;
+      let moodBackgroundAutoFadeTimer = 0;
+      let moodBackgroundInitialRevealStarted = false;
 
 
 
@@ -3204,17 +3229,22 @@
 
 
       let woodLoopOffset = 0;
-      let woodPanPointerInside = false;
-      let woodPanPointerNormX = 0;
       let woodPanVelocity = 34;
-      let woodPanTouchDragging = false;
-      let woodPanTouchLastX = 0;
-      let woodPanTouchVelocity = 0;
+      let woodPanAutoDirection = 1;
+      let woodPanDragging = false;
+      let woodPanDragPointerId = null;
+      let woodPanDragLastX = 0;
+      let woodPanDragLastTime = 0;
+      let woodPanDragReleaseVelocity = 0;
+      let woodPanReleaseActive = false;
+      let woodPanReleaseElapsed = 0;
+      let woodPanReleaseDuration = 0;
+      let woodPanReleaseStartVelocity = 34;
       const WOOD_PAN_AUTO_SPEED = 34;
-      const WOOD_PAN_MAX_INTERACTIVE_SPEED = 125;
-      const WOOD_PAN_DIRECTION_EASE = 4.6;
-      const WOOD_PAN_RELEASE_EASE = 2.9;
-      const WOOD_PAN_TOUCH_GAIN = 1.28;
+      const WOOD_PAN_DRAG_SAMPLE_EASE = 0.58;
+      const WOOD_PAN_DRAG_MAX_RELEASE_SPEED = 520;
+      const WOOD_PAN_RELEASE_MIN_DURATION = 0.55;
+      const WOOD_PAN_RELEASE_MAX_DURATION = 2.65;
 
 
 
@@ -3594,6 +3624,27 @@
         if (t >= 1 - .00001) finishStorySequenceAutoplay();
       }
 
+      function retargetStoryAutoplayDirection(direction) {
+        if (!storySequenceAutoplayActive) return;
+        const desiredDirection = direction >= 0 ? 1 : -1;
+        const currentDirection = Math.sign(storySequenceAutoplayTo - storySequenceAutoplayFrom) || 1;
+        if (desiredDirection === currentDirection) return;
+
+        const low = Math.min(storySequenceAutoplayFrom, storySequenceAutoplayTo);
+        const high = Math.max(storySequenceAutoplayFrom, storySequenceAutoplayTo);
+        const currentFrame = clamp(storySequenceAutoplayFrame, low, high);
+        const nextTarget = desiredDirection > 0 ? high : low;
+        const baseKind = storySequenceAutoplayKind.replace(/-(forward|reverse)$/, '');
+
+        storySequenceAutoplayFrom = currentFrame;
+        storySequenceAutoplayTo = nextTarget;
+        storySequenceAutoplayKind = `${baseKind}-${desiredDirection > 0 ? 'forward' : 'reverse'}`;
+        storyAutoScrollStartY = window.scrollY;
+        storyAutoScrollEndY = storyFrameToPageY(nextTarget);
+        storyAutoScrollStartTime = performance.now();
+        storyAutoScrollDuration = Math.max(220, Math.abs(nextTarget - currentFrame) / STORY_SEQUENCE_AUTOPLAY_FPS * 1000);
+      }
+
       function easeOutQuint01(t) {
         const x = clamp(t, 0, 1);
         return 1 - Math.pow(1 - x, 5);
@@ -3933,22 +3984,94 @@
       }
 
 
-      function applyMoodBackgroundClarity(value) {
-        const clarity = clamp(Number(value) / 100, 0, 1);
+      function applyMoodBackgroundClarity(value, syncSlider = true) {
+        const numeric = clamp(Number(value), 0, 100);
+        const clarity = numeric / 100;
         const effect = 1 - clarity;
-        const darkness = effect * 0.62;
+        /* Apply blur/darkening ONLY to the two mood background media elements. Using a
+           full-screen backdrop-filter here also filtered the panorama/Lottie layers behind
+           the mood section whenever the media itself was not fully opaque. */
         const blurPx = effect * 14;
-        if (moodBackgroundAdjust) {
-          moodBackgroundAdjust.style.backgroundColor = `rgba(0,0,0,${darkness.toFixed(3)})`;
-          moodBackgroundAdjust.style.webkitBackdropFilter = `blur(${blurPx.toFixed(2)}px)`;
-          moodBackgroundAdjust.style.backdropFilter = `blur(${blurPx.toFixed(2)}px)`;
+        const brightness = 1 - effect * 0.62;
+        const filter = `blur(${blurPx.toFixed(2)}px) brightness(${brightness.toFixed(3)})`;
+        if (moodVideo) moodVideo.style.filter = filter;
+        if (moodImage) moodImage.style.filter = filter;
+        /* Keep the thumb visually continuous during the automatic 2 second glide. */
+        if (syncSlider && moodBackgroundSlider) moodBackgroundSlider.value = numeric.toFixed(2);
+      }
+
+      function cancelMoodBackgroundAutoFade() {
+        if (moodBackgroundAutoFadeRaf) cancelAnimationFrame(moodBackgroundAutoFadeRaf);
+        if (moodBackgroundAutoFadeTimer) clearTimeout(moodBackgroundAutoFadeTimer);
+        moodBackgroundAutoFadeRaf = 0;
+        moodBackgroundAutoFadeTimer = 0;
+      }
+
+      function pulseMoodBackgroundSliderHandle() {
+        if (!moodBackgroundSlider || moodBackgroundUserInteracted) return;
+        moodBackgroundSlider.classList.remove('is-pulsing');
+        /* Force the class removal to commit so repeated woodgrain reveals can replay the pulse. */
+        void moodBackgroundSlider.offsetWidth;
+        moodBackgroundSlider.classList.add('is-pulsing');
+        window.setTimeout(() => moodBackgroundSlider && moodBackgroundSlider.classList.remove('is-pulsing'), 760);
+      }
+
+      function beginMoodBackgroundAutoFadeAnimation() {
+        if (moodBackgroundUserInteracted) {
+          applyMoodBackgroundClarity(moodBackgroundUserValue);
+          return;
         }
-        if (moodBackgroundSliderValue) moodBackgroundSliderValue.textContent = `${Math.round(clarity * 100)}%`;
+
+        const startValue = 100;
+        const endValue = 75;
+        const duration = 2000;
+        const startTime = performance.now();
+        applyMoodBackgroundClarity(startValue);
+
+        const tick = now => {
+          const t = clamp((now - startTime) / duration, 0, 1);
+          const eased = smootherstep01(t);
+          applyMoodBackgroundClarity(lerp(startValue, endValue, eased));
+          if (t < 1 && !moodBackgroundUserInteracted) {
+            moodBackgroundAutoFadeRaf = requestAnimationFrame(tick);
+          } else {
+            moodBackgroundAutoFadeRaf = 0;
+            if (moodBackgroundUserInteracted) {
+              applyMoodBackgroundClarity(moodBackgroundUserValue);
+            } else {
+              applyMoodBackgroundClarity(endValue);
+              pulseMoodBackgroundSliderHandle();
+            }
+          }
+        };
+        moodBackgroundAutoFadeRaf = requestAnimationFrame(tick);
+      }
+
+      function startMoodBackgroundAutoFade() {
+        cancelMoodBackgroundAutoFade();
+        if (moodBackgroundUserInteracted) {
+          applyMoodBackgroundClarity(moodBackgroundUserValue);
+          return;
+        }
+
+        /* Every newly revealed mood begins completely clear. Only after the background is
+           fully faded in do we hold for a full second, then visibly glide 100 -> 75 over
+           2 seconds. */
+        applyMoodBackgroundClarity(100);
+        moodBackgroundAutoFadeTimer = window.setTimeout(() => {
+          moodBackgroundAutoFadeTimer = 0;
+          beginMoodBackgroundAutoFadeAnimation();
+        }, 1000);
       }
 
       if (moodBackgroundSlider) {
-        moodBackgroundSlider.addEventListener('input', () => applyMoodBackgroundClarity(moodBackgroundSlider.value));
-        applyMoodBackgroundClarity(moodBackgroundSlider.value);
+        moodBackgroundSlider.addEventListener('input', () => {
+          moodBackgroundUserInteracted = true;
+          moodBackgroundUserValue = clamp(Number(moodBackgroundSlider.value), 0, 100);
+          cancelMoodBackgroundAutoFade();
+          applyMoodBackgroundClarity(moodBackgroundUserValue);
+        });
+        applyMoodBackgroundClarity(100);
       }
 
       function updateMoodSectionMotion() {
@@ -3966,6 +4089,14 @@
         /* 2) Fade Coastal Sand in over the white background. */
 
         const videoOpacity = smootherstep01(rangeProgress(p, MOOD_VIDEO_START, MOOD_VIDEO_END));
+
+        if (!moodBackgroundInitialRevealStarted && videoOpacity >= .999) {
+          moodBackgroundInitialRevealStarted = true;
+          startMoodBackgroundAutoFade();
+        }
+        if (videoOpacity <= .001 && !moodClipComplete && !moodClipActive) {
+          moodBackgroundInitialRevealStarted = false;
+        }
 
 
 
@@ -4228,6 +4359,10 @@
         if (getMoodVisualProgress() < MOOD_VIEWER_START - .006) return;
 
         moodTransitioning = true;
+        if (!moodBackgroundUserInteracted) {
+          cancelMoodBackgroundAutoFade();
+          applyMoodBackgroundClarity(100);
+        }
 
         const fromItem = MOOD_ITEMS[activeMoodIndex];
         const toItem = MOOD_ITEMS[targetIndex];
@@ -4361,56 +4496,97 @@
         if (activeMoodIndex !== 0) moodVideo.pause();
 
         resetMoodVideoShade();
+        /* The incoming background is now fully opaque. Hold clear for one full second,
+           then run the smooth 100 -> 75 slider glide unless the user has taken control. */
+        startMoodBackgroundAutoFade();
         moodTransitioning = false;
+      }
+
+      function applyWoodViewerPanPosition() {
+        /* Do not modulo the pan offset by the image's natural pixel width. The CSS texture
+           is rendered with background-size:auto 100%, so its on-screen repeat width changes
+           with the viewer height. Wrapping by naturalWidth therefore caused a periodic jump
+           that could look like the thumbnail suddenly flipped or mirrored. CSS background
+           positioning safely accepts a continuously increasing/decreasing offset. */
+        woodViewerStrip.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        if (woodViewerOverlay && woodViewerOverlay.style.opacity !== '0') {
+          woodViewerOverlay.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        }
       }
 
       function initWoodViewerInteraction() {
         if (!woodViewerShell) return;
 
-        woodViewerShell.addEventListener('pointerenter', event => {
-          if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
-            woodPanPointerInside = true;
-          }
+        woodViewerShell.addEventListener('pointerdown', event => {
+          if (event.pointerType === 'mouse' && event.button !== 0) return;
+          if (woodPanDragging) return;
+
+          woodPanDragging = true;
+          woodPanReleaseActive = false;
+          woodPanDragPointerId = event.pointerId;
+          woodPanDragLastX = event.clientX;
+          woodPanDragLastTime = performance.now();
+          woodPanDragReleaseVelocity = woodPanVelocity;
+          woodViewerShell.classList.add('is-dragging');
+          try { woodViewerShell.setPointerCapture(event.pointerId); } catch (e) {}
+          event.preventDefault();
         });
 
         woodViewerShell.addEventListener('pointermove', event => {
-          const rect = woodViewerShell.getBoundingClientRect();
-          if (!rect.width) return;
+          if (!woodPanDragging || event.pointerId !== woodPanDragPointerId) return;
 
-          if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
-            woodPanPointerInside = true;
-            woodPanPointerNormX = clamp(((event.clientX - rect.left) / rect.width) * 2 - 1, -1, 1);
-          } else if (woodPanTouchDragging) {
-            const dx = event.clientX - woodPanTouchLastX;
-            woodPanTouchLastX = event.clientX;
-            /* Touch directly imparts velocity, but the render loop still eases that
-               velocity so releasing/changing direction never snaps. */
-            woodPanTouchVelocity = clamp(-dx * 60 * WOOD_PAN_TOUCH_GAIN, -220, 220);
-          }
-        }, { passive: true });
+          const now = performance.now();
+          const dx = event.clientX - woodPanDragLastX;
+          const dt = Math.max(.008, (now - woodPanDragLastTime) / 1000);
+          woodPanDragLastX = event.clientX;
+          woodPanDragLastTime = now;
 
-        woodViewerShell.addEventListener('pointerleave', event => {
-          if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
-            woodPanPointerInside = false;
-          }
+          /* The texture follows the hand directly while grabbed. Its measured release
+             velocity is low-pass filtered so a direction change feels weighted instead
+             of inheriting a noisy one-event spike. */
+          woodLoopOffset += dx;
+          const sampledVelocity = clamp(dx / dt, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
+          woodPanDragReleaseVelocity += (sampledVelocity - woodPanDragReleaseVelocity) * WOOD_PAN_DRAG_SAMPLE_EASE;
+          applyWoodViewerPanPosition();
+          event.preventDefault();
         });
 
-        woodViewerShell.addEventListener('pointerdown', event => {
-          if (event.pointerType === 'touch') {
-            woodPanTouchDragging = true;
-            woodPanTouchLastX = event.clientX;
-            woodPanTouchVelocity = woodPanVelocity;
-            try { woodViewerShell.setPointerCapture(event.pointerId); } catch (e) {}
-          }
-        }, { passive: true });
+        const finishWoodPanDrag = event => {
+          if (!woodPanDragging) return;
+          if (event && event.pointerId !== woodPanDragPointerId) return;
 
-        const finishTouchPan = event => {
-          if (event.pointerType !== 'touch') return;
-          woodPanTouchDragging = false;
-          try { woodViewerShell.releasePointerCapture(event.pointerId); } catch (e) {}
+          const measured = clamp(woodPanDragReleaseVelocity, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
+          const direction = Math.sign(measured) || woodPanAutoDirection || 1;
+          woodPanAutoDirection = direction;
+
+          /* Continue at the ACTUAL drag speed on release. A faster drag gets a longer coast;
+             a gentle drag settles quickly. The speed then eases into the normal continuous
+             cruise speed without reversing or snapping. */
+          woodPanReleaseStartVelocity = Math.abs(measured) < 4 ? direction * WOOD_PAN_AUTO_SPEED : measured;
+          woodPanVelocity = woodPanReleaseStartVelocity;
+          const normalizedReleaseSpeed = clamp(
+            Math.abs(woodPanReleaseStartVelocity) / WOOD_PAN_DRAG_MAX_RELEASE_SPEED,
+            0,
+            1
+          );
+          woodPanReleaseDuration = lerp(
+            WOOD_PAN_RELEASE_MIN_DURATION,
+            WOOD_PAN_RELEASE_MAX_DURATION,
+            Math.pow(normalizedReleaseSpeed, .72)
+          );
+          woodPanReleaseElapsed = 0;
+          woodPanReleaseActive = true;
+
+          woodPanDragging = false;
+          woodPanDragPointerId = null;
+          woodViewerShell.classList.remove('is-dragging');
+          try { if (event) woodViewerShell.releasePointerCapture(event.pointerId); } catch (e) {}
         };
-        woodViewerShell.addEventListener('pointerup', finishTouchPan, { passive: true });
-        woodViewerShell.addEventListener('pointercancel', finishTouchPan, { passive: true });
+
+        woodViewerShell.addEventListener('pointerup', finishWoodPanDrag);
+        woodViewerShell.addEventListener('pointercancel', finishWoodPanDrag);
+        woodViewerShell.addEventListener('lostpointercapture', finishWoodPanDrag);
       }
 
 
@@ -4550,33 +4726,31 @@
 
 
       function updateWoodStripLoop(dt) {
-        let targetVelocity = WOOD_PAN_AUTO_SPEED;
-        let easeRate = WOOD_PAN_RELEASE_EASE;
-
-        if (woodPanTouchDragging) {
-          targetVelocity = woodPanTouchVelocity;
-          easeRate = WOOD_PAN_DIRECTION_EASE * 1.18;
-          woodPanTouchVelocity *= Math.exp(-2.4 * dt);
-        } else if (woodPanPointerInside && window.matchMedia('(hover:hover) and (pointer:fine)').matches) {
-          /* Camera-like steering: pointer right pans the view right, which moves the
-             texture left. The dead-center region is intentionally soft, and easing
-             through zero makes direction changes graceful rather than mechanical. */
-          const shaped = Math.sign(woodPanPointerNormX) * Math.pow(Math.abs(woodPanPointerNormX), 1.35);
-          targetVelocity = -shaped * WOOD_PAN_MAX_INTERACTIVE_SPEED;
-          easeRate = WOOD_PAN_DIRECTION_EASE;
+        if (woodPanDragging) {
+          applyWoodViewerPanPosition();
+          return;
         }
 
-        const velocityEase = 1 - Math.exp(-easeRate * dt);
-        woodPanVelocity += (targetVelocity - woodPanVelocity) * velocityEase;
-        woodLoopOffset = (woodLoopOffset + dt * woodPanVelocity) % woodLoopImageWidth;
-        if (woodLoopOffset < 0) woodLoopOffset += woodLoopImageWidth;
-
-        woodViewerStrip.style.backgroundPosition = `${woodLoopOffset}px 0px`;
-        woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
-        if (woodViewerOverlay && woodViewerOverlay.style.opacity !== '0') {
-          woodViewerOverlay.style.backgroundPosition = `${woodLoopOffset}px 0px`;
+        const targetVelocity = WOOD_PAN_AUTO_SPEED * woodPanAutoDirection;
+        if (woodPanReleaseActive) {
+          woodPanReleaseElapsed += dt;
+          const t = clamp(woodPanReleaseElapsed / Math.max(.001, woodPanReleaseDuration), 0, 1);
+          /* Smootherstep starts with almost no acceleration, so the texture genuinely keeps
+             the release speed for a beat before gradually settling into normal cruise. */
+          const eased = smootherstep01(t);
+          woodPanVelocity = lerp(woodPanReleaseStartVelocity, targetVelocity, eased);
+          if (t >= 1) {
+            woodPanVelocity = targetVelocity;
+            woodPanReleaseActive = false;
+          }
+        } else {
+          woodPanVelocity = targetVelocity;
         }
+
+        woodLoopOffset += dt * woodPanVelocity;
+        applyWoodViewerPanPosition();
       }
+
       function setStoryLottieLogicalFrame(logicalFrame) {
         if (!storySquareLottieReady || !storySquareLottie) return;
         const logicalProgress = STORY_LAST_FRAME <= 0 ? 0 : clamp(logicalFrame / STORY_LAST_FRAME, 0, 1);
@@ -5940,9 +6114,15 @@ void main(){
 
 
 
-        const x = rect.left + rect.width / 2; let y = rect.top + (rect.height - textHeight) / 2;
+        let x = rect.left + rect.width / 2; let y = rect.top + (rect.height - textHeight) / 2;
 
-
+        /* Positive letter-spacing leaves a small trailing tracking cell after each line.
+           Canvas centers that measured line box, which makes the visible glyphs appear to
+           drift left as tracking grows. Compensate by half that trailing spacing. */
+        if (element.classList.contains('hero-title')) {
+          const trackingPx = parseFloat(style.letterSpacing) || 0;
+          if (trackingPx > 0) x += trackingPx * .5;
+        }
 
         setCanvasFont(textSnapshotCtx, style);
 
@@ -6075,11 +6255,10 @@ void main(){
            horizontal mask runway for the maximum authored scale while retaining the
            smaller vertical crop for performance. */
         const paddingY = 90;
-        const effectiveHeroMaxScale = 1 + (HERO_TITLE_MAX_SCALE - 1) * HERO_TYPE_VISUAL_PROGRESS_MULTIPLIER;
+        const effectiveHeroMaxScale = HERO_TITLE_FINAL_SCALE;
         const animatedTitleOverflowX = titleRect.width * Math.max(0, effectiveHeroMaxScale - 1) * .5;
-        /* The continued second-half animation also increases letter spacing beyond the
-           original endpoint, so reserve extra horizontal runway for that width growth too. */
-        const trackingRunwayX = titleRect.width * Math.max(0, HERO_TYPE_VISUAL_PROGRESS_MULTIPLIER - 1) * .16;
+        /* Reserve explicit runway for the continued second-stage tracking too. */
+        const trackingRunwayX = titleRect.width * Math.max(0, HERO_TITLE_FINAL_TRACKING_EM - HERO_TITLE_START_TRACKING_EM) * 1.15;
         const paddingX = Math.max(150, animatedTitleOverflowX + trackingRunwayX + 170);
         const left = Math.max(0, Math.min(...rects.map(r => r.left)) - paddingX);
         const top = Math.max(0, Math.min(...rects.map(r => r.top)) - paddingY);
@@ -6559,10 +6738,12 @@ void main(){
         lastUserTravelledPx = travelled;
         targetStoryProgress = raw;
         targetScrollFrame = calculateTargetFrame(raw);
-        /* Hero typography follows the same slowed Scroll_01 timeline now. The earlier
-           half-speed background change left the text on the old physical-distance clock,
-           so it reached the end of its animation while Scroll_01 was only halfway through. */
-        heroTargetScrollFrame = targetScrollFrame;
+        /* Keep the hero on the original physical-distance clock. That is the motion rate
+           that produced the overshoot the user liked. Unlike the old version, its authored
+           progress now has a second stage instead of clamping at the halfway point. */
+        const baseActiveDistance = window.innerHeight * (SCROLL_LENGTH_VH / 100);
+        const heroRaw = baseActiveDistance <= 0 ? 0 : clamp(travelled / baseActiveDistance, 0, 1);
+        heroTargetScrollFrame = calculateTargetFrame(heroRaw);
 
         const storyLocal = rangeProgress(targetStoryProgress, STORY_SEQUENCE_START, STORY_SEQUENCE_END);
         const storyTargetFrame = getStorySequenceFrameFromScrollLocal(storyLocal);
@@ -6642,6 +6823,15 @@ void main(){
         }
       }
 
+      function getHeroTypographyTargetProgress() {
+        const frame = Math.max(0, heroTargetScrollFrame);
+        if (frame <= HERO_TYPE_MOTION_END_FRAME) {
+          return smootherstep01(clamp(frame / HERO_TYPE_MOTION_END_FRAME, 0, 1));
+        }
+        const secondHalf = rangeProgress(frame, HERO_TYPE_MOTION_END_FRAME, HERO_TYPE_CONTINUE_END_FRAME);
+        return 1 + smootherstep01(secondHalf);
+      }
+
       function updateHeroScrollTypography(force = false) {
         /* AE-style momentum: while wheel input is arriving the title develops velocity.
            When input ends, that exact velocity is carried into one continuous ease-out
@@ -6651,8 +6841,7 @@ void main(){
         const dt = clamp((now - heroTypographyLastUpdateTime) / 1000, 1 / 240, .05);
         heroTypographyLastUpdateTime = now;
 
-        const targetRaw = clamp(heroTargetScrollFrame / HERO_TYPE_MOTION_END_FRAME, 0, 1);
-        const targetProgress = smootherstep01(targetRaw);
+        const targetProgress = getHeroTypographyTargetProgress();
         const idleMs = now - heroTypographyLastUserInputTime;
         const inputActive = idleMs < HERO_TYPE_RELEASE_IDLE_MS;
 
@@ -6718,24 +6907,18 @@ void main(){
           }
         }
 
-        const progress = clamp(heroTypographyProgress, 0, 1);
-        /* Preserve the exact visual pace from the version where the text completed halfway
-           through the new half-speed Scroll_01 section. We do that by doubling only the
-           authored VISUAL progress, not the scroll state or momentum state. The first half
-           therefore looks the same as that build; the second half simply keeps going. */
-        const visualProgress = clamp(progress * HERO_TYPE_VISUAL_PROGRESS_MULTIPLIER, 0, HERO_TYPE_VISUAL_PROGRESS_MULTIPLIER);
-        /* Keep the exact first-half motion the user liked, but compress only the extra
-           second-half growth so the ending does not become oversized. */
-        const softenedScaleProgress = visualProgress <= 1
-          ? visualProgress
-          : 1 + (visualProgress - 1) * HERO_TYPE_SECOND_HALF_SCALE_GAIN;
-        const softenedTrackingProgress = visualProgress <= 1
-          ? visualProgress
-          : 1 + (visualProgress - 1) * HERO_TYPE_SECOND_HALF_TRACKING_GAIN;
-        const titleScale = 1 + (HERO_TITLE_MAX_SCALE - 1) * softenedScaleProgress;
-        const supportingScale = Math.max(.08, 1 + (HERO_SUPPORTING_MIN_SCALE - 1) * softenedScaleProgress);
-        const tracking = HERO_TITLE_START_TRACKING_EM +
-          (HERO_TITLE_END_TRACKING_EM - HERO_TITLE_START_TRACKING_EM) * softenedTrackingProgress;
+        const progress = clamp(heroTypographyProgress, 0, 2);
+        let titleScale, supportingScale, tracking;
+        if (progress <= 1) {
+          titleScale = lerp(1, HERO_TITLE_MID_SCALE, progress);
+          supportingScale = lerp(1, HERO_SUPPORTING_MID_SCALE, progress);
+          tracking = lerp(HERO_TITLE_START_TRACKING_EM, HERO_TITLE_MID_TRACKING_EM, progress);
+        } else {
+          const continuation = smootherstep01(progress - 1);
+          titleScale = lerp(HERO_TITLE_MID_SCALE, HERO_TITLE_FINAL_SCALE, continuation);
+          supportingScale = lerp(HERO_SUPPORTING_MID_SCALE, HERO_SUPPORTING_FINAL_SCALE, continuation);
+          tracking = lerp(HERO_TITLE_MID_TRACKING_EM, HERO_TITLE_FINAL_TRACKING_EM, continuation);
+        }
 
         titleElement.style.whiteSpace = heroTargetScrollFrame > .04 || smoothScrollFrame > .04 ? 'nowrap' : '';
         titleElement.style.transform = `scale(${titleScale})`;
@@ -6812,7 +6995,7 @@ void main(){
 
         const remainingFrameDelta = (backgroundAutoplayActive || backgroundAutoplayComplete || holdEnvReverseFrameLock)
           ? 0 : Math.abs(targetScrollFrame - smoothScrollFrame);
-        const heroTargetProgress = smootherstep01(clamp(heroTargetScrollFrame / HERO_TYPE_MOTION_END_FRAME, 0, 1));
+        const heroTargetProgress = getHeroTypographyTargetProgress();
         const heroStillSettling = Math.abs(heroTargetProgress - heroTypographyProgress) > .00006 || Math.abs(heroTypographyVelocity) > .00008;
 
         if (Math.abs(sd) > STORY_SETTLE_THRESHOLD || Math.abs(qd) > STORY_SETTLE_THRESHOLD ||
@@ -6867,7 +7050,44 @@ void main(){
           return;
         }
 
-        if (isTimelineAutoplayLocked()) {
+        /* Autoplay no longer traps the user in one direction. If they change their
+           mind mid-clip, reverse that SAME playhead from its current position instead of
+           ignoring the wheel until the clip has finished. */
+        if (moodClipActive) {
+          const desiredMoodDirection = event.deltaY >= 0 ? 1 : -1;
+
+          /* Important UX escape: the user may barely start returning upward from the
+             animated-thumbnail section, then immediately change their mind before the
+             Lottie is visible. Do not make that downward gesture fight a locked reverse
+             clip. Cancel the reverse clip at once, restore the completed thumbnail state,
+             and let THIS SAME wheel event continue downward normally. */
+          if (moodClipDirection < 0 && desiredMoodDirection > 0) {
+            moodClipProgress = 1;
+            moodClipDirection = 1;
+            moodClipActive = false;
+            moodClipComplete = true;
+            moodClipReverseSuppressed = false;
+            updateMoodSectionMotion();
+            syncScrollTrackingAfterProgrammaticMove();
+            return;
+          }
+
+          event.preventDefault();
+          if (desiredMoodDirection !== moodClipDirection) {
+            moodClipDirection = desiredMoodDirection;
+            moodClipComplete = false;
+            moodClipReverseSuppressed = false;
+          }
+          return;
+        }
+
+        if (storySequenceAutoplayActive) {
+          event.preventDefault();
+          retargetStoryAutoplayDirection(event.deltaY >= 0 ? 1 : -1);
+          return;
+        }
+
+        if (backgroundAutoplayActive) {
           event.preventDefault();
           return;
         }
@@ -7106,10 +7326,6 @@ void main(){
             backgroundAutoplayFrame + BACKGROUND_AUTOPLAY_FPS * dt
           );
           smoothScrollFrame = backgroundAutoplayFrame;
-          /* Keep the opening typography moving with the automatic background continuation
-             instead of freezing it at the physical scroll trigger around Scroll052. */
-          heroTargetScrollFrame = backgroundAutoplayFrame;
-
           /* The first story clip is explicitly armed when the Scroll_01 autoplay begins.
              When the background reaches Scroll060, do not let that visual handoff race past
              an as-yet-uninitialized Lottie. Hold on frame 60 until square.json is ready,
