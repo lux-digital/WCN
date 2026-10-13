@@ -2342,6 +2342,248 @@
       }
     }
 
+
+    /* =========================================================
+       MOBILE MOOD / ANIMATED THUMBNAIL — COMPACT TOUCH LAYOUT
+       Touch devices only. Desktop composition remains unchanged.
+       ========================================================= */
+    @media (hover: none) and (pointer: coarse) {
+      /* Give the clarity control its own lane above the large thumbnail. The input keeps
+         a generous 36px hit area even though the visible track/thumb are slightly smaller. */
+      #moodBackgroundControl {
+        top: max(10px, env(safe-area-inset-top)) !important;
+        width: min(160px, 42vw) !important;
+        gap: 5px !important;
+        z-index: 60 !important;
+      }
+
+      #moodBackgroundControlIcon {
+        width: 28px !important;
+        height: 28px !important;
+      }
+
+      #moodBackgroundSliderRow {
+        width: 100% !important;
+        height: 36px !important;
+        min-height: 36px !important;
+      }
+
+      #moodBackgroundSlider {
+        width: 100% !important;
+        height: 36px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: linear-gradient(rgba(255,255,255,.52), rgba(255,255,255,.52)) center / 100% 3px no-repeat !important;
+        box-shadow: none !important;
+        touch-action: none !important;
+      }
+
+      #moodBackgroundSlider::-webkit-slider-thumb {
+        width: 13px !important;
+        height: 13px !important;
+      }
+
+      #moodBackgroundSlider::-moz-range-thumb {
+        width: 13px !important;
+        height: 13px !important;
+      }
+
+      /* The shell owns almost the full mobile width. Navigation arrows are overlays now,
+         which saves the horizontal space previously consumed by sibling buttons. */
+      #woodViewerCluster {
+        left: 50% !important;
+        width: 100vw !important;
+        max-width: none !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        display: block !important;
+        transform: translateX(-50%) !important;
+      }
+
+      #woodViewerShell {
+        width: 88vw !important;
+        max-width: none !important;
+        margin: 0 auto !important;
+      }
+
+      .woodNavButton {
+        position: absolute !important;
+        top: 50% !important;
+        z-index: 12 !important;
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
+        flex-basis: 48px !important;
+        transform: translateY(-50%) !important;
+        background: rgba(0,0,0,.30) !important;
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+      }
+
+      #woodPrevButton { left: 8vw !important; }
+      #woodNextButton { right: 8vw !important; }
+
+      .woodNavButton:active {
+        transform: translateY(-50%) scale(.92) !important;
+      }
+
+      .woodNavIcon {
+        width: 14px !important;
+        height: 21px !important;
+        background-size: 14px 21px !important;
+      }
+
+      /* Nine dots: keep the hit areas generous, but distribute them across the shell instead
+         of using negative margins that visually pile them into one another on narrow phones. */
+      #woodDotButtons {
+        width: calc(100% - 30px) !important;
+        max-width: 520px !important;
+        bottom: 12px !important;
+        gap: 0 !important;
+        justify-content: space-between !important;
+      }
+
+      .woodDot {
+        flex: 0 0 30px !important;
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+        max-width: 30px !important;
+        max-height: 30px !important;
+        margin: 0 !important;
+      }
+
+      .woodDot::before {
+        width: 8px !important;
+        height: 8px !important;
+      }
+
+      #activeProductName {
+        top: calc(100% + 6px) !important;
+        font-size: 11px !important;
+        line-height: 1 !important;
+      }
+
+      #moodFooter {
+        gap: 2px !important;
+      }
+
+      #moodSeriesName {
+        line-height: .94 !important;
+      }
+
+      #moodSeriesSubhead {
+        margin-top: 2px !important;
+        line-height: 1 !important;
+      }
+    }
+
+    /* Portrait: widen and deepen the showcase so the previously empty gap under the
+       product title becomes useful image area. */
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      #moodBackgroundControl {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        width: min(154px, 40vw) !important;
+      }
+
+      #woodViewerCluster {
+        top: 10.5vh !important;
+      }
+
+      #woodViewerShell {
+        width: 88vw !important;
+        height: min(61vh, 720px) !important;
+        border-radius: 24px !important;
+      }
+
+      #woodPrevButton { left: 8.5vw !important; }
+      #woodNextButton { right: 8.5vw !important; }
+
+      #woodDotButtons {
+        width: calc(100% - 24px) !important;
+        bottom: 10px !important;
+      }
+
+      #moodLabelBlock {
+        width: 96vw !important;
+      }
+
+      #moodSeriesName {
+        font-size: clamp(22px, 6.2vw, 32px) !important;
+      }
+
+      #moodSeriesSubhead {
+        font-size: clamp(9px, 2.55vw, 12px) !important;
+      }
+
+      #moodFooter {
+        padding: 0 4px !important;
+        gap: 1px !important;
+      }
+
+      #productThumbButtons {
+        margin-top: 2px !important;
+      }
+    }
+
+    /* Landscape: the active profile label has no useful room between the viewer and the
+       main woodgrain title, so hide only that redundant label and give the image more width. */
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #moodBackgroundControl {
+        top: max(5px, env(safe-area-inset-top)) !important;
+        width: min(150px, 25vw) !important;
+        gap: 2px !important;
+      }
+
+      #moodBackgroundControlIcon {
+        width: 24px !important;
+        height: 24px !important;
+      }
+
+      #moodBackgroundSliderRow,
+      #moodBackgroundSlider {
+        height: 30px !important;
+        min-height: 30px !important;
+      }
+
+      #woodViewerCluster {
+        top: 10.5vh !important;
+      }
+
+      #woodViewerShell {
+        width: 88vw !important;
+        height: 51vh !important;
+        border-radius: 24px !important;
+      }
+
+      #woodPrevButton { left: 7.5vw !important; }
+      #woodNextButton { right: 7.5vw !important; }
+
+      #activeProductName {
+        display: none !important;
+      }
+
+      #moodSeriesName {
+        font-size: clamp(22px, 4.2vh, 34px) !important;
+        line-height: .92 !important;
+      }
+
+      #moodSeriesSubhead {
+        margin-top: 1px !important;
+        font-size: clamp(9px, 2.0vh, 14px) !important;
+      }
+
+      #moodFooter {
+        gap: 1px !important;
+      }
+
+      #productThumbButtons {
+        margin-top: 1px !important;
+      }
+    }
+
 </style>
 
 
@@ -3167,8 +3409,8 @@
 
       let isDragging = false, dragPointerId = null, previousDragX = 0, previousDragY = 0, previousDragTime = 0;
       let touchGestureMode = 'none', touchStartX = 0, touchStartY = 0;
-      let mobileTimelineTouchId = null, mobileTimelineTouchStartY = 0;
-      let mobileTimelineTouchDirection = 0;
+      let mobileTimelineTouchId = null, mobileTimelineTouchStartX = 0, mobileTimelineTouchStartY = 0;
+      let mobileTimelineTouchDirection = 0, mobileTimelineTouchSource = 'page';
 
       let holdTouchPointerId = null, holdTouchGestureMode = 'none';
       let holdTouchStartX = 0, holdTouchStartY = 0, holdTouchPreviousX = 0, holdTouchPreviousY = 0;
@@ -4107,6 +4349,14 @@
           applyMoodBackgroundClarity(moodBackgroundUserValue);
         });
         applyMoodBackgroundClarity(100);
+
+        /* Mobile range dragging is horizontal UI, not page navigation. Stop the touch
+           stream before the global timeline observer sees the inevitable small Y drift. */
+        if (MOBILE_RUNTIME) {
+          ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(type => {
+            moodBackgroundSlider.addEventListener(type, event => event.stopPropagation(), { passive: true });
+          });
+        }
       }
 
       function updateMoodSectionMotion() {
@@ -7539,9 +7789,23 @@ void main(){
 
       window.addEventListener('touchstart', event => {
         if (!MOBILE_RUNTIME || !event.touches || event.touches.length !== 1) return;
-        mobileTimelineTouchId = event.touches[0].identifier;
-        mobileTimelineTouchStartY = event.touches[0].clientY;
+        const touch = event.touches[0];
+        const target = event.target instanceof Element ? event.target : null;
+        mobileTimelineTouchId = touch.identifier;
+        mobileTimelineTouchStartX = touch.clientX;
+        mobileTimelineTouchStartY = touch.clientY;
         mobileTimelineTouchDirection = 0;
+
+        /* Controls that are intrinsically horizontal must NEVER steer the master timeline.
+           The woodgrain shell is special: horizontal motion belongs to its pan interaction,
+           but a clearly vertical swipe must still be allowed to leave the mood section. */
+        if (target && target.closest('#moodBackgroundControl, #woodPrevButton, #woodNextButton, #woodDotButtons, #productThumbButtons')) {
+          mobileTimelineTouchSource = 'control';
+        } else if (target && target.closest('#woodViewerShell')) {
+          mobileTimelineTouchSource = 'wood';
+        } else {
+          mobileTimelineTouchSource = 'page';
+        }
       }, { passive: true });
 
       window.addEventListener('touchmove', event => {
@@ -7551,8 +7815,22 @@ void main(){
         }
         const touch = Array.from(event.touches || []).find(item => item.identifier === mobileTimelineTouchId) || (event.touches && event.touches[0]);
         if (!touch) return;
+
+        const totalX = touch.clientX - mobileTimelineTouchStartX;
         const totalY = touch.clientY - mobileTimelineTouchStartY;
-        if (Math.abs(totalY) < 16) return;
+        const absX = Math.abs(totalX), absY = Math.abs(totalY);
+
+        /* Sliders/arrows/dots/product buttons are self-contained controls. Never let a
+           slightly diagonal finger movement pull the page/story away from the mood section. */
+        if (mobileTimelineTouchSource === 'control') return;
+
+        if (Math.max(absX, absY) < 14) return;
+
+        /* Horizontal-dominant gestures belong to panoramas / woodgrain panning. Requiring
+           a vertical-dominant gesture here removes the old left/right -> timeline leak. */
+        if (absX > absY * 1.08) return;
+        if (absY < 16 || absY < absX * 1.02) return;
+
         const desiredDirection = totalY < 0 ? 1 : -1;
 
         if (moodClipComplete && !moodClipActive && desiredDirection < 0) {
@@ -7585,10 +7863,12 @@ void main(){
       window.addEventListener('touchend', () => {
         mobileTimelineTouchId = null;
         mobileTimelineTouchDirection = 0;
+        mobileTimelineTouchSource = 'page';
       }, { passive: true });
       window.addEventListener('touchcancel', () => {
         mobileTimelineTouchId = null;
         mobileTimelineTouchDirection = 0;
+        mobileTimelineTouchSource = 'page';
       }, { passive: true });
 
       window.addEventListener('scroll', updateScrollTarget, { passive: true });
