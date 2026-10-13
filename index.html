@@ -7664,7 +7664,10 @@ void main(){
           if (MOBILE_RUNTIME) {
             prefetchMobileSequenceWindow(backgroundAutoplayFrame, 1);
             const nextNeededFrame = Math.min(BACKGROUND_AUTOPLAY_END_FRAME, Math.floor(backgroundAutoplayFrame) + 1);
-            if (!scrollFrames[nextNeededFrame] || !maskFrames[nextNeededFrame]) {
+            /* Mobile deliberately has NO animated mask. The previous guard mistakenly
+               required maskFrames[nextNeededFrame] as well, which can never become truthy
+               and therefore froze autoplay forever at its first frame. */
+            if (!scrollFrames[nextNeededFrame]) {
               loadMobileSequencePair(nextNeededFrame).catch(() => {});
               return;
             }
