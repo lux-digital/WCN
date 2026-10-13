@@ -2584,6 +2584,140 @@
       }
     }
 
+
+
+    /* =========================================================
+       MOBILE MOOD POLISH V2
+       - tighter title/subtitle relationship on every layout
+       - no title/thumbnail collision on phones
+       - compact icon -> slider spacing while preserving slider hit area
+       - wider mobile woodgrain viewer with overlay arrows
+       ========================================================= */
+
+    /* The visible gap should be typographic, not a large layout gap. */
+    #moodSeriesName {
+      margin-bottom: 0 !important;
+    }
+    #moodSeriesSubhead {
+      margin-top: -2px !important;
+      line-height: .98 !important;
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      #moodBackgroundControl {
+        gap: 0 !important;
+      }
+      #moodBackgroundControlIcon {
+        margin-bottom: -7px !important;
+      }
+      #moodBackgroundSliderRow {
+        /* Keep the generous touch lane, but pull its visible track closer to the icon. */
+        margin-top: -4px !important;
+      }
+
+      #woodViewerShell {
+        width: 92vw !important;
+      }
+      #woodPrevButton { left: 5.5vw !important; }
+      #woodNextButton { right: 5.5vw !important; }
+
+      /* On mobile the footer becomes a full-screen positioning layer. This removes the
+         old flex-flow dependency that let the main title drift upward into the thumbnail. */
+      #moodFooter {
+        position: absolute !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+        pointer-events: none !important;
+      }
+      #moodLabelBlock {
+        position: absolute !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: 96vw !important;
+        transform: translateX(-50%) !important;
+        margin: 0 !important;
+        pointer-events: none !important;
+      }
+      #productThumbButtons {
+        position: absolute !important;
+        left: 50% !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: 0 !important;
+        transform: translateX(-50%) !important;
+        pointer-events: auto !important;
+      }
+      #moodSeriesName {
+        margin: 0 !important;
+        transform: none !important;
+      }
+      #moodSeriesSubhead {
+        margin-top: -2px !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      #moodBackgroundControl {
+        top: max(5px, env(safe-area-inset-top)) !important;
+        width: min(154px, 40vw) !important;
+      }
+      #woodViewerCluster {
+        top: 11.5vh !important;
+      }
+      #woodViewerShell {
+        width: 92vw !important;
+        height: 53vh !important;
+      }
+      #activeProductName {
+        top: calc(100% + 4px) !important;
+      }
+      #moodLabelBlock {
+        top: 70vh !important;
+      }
+      #moodSeriesName {
+        font-size: clamp(22px, 6.2vw, 32px) !important;
+        line-height: .94 !important;
+      }
+      #moodSeriesSubhead {
+        font-size: clamp(9px, 2.55vw, 12px) !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #moodBackgroundControl {
+        top: max(2px, env(safe-area-inset-top)) !important;
+        width: min(150px, 25vw) !important;
+      }
+      #moodBackgroundControlIcon {
+        margin-bottom: -8px !important;
+      }
+      #woodViewerCluster {
+        top: 13.5vh !important;
+      }
+      #woodViewerShell {
+        width: 92vw !important;
+        height: 42vh !important;
+      }
+      #woodPrevButton { left: 5vw !important; }
+      #woodNextButton { right: 5vw !important; }
+      #moodLabelBlock {
+        top: 58.5vh !important;
+      }
+      #moodSeriesName {
+        font-size: clamp(21px, 4.1vh, 32px) !important;
+        line-height: .92 !important;
+      }
+      #moodSeriesSubhead {
+        margin-top: -3px !important;
+        font-size: clamp(9px, 1.9vh, 13px) !important;
+      }
+    }
+
 </style>
 
 
@@ -3447,10 +3581,11 @@
       const scrollFrames = [], maskFrames = [];
       const mobileSequenceLoads = new Map();
       const mobileSequenceUse = new Map();
-      const MOBILE_SEQUENCE_INITIAL_COUNT = 14;
-      const MOBILE_SEQUENCE_CACHE_MAX = 34;
-      const MOBILE_SEQUENCE_PREFETCH_AHEAD = 14;
-      const MOBILE_SEQUENCE_PREFETCH_BEHIND = 5;
+      const MOBILE_SEQUENCE_INITIAL_COUNT = 16;
+      const MOBILE_SEQUENCE_CACHE_MAX = 44;
+      const MOBILE_SEQUENCE_PREFETCH_AHEAD = 24;
+      const MOBILE_SEQUENCE_PREFETCH_BEHIND = 4;
+      const MOBILE_AUTOPLAY_WARMUP_FRAME = 34;
       let mobileSequenceUseTick = 0;
       let mobileSequenceDirection = 1;
       let storySquareLottie = null, storySquareLottieReady = false, storySquareLottieTotalFrames = 1;
@@ -4811,6 +4946,9 @@
         woodViewerShell.addEventListener('pointerdown', event => {
           if (event.pointerType === 'mouse' && event.button !== 0) return;
           if (event.target.closest('.woodDot, button, input, a, [role="button"]')) return;
+          /* Mobile Safari is much more reliable with a direct touch path for this surface.
+             Do not let the parallel PointerEvent path compete with it. */
+          if (MOBILE_RUNTIME && event.pointerType === 'touch') return;
           if (woodPanDragging || woodPanTouchMode === 'pending') return;
 
           woodPanReleaseActive = false;
@@ -4900,6 +5038,85 @@
         woodViewerShell.addEventListener('pointerup', finishWoodPanDrag);
         woodViewerShell.addEventListener('pointercancel', finishWoodPanDrag);
         woodViewerShell.addEventListener('lostpointercapture', finishWoodPanDrag);
+
+        /* MOBILE ANIMATED-THUMBNAIL SWIPE
+           This mirrors the desktop grab/drag behavior with direct touch events. A vertical
+           gesture is never prevented, so it remains free to leave the section; once the
+           gesture is clearly horizontal, the woodgrain owns it and the master timeline does not. */
+        if (MOBILE_RUNTIME && !woodViewerShell.dataset.mobileSwipeReady) {
+          woodViewerShell.dataset.mobileSwipeReady = '1';
+          let touchId = null, mode = 'none', startX = 0, startY = 0, lastX = 0, lastTime = 0, releaseVelocity = 0;
+
+          woodViewerShell.addEventListener('touchstart', event => {
+            if (!event.touches || event.touches.length !== 1) return;
+            if (event.target.closest('.woodDot, button, input, a, [role="button"]')) return;
+            const t = event.touches[0];
+            touchId = t.identifier;
+            mode = 'pending';
+            startX = lastX = t.clientX;
+            startY = t.clientY;
+            lastTime = performance.now();
+            releaseVelocity = woodPanVelocity;
+            woodPanReleaseActive = false;
+          }, { passive: true });
+
+          woodViewerShell.addEventListener('touchmove', event => {
+            if (touchId === null) return;
+            const t = Array.from(event.touches || []).find(item => item.identifier === touchId);
+            if (!t) return;
+            const totalX = t.clientX - startX;
+            const totalY = t.clientY - startY;
+            const ax = Math.abs(totalX), ay = Math.abs(totalY);
+
+            if (mode === 'pending') {
+              if (Math.max(ax, ay) < 8) return;
+              if (ay > ax * 1.08) { mode = 'scroll'; return; }
+              if (ax <= ay * 1.02) return;
+              mode = 'pan';
+              woodPanDragging = true;
+              woodPanTouchMode = 'pan';
+              woodViewerShell.classList.add('is-dragging');
+              lastX = t.clientX;
+              lastTime = performance.now();
+              event.preventDefault();
+              return;
+            }
+
+            if (mode !== 'pan') return;
+            event.preventDefault();
+            const now = performance.now();
+            const dt = Math.max(.008, (now - lastTime) / 1000);
+            const dx = t.clientX - lastX;
+            lastX = t.clientX;
+            lastTime = now;
+            woodLoopOffset += dx;
+            const sample = clamp(dx / dt, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
+            releaseVelocity += (sample - releaseVelocity) * WOOD_PAN_DRAG_SAMPLE_EASE;
+            applyWoodViewerPanPosition();
+          }, { passive: false });
+
+          const finishTouchPan = () => {
+            if (mode === 'pan') {
+              const measured = clamp(releaseVelocity, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
+              const direction = Math.sign(measured) || woodPanAutoDirection || 1;
+              woodPanAutoDirection = direction;
+              woodPanReleaseStartVelocity = Math.abs(measured) < 4 ? direction * WOOD_PAN_AUTO_SPEED : measured;
+              woodPanVelocity = woodPanReleaseStartVelocity;
+              const normalized = clamp(Math.abs(woodPanReleaseStartVelocity) / WOOD_PAN_DRAG_MAX_RELEASE_SPEED, 0, 1);
+              woodPanReleaseDuration = lerp(WOOD_PAN_RELEASE_MIN_DURATION, WOOD_PAN_RELEASE_MAX_DURATION, Math.pow(normalized, .72));
+              woodPanReleaseElapsed = 0;
+              woodPanReleaseActive = true;
+            }
+            touchId = null;
+            mode = 'none';
+            woodPanDragging = false;
+            woodPanTouchMode = 'none';
+            woodViewerShell.classList.remove('is-dragging');
+          };
+
+          woodViewerShell.addEventListener('touchend', finishTouchPan, { passive: true });
+          woodViewerShell.addEventListener('touchcancel', finishTouchPan, { passive: true });
+        }
       }
 
 
@@ -7376,6 +7593,17 @@ void main(){
         lastUserTravelledPx = travelled;
         targetStoryProgress = raw;
         targetScrollFrame = calculateTargetFrame(raw);
+
+        /* MOBILE 720p AUTOPLAY RUNWAY
+           Start decoding the authored frame-52 autoplay section well BEFORE the user reaches
+           it. The previous rolling cache only looked a short distance ahead from the current
+           manual frame, so autoplay repeatedly caught the network/decoder and visibly paused.
+           At 720p with no mask we can safely keep a larger bounded runway ready. */
+        if (MOBILE_RUNTIME && userScrollDirection > 0 &&
+            targetScrollFrame >= MOBILE_AUTOPLAY_WARMUP_FRAME &&
+            targetScrollFrame < BACKGROUND_AUTOPLAY_START_FRAME + 1) {
+          prefetchMobileSequenceWindow(BACKGROUND_AUTOPLAY_START_FRAME, 1);
+        }
 
         if (moodClipReverseSuppressed && raw < MOOD_REVERSE_ESCAPE_MIN_PROGRESS) {
           moodClipReverseSuppressed = false;
