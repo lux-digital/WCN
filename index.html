@@ -2334,6 +2334,14 @@
       }
     }
 
+
+    /* MOBILE STORY LOTTIE — larger portrait presentation. */
+    @media (max-width: 800px) and (orientation: portrait) {
+      #storySequenceLottie {
+        transform: scale(1.05) !important;
+      }
+    }
+
 </style>
 
 
@@ -2779,8 +2787,8 @@
       /* The story animation begins at STORY_SEQUENCE_START (frame 60). Forward scrolling
          deliberately stretches this authored range; reverse wheel movement is compensated
          later so the whole experience returns at the original logical speed. */
-      const STORY_SEQUENCE_SCROLL_SLOWDOWN = 2.2;
-      const STORY_SEQUENCE_AUTOPLAY_FPS = 38;
+      const STORY_SEQUENCE_SCROLL_SLOWDOWN = MOBILE_RUNTIME ? 1.05 : 2.2;
+      const STORY_SEQUENCE_AUTOPLAY_FPS = MOBILE_RUNTIME ? 52 : 38;
       const STORY_FIRST_AUTOPLAY_END_FRAME = 72; // text000 -> text072
       const STORY_MID_AUTOPLAY_START_FRAME = 80;
       const STORY_MID_AUTOPLAY_END_FRAME = 144;
@@ -3264,6 +3272,8 @@
       let woodPanAutoDirection = 1;
       let woodPanDragging = false;
       let woodPanDragPointerId = null;
+      let woodPanTouchMode = 'none';
+      let woodPanTouchStartX = 0, woodPanTouchStartY = 0;
       let woodPanDragLastX = 0;
       let woodPanDragLastTime = 0;
       let woodPanDragReleaseVelocity = 0;
@@ -4550,26 +4560,57 @@
 
         woodViewerShell.addEventListener('pointerdown', event => {
           if (event.pointerType === 'mouse' && event.button !== 0) return;
-          /* The nine woodgrain dots live inside the draggable viewer shell. Do not let
-             thumbnail drag capture their pointerdown or the browser never gets a normal
-             click to the navigation button. The same guard keeps any future controls
-             inside the shell interactive. */
           if (event.target.closest('.woodDot, button, input, a, [role="button"]')) return;
-          if (woodPanDragging) return;
+          if (woodPanDragging || woodPanTouchMode === 'pending') return;
 
-          woodPanDragging = true;
           woodPanReleaseActive = false;
           woodPanDragPointerId = event.pointerId;
           woodPanDragLastX = event.clientX;
           woodPanDragLastTime = performance.now();
           woodPanDragReleaseVelocity = woodPanVelocity;
+
+          if (MOBILE_RUNTIME && event.pointerType === 'touch') {
+            woodPanTouchMode = 'pending';
+            woodPanTouchStartX = event.clientX;
+            woodPanTouchStartY = event.clientY;
+            return;
+          }
+
+          woodPanTouchMode = 'pan';
+          woodPanDragging = true;
           woodViewerShell.classList.add('is-dragging');
           try { woodViewerShell.setPointerCapture(event.pointerId); } catch (e) {}
           event.preventDefault();
         });
 
         woodViewerShell.addEventListener('pointermove', event => {
-          if (!woodPanDragging || event.pointerId !== woodPanDragPointerId) return;
+          if (event.pointerId !== woodPanDragPointerId) return;
+
+          if (MOBILE_RUNTIME && event.pointerType === 'touch' && woodPanTouchMode === 'pending') {
+            const totalX = event.clientX - woodPanTouchStartX;
+            const totalY = event.clientY - woodPanTouchStartY;
+            const ax = Math.abs(totalX), ay = Math.abs(totalY);
+            if (Math.max(ax, ay) < 8) return;
+
+            if (ay > ax * 1.06) {
+              woodPanTouchMode = 'scroll';
+              woodPanDragPointerId = null;
+              return;
+            }
+
+            if (ax > ay * 1.02) {
+              woodPanTouchMode = 'pan';
+              woodPanDragging = true;
+              woodPanDragLastX = event.clientX;
+              woodPanDragLastTime = performance.now();
+              woodViewerShell.classList.add('is-dragging');
+              try { woodViewerShell.setPointerCapture(event.pointerId); } catch (e) {}
+              event.preventDefault();
+            }
+            return;
+          }
+
+          if (woodPanTouchMode === 'scroll' || !woodPanDragging) return;
 
           const now = performance.now();
           const dx = event.clientX - woodPanDragLastX;
@@ -4577,9 +4618,6 @@
           woodPanDragLastX = event.clientX;
           woodPanDragLastTime = now;
 
-          /* The texture follows the hand directly while grabbed. Its measured release
-             velocity is low-pass filtered so a direction change feels weighted instead
-             of inheriting a noisy one-event spike. */
           woodLoopOffset += dx;
           const sampledVelocity = clamp(dx / dt, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
           woodPanDragReleaseVelocity += (sampledVelocity - woodPanDragReleaseVelocity) * WOOD_PAN_DRAG_SAMPLE_EASE;
@@ -4588,33 +4626,23 @@
         });
 
         const finishWoodPanDrag = event => {
-          if (!woodPanDragging) return;
-          if (event && event.pointerId !== woodPanDragPointerId) return;
+          if (event && woodPanDragPointerId !== null && event.pointerId !== woodPanDragPointerId) return;
 
-          const measured = clamp(woodPanDragReleaseVelocity, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
-          const direction = Math.sign(measured) || woodPanAutoDirection || 1;
-          woodPanAutoDirection = direction;
-
-          /* Continue at the ACTUAL drag speed on release. A faster drag gets a longer coast;
-             a gentle drag settles quickly. The speed then eases into the normal continuous
-             cruise speed without reversing or snapping. */
-          woodPanReleaseStartVelocity = Math.abs(measured) < 4 ? direction * WOOD_PAN_AUTO_SPEED : measured;
-          woodPanVelocity = woodPanReleaseStartVelocity;
-          const normalizedReleaseSpeed = clamp(
-            Math.abs(woodPanReleaseStartVelocity) / WOOD_PAN_DRAG_MAX_RELEASE_SPEED,
-            0,
-            1
-          );
-          woodPanReleaseDuration = lerp(
-            WOOD_PAN_RELEASE_MIN_DURATION,
-            WOOD_PAN_RELEASE_MAX_DURATION,
-            Math.pow(normalizedReleaseSpeed, .72)
-          );
-          woodPanReleaseElapsed = 0;
-          woodPanReleaseActive = true;
+          if (woodPanDragging) {
+            const measured = clamp(woodPanDragReleaseVelocity, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
+            const direction = Math.sign(measured) || woodPanAutoDirection || 1;
+            woodPanAutoDirection = direction;
+            woodPanReleaseStartVelocity = Math.abs(measured) < 4 ? direction * WOOD_PAN_AUTO_SPEED : measured;
+            woodPanVelocity = woodPanReleaseStartVelocity;
+            const normalizedReleaseSpeed = clamp(Math.abs(woodPanReleaseStartVelocity) / WOOD_PAN_DRAG_MAX_RELEASE_SPEED, 0, 1);
+            woodPanReleaseDuration = lerp(WOOD_PAN_RELEASE_MIN_DURATION, WOOD_PAN_RELEASE_MAX_DURATION, Math.pow(normalizedReleaseSpeed, .72));
+            woodPanReleaseElapsed = 0;
+            woodPanReleaseActive = true;
+          }
 
           woodPanDragging = false;
           woodPanDragPointerId = null;
+          woodPanTouchMode = 'none';
           woodViewerShell.classList.remove('is-dragging');
           try { if (event) woodViewerShell.releasePointerCapture(event.pointerId); } catch (e) {}
         };
@@ -5744,6 +5772,7 @@ void main(){
       stage.addEventListener('pointerdown', event => {
 
         if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"]')) return;
+        if (MOBILE_RUNTIME && event.pointerType === 'touch') return;
         if (smoothScrollFrame >= PANORAMA_FADE_END_FRAME) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
 
@@ -5878,6 +5907,7 @@ void main(){
          starts directly on top of the story text. */
       stage.addEventListener('pointerdown', event => {
         if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"]')) return;
+        if (MOBILE_RUNTIME) return;
         if (event.pointerType !== 'touch') return;
         if (smoothScrollFrame < PANORAMA_FADE_END_FRAME) return;
         if (!holdEnvLoaded || holdEnvBlend <= .02) return;
@@ -5950,6 +5980,88 @@ void main(){
       }
 
       ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => stage.addEventListener(type, finishHoldTouch));
+
+      /* Dedicated mobile touch path: vertical stays native; horizontal pans the active panorama. */
+      let mobilePanGestureId = null, mobilePanGestureMode = 'none';
+      let mobilePanStartX = 0, mobilePanStartY = 0, mobilePanPrevX = 0, mobilePanPrevY = 0, mobilePanPrevTime = 0;
+      let mobilePanYawVelocity = 0, mobilePanPitchVelocity = 0;
+
+      function getMobilePanTarget() {
+        if (!MOBILE_RUNTIME) return 'none';
+        if (panoramaLoaded && smoothScrollFrame < PANORAMA_FADE_END_FRAME) return 'main';
+        if (holdEnvLoaded && holdEnvBlend > .035 && (holdEnvMode === 'active' || holdEnvMode === 'entering') && smoothStoryProgress < MOOD_WHITE_START) return 'hold';
+        return 'none';
+      }
+
+      stage.addEventListener('touchstart', event => {
+        if (!MOBILE_RUNTIME || !event.touches || event.touches.length !== 1) return;
+        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"]')) return;
+        if (getMobilePanTarget() === 'none') return;
+        const touch = event.touches[0];
+        mobilePanGestureId = touch.identifier;
+        mobilePanGestureMode = 'pending';
+        mobilePanStartX = mobilePanPrevX = touch.clientX;
+        mobilePanStartY = mobilePanPrevY = touch.clientY;
+        mobilePanPrevTime = performance.now();
+        mobilePanYawVelocity = mobilePanPitchVelocity = 0;
+      }, { passive: true });
+
+      stage.addEventListener('touchmove', event => {
+        if (!MOBILE_RUNTIME || mobilePanGestureId === null) return;
+        const touch = Array.from(event.touches || []).find(item => item.identifier === mobilePanGestureId);
+        if (!touch) return;
+
+        if (mobilePanGestureMode === 'pending') {
+          const totalX = touch.clientX - mobilePanStartX;
+          const totalY = touch.clientY - mobilePanStartY;
+          const ax = Math.abs(totalX), ay = Math.abs(totalY);
+          if (Math.max(ax, ay) < 7) return;
+          if (ay > ax * 1.04) { mobilePanGestureMode = 'scroll'; return; }
+          if (ax > ay * 1.01) {
+            mobilePanGestureMode = getMobilePanTarget();
+            if (mobilePanGestureMode === 'none') return;
+            mobilePanPrevX = touch.clientX; mobilePanPrevY = touch.clientY; mobilePanPrevTime = performance.now();
+            if (mobilePanGestureMode === 'main') isDragging = true;
+            if (mobilePanGestureMode === 'hold') { holdTouchLookUnlocked = true; holdEnvMouseBlend = 1; }
+            event.preventDefault();
+          }
+          return;
+        }
+
+        if (mobilePanGestureMode === 'scroll' || mobilePanGestureMode === 'none') return;
+        event.preventDefault();
+        const now = performance.now();
+        const dt = Math.max(.008, (now - mobilePanPrevTime) / 1000);
+        const dx = touch.clientX - mobilePanPrevX, dy = touch.clientY - mobilePanPrevY;
+
+        if (mobilePanGestureMode === 'main') {
+          const yd = -dx * DRAG_SENSITIVITY * 1.18;
+          const pd = dy * DRAG_SENSITIVITY * .82;
+          yaw += yd; pitch = clamp(pitch + pd, -MAX_PITCH, MAX_PITCH);
+          mobilePanYawVelocity += (yd / dt - mobilePanYawVelocity) * .38;
+          mobilePanPitchVelocity += (pd / dt - mobilePanPitchVelocity) * .38;
+          renderPanorama();
+        } else if (mobilePanGestureMode === 'hold') {
+          mouseX = clamp(mouseX + dx / Math.max(220, viewportWidth * .42), -1, 1);
+          mouseY = clamp(mouseY + dy / Math.max(320, viewportHeight * .60), -1, 1);
+          holdEnvMouseBlend = 1;
+        }
+        mobilePanPrevX = touch.clientX; mobilePanPrevY = touch.clientY; mobilePanPrevTime = now;
+      }, { passive: false });
+
+      function finishMobilePanGesture() {
+        if (!MOBILE_RUNTIME) return;
+        if (mobilePanGestureMode === 'main') {
+          isDragging = false;
+          inertialYawVelocity = clamp(mobilePanYawVelocity, -MAX_DRAG_VELOCITY, MAX_DRAG_VELOCITY);
+          inertialPitchVelocity = clamp(mobilePanPitchVelocity, -MAX_DRAG_VELOCITY, MAX_DRAG_VELOCITY);
+        }
+        mobilePanGestureId = null; mobilePanGestureMode = 'none';
+        mobilePanYawVelocity = mobilePanPitchVelocity = 0;
+      }
+      stage.addEventListener('touchend', finishMobilePanGesture, { passive: true });
+      stage.addEventListener('touchcancel', finishMobilePanGesture, { passive: true });
+
 
 
 
@@ -7437,13 +7549,29 @@ void main(){
           if (isTimelineAutoplayLocked() || panoramaReturnActive) event.preventDefault();
           return;
         }
-        if (!isTimelineAutoplayLocked() && !panoramaReturnActive) return;
-        event.preventDefault();
         const touch = Array.from(event.touches || []).find(item => item.identifier === mobileTimelineTouchId) || (event.touches && event.touches[0]);
         if (!touch) return;
         const totalY = touch.clientY - mobileTimelineTouchStartY;
-        if (Math.abs(totalY) < 22) return;
+        if (Math.abs(totalY) < 16) return;
         const desiredDirection = totalY < 0 ? 1 : -1;
+
+        if (moodClipComplete && !moodClipActive && desiredDirection < 0) {
+          event.preventDefault();
+          mobileTimelineTouchDirection = desiredDirection;
+          startMoodClip(-1);
+          return;
+        }
+        if (!moodClipActive && !moodClipComplete && moodClipReverseSuppressed && moodClipProgress <= .001 &&
+            desiredDirection > 0 && calculateRawScrollProgress() >= MOOD_REVERSE_ESCAPE_MIN_PROGRESS) {
+          event.preventDefault();
+          mobileTimelineTouchDirection = desiredDirection;
+          moodClipReverseSuppressed = false;
+          startMoodClip(1);
+          return;
+        }
+
+        if (!isTimelineAutoplayLocked() && !panoramaReturnActive) return;
+        event.preventDefault();
         if (desiredDirection === mobileTimelineTouchDirection) return;
         mobileTimelineTouchDirection = desiredDirection;
         if (storySequenceAutoplayActive) retargetStoryAutoplayDirection(desiredDirection);
