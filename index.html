@@ -360,10 +360,16 @@
       cursor: grabbing;
     }
 
-    /* MOBILE PANORAMA GESTURES */
+    /* MOBILE PANORAMA GESTURES
+       Vertical movement always belongs to native page scrolling. Horizontal movement
+       remains available to the custom panorama drag handlers. */
     @media (hover: none), (pointer: coarse) {
-      #panorama { touch-action: none; }
-      #stage.mobile-hold-touch { touch-action: none; }
+      #stage,
+      #panorama,
+      #panorama > canvas {
+        touch-action: pan-y !important;
+        overscroll-behavior-x: none;
+      }
     }
 
 
@@ -5751,7 +5757,9 @@ void main(){
           touchGestureMode = 'pending';
           touchStartX = previousDragX = event.clientX;
           touchStartY = previousDragY = event.clientY;
-          try { stage.setPointerCapture(event.pointerId); } catch (e) { }
+          /* Do NOT capture yet. Safari/Chrome must be free to claim a vertical gesture
+             as native page scrolling. Capture is added only after we positively identify
+             a horizontal panorama drag. */
           return;
         }
 
@@ -5770,11 +5778,9 @@ void main(){
 
         if (event.pointerType === 'touch') {
           if (touchGestureMode === 'scroll') {
-            const dy = event.clientY - previousDragY;
+            /* Native browser scrolling owns vertical gestures. Never preventDefault here. */
             previousDragY = event.clientY;
             previousDragX = event.clientX;
-            event.preventDefault();
-            handleMobileVerticalGesture(dy);
             return;
           }
 
@@ -5792,8 +5798,7 @@ void main(){
               smoothedFogForce.set(0, 0);
               previousDragX = event.clientX;
               previousDragY = event.clientY;
-              event.preventDefault();
-              handleMobileVerticalGesture(totalY);
+              /* Let the browser continue the same touch as a native vertical scroll. */
               return;
             }
 
@@ -5804,6 +5809,7 @@ void main(){
               previousDragX = event.clientX;
               previousDragY = event.clientY;
               previousDragTime = performance.now();
+              try { stage.setPointerCapture(event.pointerId); } catch (e) { }
               event.preventDefault();
               return;
             }
@@ -5881,18 +5887,16 @@ void main(){
         holdTouchGestureMode = 'pending';
         holdTouchStartX = holdTouchPreviousX = event.clientX;
         holdTouchStartY = holdTouchPreviousY = event.clientY;
-        try { stage.setPointerCapture(event.pointerId); } catch (e) { }
+        /* As with the main panorama, wait for a confirmed horizontal gesture before
+           capturing the pointer. Vertical gestures stay native. */
       }, { passive: true });
 
       stage.addEventListener('pointermove', event => {
         if (event.pointerType !== 'touch' || event.pointerId !== holdTouchPointerId) return;
 
         if (holdTouchGestureMode === 'scroll') {
-          const dy = event.clientY - holdTouchPreviousY;
           holdTouchPreviousY = event.clientY;
           holdTouchPreviousX = event.clientX;
-          event.preventDefault();
-          handleMobileVerticalGesture(dy);
           return;
         }
 
@@ -5906,8 +5910,6 @@ void main(){
             holdTouchGestureMode = 'scroll';
             holdTouchPreviousX = event.clientX;
             holdTouchPreviousY = event.clientY;
-            event.preventDefault();
-            handleMobileVerticalGesture(totalY);
             return;
           }
 
@@ -5917,6 +5919,7 @@ void main(){
             holdEnvMouseBlend = 1;
             holdTouchPreviousX = event.clientX;
             holdTouchPreviousY = event.clientY;
+            try { stage.setPointerCapture(event.pointerId); } catch (e) { }
             event.preventDefault();
             return;
           }
