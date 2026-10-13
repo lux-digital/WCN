@@ -2738,6 +2738,10 @@
       const PANORAMA_NORMAL_CAMERA_EASE_RATE = 7.5;
 
       const HOLD_ENV_IMAGE = 'hold-extended.jpg';
+      const HOLD_ENV_HIRES_IMAGE = '2500 × 1408 image.jpg';
+      const HOLD_ENV_HIRES_FADE_MS = 2800;
+      const HOLD_ENV_HIRES_FADE_START_BLEND = 0.22;
+      const HOLD_ENV_HIRES_FEATHER_FRACTION = 0.022;
       const HOLD_ENV_FOV = 50;
       const HOLD_ENV_CURVE_DEPTH = 0.18;
       const HOLD_ENV_CURVE_SOFTNESS = 0.58;
@@ -3119,6 +3123,8 @@
 
       let inertialYawVelocity = 0, inertialPitchVelocity = 0, mouseX = 0, mouseY = 0, smoothMouseX = 0, smoothMouseY = 0;
       let holdEnvRenderer = null, holdEnvScene = null, holdEnvCamera = null, holdEnvMesh = null, holdEnvTexture = null;
+      let holdEnvHiResMesh = null, holdEnvHiResTexture = null, holdEnvHiResMaterial = null, holdEnvHiResAlphaTexture = null;
+      let holdEnvHiResReady = false, holdEnvHiResFadeStartedAt = 0;
       let holdEnvLoaded = false, holdEnvAspect = 16 / 9, holdEnvCenterWidth = 16 / 9 * 2, holdEnvCenterHeight = 2;
       let holdEnvCameraDistance = 1, holdEnvSmoothMouseX = 0, holdEnvSmoothMouseY = 0, holdEnvYaw = 0, holdEnvPitch = 0;
       let holdEnvBlend = 0, holdEnvMouseBlend = 0, holdEnvEnteredAt = 0;
@@ -4023,7 +4029,7 @@
         }
 
         const startValue = 100;
-        const endValue = 75;
+        const endValue = 50;
         const duration = 2000;
         const startTime = performance.now();
         applyMoodBackgroundClarity(startValue);
@@ -4055,7 +4061,7 @@
         }
 
         /* Every newly revealed mood begins completely clear. Only after the background is
-           fully faded in do we hold for a full second, then visibly glide 100 -> 75 over
+           fully faded in do we hold for a full second, then visibly glide 100 -> 50 over
            2 seconds. */
         applyMoodBackgroundClarity(100);
         moodBackgroundAutoFadeTimer = window.setTimeout(() => {
@@ -4497,7 +4503,7 @@
 
         resetMoodVideoShade();
         /* The incoming background is now fully opaque. Hold clear for one full second,
-           then run the smooth 100 -> 75 slider glide unless the user has taken control. */
+           then run the smooth 100 -> 50 slider glide unless the user has taken control. */
         startMoodBackgroundAutoFade();
         moodTransitioning = false;
       }
@@ -4520,6 +4526,11 @@
 
         woodViewerShell.addEventListener('pointerdown', event => {
           if (event.pointerType === 'mouse' && event.button !== 0) return;
+          /* The nine woodgrain dots live inside the draggable viewer shell. Do not let
+             thumbnail drag capture their pointerdown or the browser never gets a normal
+             click to the navigation button. The same guard keeps any future controls
+             inside the shell interactive. */
+          if (event.target.closest('.woodDot, button, input, a, [role="button"]')) return;
           if (woodPanDragging) return;
 
           woodPanDragging = true;
@@ -4620,6 +4631,7 @@
           dot.dataset.index = String(index);
           dot.setAttribute('aria-label', `Show ${item.name}`);
           dot.setAttribute('aria-pressed', index === activeMoodIndex ? 'true' : 'false');
+          dot.addEventListener('pointerdown', event => event.stopPropagation());
           dot.addEventListener('click', () => {
             const direction = index >= activeMoodIndex ? 1 : -1;
             transitionMoodItem(index, direction);
@@ -6425,6 +6437,103 @@ void main(){
         holdEnvCamera.position.set(0, 0, holdEnvCameraDistance);
       }
 
+      function createHoldHiResFeatherAlphaTexture() {
+        const width = 512, height = 288;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(width, height);
+        const data = imageData.data;
+        const featherX = Math.max(2, width * HOLD_ENV_HIRES_FEATHER_FRACTION);
+        const featherY = Math.max(2, height * HOLD_ENV_HIRES_FEATHER_FRACTION);
+
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const edgeX = Math.min(x, width - 1 - x) / featherX;
+            const edgeY = Math.min(y, height - 1 - y) / featherY;
+            const edge = clamp(Math.min(edgeX, edgeY), 0, 1);
+            const soft = smootherstep01(edge);
+            const value = Math.round(soft * 255);
+            const i = (y * width + x) * 4;
+            data[i] = value;
+            data[i + 1] = value;
+            data[i + 2] = value;
+            data[i + 3] = 255;
+          }
+        }
+        ctx.putImageData(imageData, 0, 0);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+        return texture;
+      }
+
+      function configureHoldHiResTextureCrop(texture) {
+        if (!texture || !texture.image || !texture.image.width || !texture.image.height) return;
+        const sourceAspect = texture.image.width / texture.image.height;
+        const targetAspect = holdEnvCenterWidth / holdEnvCenterHeight;
+        texture.repeat.set(1, 1);
+        texture.offset.set(0, 0);
+
+        /* The supplied 2500×1408 insert is fractionally taller than exact 16:9.
+           Crop the tiny excess rather than stretching it, so architectural lines align
+           exactly with the original 1920×1080 center frame. */
+        if (sourceAspect < targetAspect) {
+          const repeatY = sourceAspect / targetAspect;
+          texture.repeat.y = repeatY;
+          texture.offset.y = (1 - repeatY) * .5;
+        } else if (sourceAspect > targetAspect) {
+          const repeatX = targetAspect / sourceAspect;
+          texture.repeat.x = repeatX;
+          texture.offset.x = (1 - repeatX) * .5;
+        }
+        texture.needsUpdate = true;
+      }
+
+      function loadHoldHiResInsert(textureLoader) {
+        /* Start this download as soon as the base hold environment is initialized, but do
+           not block the page loader on it. In normal use Scroll_01 gives it plenty of time
+           to arrive before the semi-panorama is shown. */
+        textureLoader.load(HOLD_ENV_HIRES_IMAGE, texture => {
+          holdEnvHiResTexture = texture;
+          holdEnvHiResTexture.colorSpace = THREE.SRGBColorSpace;
+          holdEnvHiResTexture.wrapS = THREE.ClampToEdgeWrapping;
+          holdEnvHiResTexture.wrapT = THREE.ClampToEdgeWrapping;
+          holdEnvHiResTexture.minFilter = THREE.LinearMipmapLinearFilter;
+          holdEnvHiResTexture.magFilter = THREE.LinearFilter;
+          holdEnvHiResTexture.generateMipmaps = true;
+          configureHoldHiResTextureCrop(holdEnvHiResTexture);
+
+          holdEnvHiResAlphaTexture = createHoldHiResFeatherAlphaTexture();
+          holdEnvHiResMaterial = new THREE.MeshBasicMaterial({
+            map: holdEnvHiResTexture,
+            alphaMap: holdEnvHiResAlphaTexture,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            depthTest: false,
+            side: THREE.FrontSide
+          });
+
+          const hiResGeometry = new THREE.PlaneGeometry(holdEnvCenterWidth, holdEnvCenterHeight, 1, 1);
+          holdEnvHiResMesh = new THREE.Mesh(hiResGeometry, holdEnvHiResMaterial);
+          /* The middle third of hold-extended is mathematically flat at z=0. Put the
+             high-resolution insert microscopically closer to the camera so it never
+             z-fights while remaining at exactly the same apparent scale. */
+          holdEnvHiResMesh.position.z = 0.0015;
+          holdEnvHiResMesh.renderOrder = 10;
+          holdEnvScene.add(holdEnvHiResMesh);
+          holdEnvHiResReady = true;
+          holdEnvHiResFadeStartedAt = 0;
+        }, undefined, error => {
+          console.warn('[West Coast Naturals] High-resolution hold insert could not be loaded:', HOLD_ENV_HIRES_IMAGE, error);
+        });
+      }
+
       function initHoldEnvironment() {
         if (holdEnvRenderer) return Promise.resolve();
         return new Promise((resolve, reject) => {
@@ -6460,6 +6569,11 @@ void main(){
             const material = new THREE.MeshBasicMaterial({ map: holdEnvTexture, transparent: false, depthWrite: false, side: THREE.FrontSide });
             holdEnvMesh = new THREE.Mesh(geometry, material);
             holdEnvScene.add(holdEnvMesh);
+
+            /* Preload the sharper 2500×1408 center insert in parallel with the rest of
+               the experience. It is non-blocking; the base panorama remains a complete
+               fallback if this optional enhancement is unavailable. */
+            loadHoldHiResInsert(textureLoader);
 
             holdEnvLoaded = true;
             holdEnvRenderer.render(holdEnvScene, holdEnvCamera);
@@ -6529,6 +6643,8 @@ void main(){
           holdTouchLookUnlocked = false;
           holdEnvSmoothMouseX = holdEnvSmoothMouseY = 0;
           holdEnvYaw = holdEnvPitch = 0;
+          holdEnvHiResFadeStartedAt = 0;
+          if (holdEnvHiResMaterial) holdEnvHiResMaterial.opacity = 0;
         }
 
         if (holdEnvReverseSuppressed && movingForward && smoothStoryProgress >= HOLD_ENV_ACTIVE_START) {
@@ -6642,6 +6758,21 @@ void main(){
           const cameraEase = 1 - Math.exp(-cameraRate * dt);
           holdEnvYaw += (targetYaw - holdEnvYaw) * cameraEase;
           holdEnvPitch += (targetPitch - holdEnvPitch) * cameraEase;
+        }
+
+        /* Fade the sharper central insert in only after the semi-panorama itself
+           is visibly established. Because it is a second mesh in the SAME Three.js scene,
+           camera pan, hotspot zoom and perspective remain perfectly locked together. */
+        if (holdEnvHiResReady && holdEnvHiResMaterial) {
+          const hiResCanAppear = (holdEnvMode === 'entering' || holdEnvMode === 'active') && holdEnvBlend >= HOLD_ENV_HIRES_FADE_START_BLEND;
+          if (hiResCanAppear) {
+            if (!holdEnvHiResFadeStartedAt) holdEnvHiResFadeStartedAt = nowMs;
+            const hiResT = clamp((nowMs - holdEnvHiResFadeStartedAt) / HOLD_ENV_HIRES_FADE_MS, 0, 1);
+            holdEnvHiResMaterial.opacity = smootherstep01(hiResT);
+          } else if (holdEnvMode === 'inactive') {
+            holdEnvHiResFadeStartedAt = 0;
+            holdEnvHiResMaterial.opacity = 0;
+          }
         }
 
         holdEnvCanvas.style.opacity = String(clamp(holdEnvBlend, 0, 1));
