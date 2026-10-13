@@ -2662,7 +2662,7 @@
 
 
       const PANORAMA_IMAGE = '360.jpg', PANORAMA_IMAGE_MOBILE = '360-mobile.jpg',
-        SCROLL_FOLDER = 'Scroll_01', MASK_FOLDER = 'Mask_01', SCROLL_FRAME_COUNT = 109,
+        SCROLL_FOLDER = 'Scroll_01', SCROLL_FOLDER_MOBILE = 'Scroll_01-mobile', MASK_FOLDER = 'Mask_01', SCROLL_FRAME_COUNT = 109,
         STORY_SEQUENCE_LOTTIE = 'square.json', STORY_SEQUENCE_FRAME_COUNT = 369;
 
       function isMobilePanoramaDevice() {
@@ -3064,6 +3064,7 @@
 
 
       const experience = $('experience'), stage = $('stage'), panoramaElement = $('panorama'), heroText = $('heroText');
+      const heroTextInner = $('heroTextInner');
 
 
 
@@ -3196,10 +3197,10 @@
       const scrollFrames = [], maskFrames = [];
       const mobileSequenceLoads = new Map();
       const mobileSequenceUse = new Map();
-      const MOBILE_SEQUENCE_INITIAL_COUNT = 9;
-      const MOBILE_SEQUENCE_CACHE_MAX = 26;
-      const MOBILE_SEQUENCE_PREFETCH_AHEAD = 9;
-      const MOBILE_SEQUENCE_PREFETCH_BEHIND = 4;
+      const MOBILE_SEQUENCE_INITIAL_COUNT = 14;
+      const MOBILE_SEQUENCE_CACHE_MAX = 34;
+      const MOBILE_SEQUENCE_PREFETCH_AHEAD = 14;
+      const MOBILE_SEQUENCE_PREFETCH_BEHIND = 5;
       let mobileSequenceUseTick = 0;
       let mobileSequenceDirection = 1;
       let storySquareLottie = null, storySquareLottieReady = false, storySquareLottieTotalFrames = 1;
@@ -3319,7 +3320,7 @@
 
 
 
-      const scrollImagePath = f => `${SCROLL_FOLDER}/Scroll${padFrame(f)}.jpg`;
+      const scrollImagePath = f => `${MOBILE_RUNTIME ? SCROLL_FOLDER_MOBILE : SCROLL_FOLDER}/Scroll${padFrame(f)}.jpg`;
 
 
 
@@ -6025,7 +6026,7 @@ void main(){
         if (!MOBILE_RUNTIME) return;
         const loaded = [];
         for (let i = 0; i < SCROLL_FRAME_COUNT; i++) {
-          if (scrollFrames[i] && maskFrames[i]) loaded.push(i);
+          if (scrollFrames[i]) loaded.push(i);
         }
         if (loaded.length <= MOBILE_SEQUENCE_CACHE_MAX) return;
         loaded.sort((a, b) => {
@@ -6044,19 +6045,22 @@ void main(){
 
       function loadMobileSequencePair(frame) {
         frame = clamp(Math.round(frame), 0, SCROLL_FRAME_COUNT - 1);
-        if (scrollFrames[frame] && maskFrames[frame]) {
+        if (scrollFrames[frame]) {
           markMobileSequenceFrameUsed(frame);
-          return Promise.resolve([scrollFrames[frame], maskFrames[frame]]);
+          return Promise.resolve([scrollFrames[frame], null]);
         }
         if (mobileSequenceLoads.has(frame)) return mobileSequenceLoads.get(frame);
-        const promise = Promise.all([loadImage(scrollImagePath(frame)), loadImage(maskImagePath(frame))])
-          .then(([image, mask]) => {
+        /* Mobile deliberately uses ONLY the 1280×720 colour sequence. Do not request
+           Mask_01 at all: it doubles network/decode memory for an effect we are replacing
+           with a simple DOM-text fade on phones/tablets. */
+        const promise = loadImage(scrollImagePath(frame))
+          .then(image => {
             scrollFrames[frame] = image;
-            maskFrames[frame] = mask;
+            maskFrames[frame] = null;
             markMobileSequenceFrameUsed(frame);
             mobileSequenceLoads.delete(frame);
             pruneMobileSequenceCache(currentScrollFrame >= 0 ? currentScrollFrame : frame);
-            return [image, mask];
+            return [image, null];
           })
           .catch(error => {
             mobileSequenceLoads.delete(frame);
@@ -6126,8 +6130,8 @@ void main(){
 
       async function loadScrollAssets() {
         if (MOBILE_RUNTIME) {
-          /* Keep decoded image memory bounded on mobile instead of holding 218 full-HD
-             sequence+mask images at once. */
+          /* Mobile uses the dedicated 1280×720 Scroll_01-mobile sequence and no
+             animated masks. Keep only a bounded rolling cache of decoded colour frames. */
           let loaded = 0;
           const initialFrames = Array.from({ length: Math.min(MOBILE_SEQUENCE_INITIAL_COUNT, SCROLL_FRAME_COUNT) }, (_, i) => i);
           await Promise.all(initialFrames.map(frame => loadMobileSequencePair(frame).then(() => {
@@ -6455,7 +6459,8 @@ void main(){
       function renderFrame(frame) {
 
         const image = scrollFrames[frame], mask = maskFrames[frame];
-        if (!image || !mask) {
+        const frameReady = MOBILE_RUNTIME ? !!image : (!!image && !!mask);
+        if (!frameReady) {
           if (MOBILE_RUNTIME) {
             loadMobileSequencePair(frame).then(() => {
               if (currentScrollFrame === frame) renderFrame(frame);
@@ -6470,6 +6475,15 @@ void main(){
         }
 
         drawCover(sceneCtx, image, sceneCanvas); // cover the entire physical canvas, no letterboxing
+
+        /* Mobile intentionally has no animated foreground mask. The real DOM hero text
+           fades away independently, so there is no second canvas compositing pass here. */
+        if (MOBILE_RUNTIME) {
+          maskedTextCtx.setTransform(1, 0, 0, 1, 0, 0);
+          maskedTextCtx.clearRect(0, 0, maskedTextCanvas.width, maskedTextCanvas.height);
+          maskedTextCanvas.style.opacity = '0';
+          return;
+        }
 
         /* IMPORTANT: do not replace the real HTML hero text with a canvas redraw.
            That old approach used different font metrics and caused the visible jump on
@@ -7191,9 +7205,27 @@ void main(){
         titleElement.style.letterSpacing = `${tracking}em`;
         eyebrowElement.style.transform = `scale(${supportingScale})`;
         copyElement.style.transform = `scale(${supportingScale})`;
+
+        if (MOBILE_RUNTIME) {
+          /* Replace the expensive frame-by-frame foreground mask with a simple fade.
+             It begins shortly after the sequence starts and is gone well before the
+             semi-panorama handoff. Applying it to the inner wrapper avoids fighting the
+             opening WAAPI opacity animation on #heroText itself. */
+          const mobileTextFade = smootherstep01(rangeProgress(smoothScrollFrame, 3, 30));
+          heroTextInner.style.opacity = String(1 - mobileTextFade);
+        }
       }
 
       function updateTextMode() {
+
+        if (MOBILE_RUNTIME) {
+          usingCanvasText = false;
+          heroText.style.visibility = 'visible';
+          maskedTextCanvas.style.opacity = '0';
+          maskedTextCtx.setTransform(1, 0, 0, 1, 0, 0);
+          maskedTextCtx.clearRect(0, 0, maskedTextCanvas.width, maskedTextCanvas.height);
+          return;
+        }
 
         if (smoothScrollFrame > .04) {
 
