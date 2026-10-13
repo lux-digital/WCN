@@ -2927,6 +2927,7 @@
          The working scroll engine below is intentionally left unchanged. */
 
       const MOOD_WHITE_START = .955;
+      const MOOD_REVERSE_ESCAPE_MIN_PROGRESS = MOOD_WHITE_START - 0.06;
 
       const MOOD_SLOWDOWN = 1.0; // final white/mood reveal now plays as a timed clip, not a stretched scroll section
 
@@ -3084,6 +3085,7 @@
 
 
       const moodLabelBlock = $('moodLabelBlock'), moodSeriesName = $('moodSeriesName'), productThumbButtons = $('productThumbButtons'), activeProductName = $('activeProductName');
+      const moodContent = $('moodContent');
       const moodBackgroundControl = $('moodBackgroundControl'), moodBackgroundSlider = $('moodBackgroundSlider'), moodBackgroundSliderValue = $('moodBackgroundSliderValue');
 
 
@@ -4054,20 +4056,14 @@
       }
 
       function startMoodBackgroundAutoFade() {
+        /* Automatic darkening is disabled. Keep every newly revealed mood at 100% clear
+           unless the user has explicitly chosen a different slider value. */
         cancelMoodBackgroundAutoFade();
         if (moodBackgroundUserInteracted) {
           applyMoodBackgroundClarity(moodBackgroundUserValue);
-          return;
+        } else {
+          applyMoodBackgroundClarity(100);
         }
-
-        /* Every newly revealed mood begins completely clear. Only after the background is
-           fully faded in do we hold for a full second, then visibly glide 100 -> 50 over
-           2 seconds. */
-        applyMoodBackgroundClarity(100);
-        moodBackgroundAutoFadeTimer = window.setTimeout(() => {
-          moodBackgroundAutoFadeTimer = 0;
-          beginMoodBackgroundAutoFadeAnimation();
-        }, 1000);
       }
 
       if (moodBackgroundSlider) {
@@ -4199,8 +4195,9 @@
       }
 
       function resolveWoodgrainPath(productLabel, moodName) {
-        const filename = moodNameToWoodgrainFilename(moodName);
-        if (productLabel === 'LUX LAP' || productLabel === 'SOFFIT') return filename;
+        const extension = productLabel === 'NEO LUMBER' ? 'png' : 'jpg';
+        const filename = `${moodName}.${extension}`;
+        if (productLabel === 'LUX LAP' || productLabel === 'SOFFIT') return `${moodName}.jpg`;
         return `${productLabel}/${filename}`;
       }
 
@@ -4502,8 +4499,8 @@
         if (activeMoodIndex !== 0) moodVideo.pause();
 
         resetMoodVideoShade();
-        /* The incoming background is now fully opaque. Hold clear for one full second,
-           then run the smooth 100 -> 50 slider glide unless the user has taken control. */
+        /* Keep the incoming background clear by default. The slider remains available
+           for manual adjustment, and a user-selected value persists across woodgrains. */
         startMoodBackgroundAutoFade();
         moodTransitioning = false;
       }
@@ -4604,7 +4601,19 @@
 
       function initMoodSection() {
 
-
+        /* Keep the full-stage panorama / semi-panorama pointer handlers from stealing
+           presses intended for controls in the mood/thumbnail UI. The nine woodgrain dots
+           already had this protection individually, which is why they were the only buttons
+           still working after the direction-change update. Use one delegated guard for every
+           actual interactive control while leaving the thumbnail shell itself draggable. */
+        if (moodContent && !moodContent.dataset.pointerGuardReady) {
+          moodContent.dataset.pointerGuardReady = '1';
+          moodContent.addEventListener('pointerdown', event => {
+            if (event.target.closest('button, input, a, [role="button"]')) {
+              event.stopPropagation();
+            }
+          });
+        }
 
         initWoodViewerInteraction();
         woodViewerStrip.style.backgroundImage = `url("${encodeURI(WOODGRAIN_STRIP_IMAGE)}")`;
@@ -5679,6 +5688,7 @@ void main(){
 
       stage.addEventListener('pointerdown', event => {
 
+        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"]')) return;
         if (smoothScrollFrame >= PANORAMA_FADE_END_FRAME) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
 
@@ -5811,6 +5821,7 @@ void main(){
          The whole stage receives the gesture, so panning also works when the finger
          starts directly on top of the story text. */
       stage.addEventListener('pointerdown', event => {
+        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"]')) return;
         if (event.pointerType !== 'touch') return;
         if (smoothScrollFrame < PANORAMA_FADE_END_FRAME) return;
         if (!holdEnvLoaded || holdEnvBlend <= .02) return;
@@ -6869,6 +6880,10 @@ void main(){
         lastUserTravelledPx = travelled;
         targetStoryProgress = raw;
         targetScrollFrame = calculateTargetFrame(raw);
+
+        if (moodClipReverseSuppressed && raw < MOOD_REVERSE_ESCAPE_MIN_PROGRESS) {
+          moodClipReverseSuppressed = false;
+        }
         /* Keep the hero on the original physical-distance clock. That is the motion rate
            that produced the overshoot the user liked. Unlike the old version, its authored
            progress now has a second stage instead of clamping at the halfway point. */
@@ -7176,6 +7191,15 @@ void main(){
       window.addEventListener('wheel', event => {
         if (event.ctrlKey || !scrollingReady) return;
 
+        /* The one-gesture mood escape is valid only while we are still close to the
+           thumbnail -> semi-panorama handoff. Once the user has genuinely travelled up
+           into the story, clear it permanently so a later top-to-bottom scroll cannot
+           accidentally jump straight back to the mood section. */
+        const wheelTimelineProgress = calculateRawScrollProgress();
+        if (moodClipReverseSuppressed && wheelTimelineProgress < MOOD_REVERSE_ESCAPE_MIN_PROGRESS) {
+          moodClipReverseSuppressed = false;
+        }
+
         if (panoramaReturnActive) {
           event.preventDefault();
           return;
@@ -7187,28 +7211,28 @@ void main(){
         if (moodClipActive) {
           const desiredMoodDirection = event.deltaY >= 0 ? 1 : -1;
 
-          /* Important UX escape: the user may barely start returning upward from the
-             animated-thumbnail section, then immediately change their mind before the
-             Lottie is visible. Do not make that downward gesture fight a locked reverse
-             clip. Cancel the reverse clip at once, restore the completed thumbnail state,
-             and let THIS SAME wheel event continue downward normally. */
-          if (moodClipDirection < 0 && desiredMoodDirection > 0) {
-            moodClipProgress = 1;
-            moodClipDirection = 1;
-            moodClipActive = false;
-            moodClipComplete = true;
-            moodClipReverseSuppressed = false;
-            updateMoodSectionMotion();
-            syncScrollTrackingAfterProgrammaticMove();
-            return;
-          }
-
+          /* The final mood/thumbnail transition is visual-only while the physical page is
+             parked at its boundary. Therefore an opposite wheel gesture must reverse THIS
+             SAME clip immediately; relying on native page scrolling would fail at the bottom
+             of the document because there is nowhere farther down for the browser to move. */
           event.preventDefault();
           if (desiredMoodDirection !== moodClipDirection) {
             moodClipDirection = desiredMoodDirection;
             moodClipComplete = false;
             moodClipReverseSuppressed = false;
           }
+          return;
+        }
+
+        /* If the upward mood clip has already reached its semi-panorama endpoint, the page
+           is still physically parked at the thumbnail boundary. The very first downward
+           wheel gesture must therefore replay the mood clip forward rather than waiting for
+           an additional upward scroll to move the page off that boundary. */
+        if (event.deltaY > 0 && !moodClipComplete && moodClipReverseSuppressed &&
+            moodClipProgress <= .001 && wheelTimelineProgress >= MOOD_REVERSE_ESCAPE_MIN_PROGRESS) {
+          event.preventDefault();
+          moodClipReverseSuppressed = false;
+          startMoodClip(1);
           return;
         }
 
