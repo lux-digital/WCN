@@ -3555,14 +3555,14 @@
 
       const MOOD_CHANGE_EASE = 'cubic-bezier(.45,0,.55,1)';
 
-      /* Bottom mood backgrounds are not full panoramas. Give them only a restrained
-         camera-like drift: a small overscale protects the edges while the image/video
-         slides a few pixels opposite the mouse. This works for MP4 and static images,
-         and will keep working when the remaining mood stills are replaced by MP4s. */
-      const MOOD_BG_PARALLAX_SCALE = 1.075;
-      const MOOD_BG_PARALLAX_X = 0.012;
-      const MOOD_BG_PARALLAX_Y = 0.009;
-      const MOOD_BG_PARALLAX_EASE = 4.2;
+      /* Dramatic camera-like parallax for the animated-thumbnail backgrounds.
+         The media is deliberately overscaled so the scene can travel much farther
+         without ever exposing an edge. The movement stays opposite the pointer so it
+         feels like looking around a much larger environment behind the product. */
+      const MOOD_BG_PARALLAX_SCALE = 1.22;
+      const MOOD_BG_PARALLAX_X = 0.070;
+      const MOOD_BG_PARALLAX_Y = 0.050;
+      const MOOD_BG_PARALLAX_EASE = 3.15;
 
       /* Panorama bird flocks: tweak these controls as needed. Higher layers stay smaller
          and always travel slower than the nearer ones, even when master speed changes. */
