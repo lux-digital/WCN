@@ -3267,7 +3267,17 @@
         STORY_SEQUENCE_LOTTIE = 'square.json', STORY_SEQUENCE_FRAME_COUNT = 369;
 
       function isMobilePanoramaDevice() {
-        return window.matchMedia('(pointer: coarse)').matches || Math.min(window.innerWidth, window.innerHeight) <= 900;
+        /* Do not classify desktop by viewport HEIGHT. Elementor/iframes often have a
+           desktop viewport shorter than 900px, which previously forced the mobile build.
+           Prefer actual mobile/touch-device signals instead. */
+        const ua = navigator.userAgent || '';
+        const uaDataMobile = !!(navigator.userAgentData && navigator.userAgentData.mobile);
+        const mobileUA = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini|Mobile/i.test(ua);
+        const iPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        const coarseNoHover = window.matchMedia('(pointer: coarse) and (hover: none)').matches;
+        const narrowTouchViewport = window.innerWidth <= 900 && navigator.maxTouchPoints > 0;
+
+        return uaDataMobile || mobileUA || iPadOS || (coarseNoHover && narrowTouchViewport);
       }
 
       const MOBILE_RUNTIME = isMobilePanoramaDevice();
