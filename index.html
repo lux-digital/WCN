@@ -121,7 +121,7 @@
 
 
 
-   narrower Elementor/container column. JS also aligns its left edge. */
+   narrower Elementor/container column. JS also aligns its left edge. */
 
 
 
@@ -137,11 +137,10 @@
 
     #stage {
       position: sticky;
-      /* Keep the sticky anchor at the real viewport top. The old top:-3px correction
-         did not take effect until the first few pixels of scrolling, which exposed a
-         thin black seam above the opening panorama at page load. */
-      top: 0;
-      transform: translateY(-3px);
+      /* The stage now starts at the true top of #experience. Literal NBSP indentation
+         before this element previously created an anonymous line box above it. */
+      top: -3px;
+      transform: none;
       width: 100vw;
       height: calc(100vh + 6px);
       height: calc(100dvh + 6px);
@@ -1089,7 +1088,7 @@
 
     /* This group is always mathematically centered. Its transition changes opacity only,
 
-   so the left:50% / translateX(-50%) centering can never be overwritten. */
+   so the left:50% / translateX(-50%) centering can never be overwritten. */
 
     #woodViewerCluster {
       position: absolute;
@@ -2953,11 +2952,11 @@
 
 
 
-      <div id="stage">
+      <div id="stage">
 
 
 
-          <canvas id="sceneCanvas"></canvas>
+          <canvas id="sceneCanvas"></canvas>
       <canvas id="holdEnvCanvas"></canvas>
       <div id="holdFlareLayer" aria-hidden="true">
         <div id="holdSunBloom" class="holdFlareEl"></div>
@@ -2995,12 +2994,12 @@
 
 
 
-          <div id="panorama">
+          <div id="panorama">
         <div id="flareLayer">
 
 
 
-                <div id="sunBloom"></div>
+                <div id="sunBloom"></div>
           <div id="sunStreak"></div>
           <div id="sunCore"></div>
 
@@ -3013,65 +3012,65 @@
 
 
 
-                <div class="flareGhost" id="flareGhost1"><span class="flareGhostShape"></span></div>
+                <div class="flareGhost" id="flareGhost1"><span class="flareGhostShape"></span></div>
           <div class="flareGhost" id="flareGhost2"></div>
 
 
 
-                <div class="flareGhost" id="flareGhost3"><span class="flareGhostShape"></span></div>
+                <div class="flareGhost" id="flareGhost3"><span class="flareGhostShape"></span></div>
           <div class="flareGhost" id="flareGhost4"></div>
 
 
 
-             
+             
         </div>
       </div>
 
 
 
-          <div id="heroText">
+          <div id="heroText">
         <div id="heroTextInner">
 
 
 
-                <div class="eyebrow" id="eyebrow">LUX ARCHITECTURAL PRODUCTS</div>
+                <div class="eyebrow" id="eyebrow">LUX ARCHITECTURAL PRODUCTS</div>
 
 
 
-                <h1 class="hero-title" id="heroTitle">West Coast<br>Natural Series</h1>
+                <h1 class="hero-title" id="heroTitle">West Coast<br>Natural Series</h1>
 
 
 
-                <div class="hero-copy" id="heroCopy">
+                <div class="hero-copy" id="heroCopy">
 
 
 
-                    <p>LUX Architectural Products is proud to present our newest colour series,<br>the West Coast
+                    <p>LUX Architectural Products is proud to present our newest colour series,<br>the West Coast
               Natural Series.</p>
 
 
 
-                    <p>The LUX West Coast Natural Series is a collection of beautiful and intricately<br>designed siding
+                    <p>The LUX West Coast Natural Series is a collection of beautiful and intricately<br>designed siding
               options that are perfect for homeowners, builders, and architects<br>looking to bring the natural beauty
               of the West Coast forests into their projects.</p>
 
 
 
-                    <p>This series is inspired by the lush and varied landscapes of the<br>Pacific North West and
+                    <p>This series is inspired by the lush and varied landscapes of the<br>Pacific North West and
               designed to mimic the look of natural wood, but with<br>all the benefits of modern metal siding.</p>
 
 
 
-                  </div>
+                  </div>
 
 
 
-              </div>
+              </div>
       </div>
 
 
 
-         
+         
       <div id="flareFrontLayer">
         <div id="flareGhostFront2"><span class="flareGhostShape"></span></div>
         <div id="flareGhostFront4"><span class="flareGhostShape"></span></div>
@@ -3081,7 +3080,7 @@
 
 
 
-          <div id="storyLayer">
+          <div id="storyLayer">
         <div id="storySequenceLottie" aria-hidden="true"></div>
       </div>
 
@@ -3089,34 +3088,34 @@
 
 
 
-              <video id="moodVideo" muted loop playsinline autoplay preload="metadata">
+              <video id="moodVideo" muted loop playsinline autoplay preload="metadata">
 
 
 
-                 
+                 
           <source src="Mood/coastal%20sand.mp4" type="video/mp4">
 
 
 
-               
+               
         </video>
 
         <img id="moodImage" src="Mood/Tobacco.jpg" alt="" aria-hidden="true">
 
 
 
-              <div id="moodVideoShade"></div>
+              <div id="moodVideoShade"></div>
         <div id="moodBackgroundAdjust" aria-hidden="true"></div>
 
         <div id="moodWhiteFade"></div>
 
 
 
-              <div id="moodBottomGradient"></div>
+              <div id="moodBottomGradient"></div>
 
 
 
-              <div id="moodContent">
+              <div id="moodContent">
 
           <div id="moodBackgroundControl" aria-label="Background clarity">
             <img id="moodBackgroundControlIcon" src="image.png" alt="" aria-hidden="true">
@@ -3125,101 +3124,101 @@
             </div>
           </div>
 
-                  <div id="woodViewerCluster">
+                  <div id="woodViewerCluster">
 
 
 
-                      <button class="woodNavButton" id="woodPrevButton" type="button" aria-label="Previous woodgrain">
+                      <button class="woodNavButton" id="woodPrevButton" type="button" aria-label="Previous woodgrain">
 
 
 
-                          <span class="woodNavIcon woodNavIconPrev"></span>
+                          <span class="woodNavIcon woodNavIconPrev"></span>
 
 
 
-                        </button>
+                        </button>
 
 
 
-                      <div id="woodViewerShell">
+                      <div id="woodViewerShell">
 
 
 
-                          <div id="woodViewerStrip"></div>
+                          <div id="woodViewerStrip"></div>
 
                 <div id="woodViewerStripIncoming" aria-hidden="true"></div>
                 <div id="woodViewerOverlay" aria-hidden="true"></div>
 
 
 
-                          <div id="woodDotButtons" aria-label="Woodgrain options"></div>
+                          <div id="woodDotButtons" aria-label="Woodgrain options"></div>
 
 
 
-                        </div>
+                        </div>
 
                 <div id="activeProductName" aria-live="polite">LUX LAP</div>
 
 
 
-                      <button class="woodNavButton" id="woodNextButton" type="button" aria-label="Next woodgrain">
+                      <button class="woodNavButton" id="woodNextButton" type="button" aria-label="Next woodgrain">
 
 
 
-                          <span class="woodNavIcon woodNavIconNext"></span>
+                          <span class="woodNavIcon woodNavIconNext"></span>
 
 
 
-                        </button>
+                        </button>
 
 
 
-                    </div>
+                    </div>
 
 
 
-                  <div id="moodFooter">
+                  <div id="moodFooter">
 
 
 
-                      <div id="moodLabelBlock">
+                      <div id="moodLabelBlock">
 
 
 
-                          <div id="moodSeriesName">COASTAL SAND</div>
+                          <div id="moodSeriesName">COASTAL SAND</div>
 
 
 
-                          <div id="moodSeriesSubhead">AVAILABLE IN THE FOLLOWING PRODUCTS</div>
+                          <div id="moodSeriesSubhead">AVAILABLE IN THE FOLLOWING PRODUCTS</div>
 
 
 
-                        </div>
+                        </div>
 
 
 
-                      <div id="productThumbButtons" aria-label="Available products"></div>
+                      <div id="productThumbButtons" aria-label="Available products"></div>
 
 
 
-                    </div>
+                    </div>
 
 
 
-                </div>
+                </div>
 
 
 
-           
+           
       </div>
 
 
 
-          <div id="scrollIndicator"></div>
+          <div id="scrollIndicator"></div>
 
 
 
-       
+       
     </div>
 
 
