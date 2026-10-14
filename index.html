@@ -403,6 +403,210 @@
 
 
 
+    /* Semi-panorama lens flare. This intentionally mirrors the stronger optical
+       language of the original 360 flare: visible bloom, streak, starburst and
+       polygonal lens ghosts. It sits above the entire hold WebGL canvas (including
+       the high-resolution insert) and below the hotspot UI. */
+    #holdFlareLayer {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0;
+    }
+
+    .holdFlareEl,
+    .holdFlareGhost {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      transform-origin: 50% 50%;
+      will-change: left, top, opacity, transform;
+    }
+
+    #holdSunBloom {
+      width: 500px;
+      height: 500px;
+      margin-left: -250px;
+      margin-top: -250px;
+      border-radius: 50%;
+      background: radial-gradient(circle,
+        rgba(255,255,255,.96) 0%,
+        rgba(255,252,225,.88) 4%,
+        rgba(255,231,157,.68) 11%,
+        rgba(255,200,91,.42) 22%,
+        rgba(255,167,55,.22) 35%,
+        rgba(255,136,39,.09) 49%,
+        rgba(255,120,28,.035) 61%,
+        transparent 76%);
+      filter: blur(4px) brightness(1.55);
+      opacity: 0;
+    }
+
+    #holdSunCore {
+      width: 88px;
+      height: 88px;
+      margin-left: -44px;
+      margin-top: -44px;
+      border-radius: 50%;
+      background: radial-gradient(circle,
+        rgba(255,255,255,1) 0%,
+        rgba(255,255,243,.97) 10%,
+        rgba(255,242,182,.88) 24%,
+        rgba(255,203,102,.48) 47%,
+        rgba(255,163,61,.14) 68%,
+        transparent 84%);
+      filter: blur(1px) brightness(1.65);
+      opacity: 0;
+    }
+
+    #holdSunStreak {
+      width: 980px;
+      height: 34px;
+      margin-left: -490px;
+      margin-top: -17px;
+      background: radial-gradient(ellipse,
+        rgba(255,253,232,.90) 0%,
+        rgba(255,224,153,.48) 18%,
+        rgba(255,183,86,.17) 42%,
+        transparent 74%);
+      filter: blur(4px) brightness(1.62);
+      opacity: 0;
+    }
+
+    #holdSunRays {
+      position: absolute;
+      width: 1080px;
+      height: 1080px;
+      margin-left: -540px;
+      margin-top: -540px;
+      opacity: 0;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      transform-origin: 50% 50%;
+      will-change: left, top, opacity, transform;
+    }
+
+    .holdSunRay {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 47%;
+      height: 1.7px;
+      transform-origin: 0 50%;
+      background: linear-gradient(90deg,
+        rgba(255,255,244,.98) 0%,
+        rgba(255,232,168,.86) 7%,
+        rgba(255,194,91,.48) 25%,
+        rgba(255,168,64,.15) 54%,
+        transparent 91%);
+      filter: blur(.28px) drop-shadow(0 0 3px rgba(255,194,88,.50));
+    }
+
+    .holdSunRay:nth-child(1){ transform:rotate(0deg); }
+    .holdSunRay:nth-child(2){ transform:rotate(31deg); width:39%; opacity:.76; }
+    .holdSunRay:nth-child(3){ transform:rotate(67deg); width:45%; opacity:.92; }
+    .holdSunRay:nth-child(4){ transform:rotate(101deg); width:35%; opacity:.66; }
+    .holdSunRay:nth-child(5){ transform:rotate(137deg); width:43%; opacity:.82; }
+    .holdSunRay:nth-child(6){ transform:rotate(168deg); width:36%; opacity:.68; }
+    .holdSunRay:nth-child(7){ transform:rotate(214deg); width:42%; opacity:.80; }
+    .holdSunRay:nth-child(8){ transform:rotate(286deg); width:38%; opacity:.72; }
+
+    .holdFlareGhost {
+      opacity: 0;
+      overflow: visible;
+    }
+
+    .holdFlareGhostShape {
+      position: absolute;
+      inset: 0;
+      display: block;
+      pointer-events: none;
+      -webkit-backdrop-filter: blur(2px) saturate(1.08);
+      backdrop-filter: blur(2px) saturate(1.08);
+    }
+
+    #holdFlareGhost1 {
+      width: 96px;
+      height: 96px;
+      margin-left: -48px;
+      margin-top: -48px;
+      filter: blur(2.2px) brightness(1.18);
+    }
+    #holdFlareGhost1 .holdFlareGhostShape {
+      clip-path: polygon(50% 0%,88% 19%,100% 58%,74% 94%,31% 100%,4% 67%,10% 24%);
+      background: radial-gradient(circle at 50% 50%,
+        transparent 0%, transparent 42%,
+        rgba(255,250,225,.82) 60%,
+        rgba(255,207,108,.52) 76%,
+        rgba(255,150,54,.15) 88%, transparent 100%);
+      box-shadow: 0 0 22px rgba(255,218,133,.38), 0 0 42px rgba(255,174,72,.24);
+    }
+
+    #holdFlareGhost2 {
+      width: 152px;
+      height: 152px;
+      margin-left: -76px;
+      margin-top: -76px;
+      filter: blur(3.4px) brightness(1.08);
+    }
+    #holdFlareGhost2 .holdFlareGhostShape {
+      clip-path: polygon(50% 0%,85% 15%,100% 50%,85% 85%,50% 100%,15% 85%,0% 50%,15% 15%);
+      background: radial-gradient(circle at 50% 50%,
+        transparent 0%, transparent 45%,
+        rgba(255,245,207,.68) 64%,
+        rgba(255,185,82,.34) 81%,
+        rgba(214,108,39,.11) 91%, transparent 100%);
+      box-shadow: 0 0 30px rgba(255,204,104,.28), 0 0 58px rgba(255,159,67,.20);
+    }
+
+    #holdFlareGhost3 {
+      width: 72px;
+      height: 72px;
+      margin-left: -36px;
+      margin-top: -36px;
+      filter: blur(4.6px) brightness(1.02);
+    }
+    #holdFlareGhost3 .holdFlareGhostShape {
+      clip-path: polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
+      background: radial-gradient(circle at 50% 50%,
+        transparent 0%, transparent 39%,
+        rgba(255,251,229,.75) 58%,
+        rgba(255,211,120,.40) 75%,
+        rgba(255,158,56,.12) 87%, transparent 100%);
+      box-shadow: 0 0 22px rgba(255,221,142,.30), 0 0 38px rgba(255,188,82,.20);
+    }
+
+    #holdFlareGhost4 {
+      width: 194px;
+      height: 194px;
+      margin-left: -97px;
+      margin-top: -97px;
+      filter: blur(6.2px) brightness(.94);
+    }
+    #holdFlareGhost4 .holdFlareGhostShape {
+      clip-path: polygon(50% 0%,82% 10%,100% 38%,96% 70%,70% 96%,36% 100%,8% 78%,0% 45%,17% 15%);
+      background: radial-gradient(circle at 50% 50%,
+        transparent 0%, transparent 48%,
+        rgba(255,216,148,.50) 68%,
+        rgba(205,94,35,.22) 85%,
+        rgba(158,63,24,.07) 93%, transparent 100%);
+      box-shadow: 0 0 40px rgba(235,140,66,.20), 0 0 72px rgba(227,119,52,.14);
+    }
+
+    @media (max-width: 900px) {
+      #holdSunBloom { width:380px; height:380px; margin-left:-190px; margin-top:-190px; }
+      #holdSunCore { width:70px; height:70px; margin-left:-35px; margin-top:-35px; }
+      #holdSunStreak { width:720px; margin-left:-360px; }
+      #holdSunRays { width:820px; height:820px; margin-left:-410px; margin-top:-410px; }
+      #holdFlareGhost1 { transform-origin:50% 50%; }
+      #holdFlareGhost2 { width:128px; height:128px; margin-left:-64px; margin-top:-64px; }
+      #holdFlareGhost4 { width:160px; height:160px; margin-left:-80px; margin-top:-80px; }
+    }
+
     #sunBloom {
       position: absolute;
       width: 500px;
@@ -2750,6 +2954,19 @@
 
           <canvas id="sceneCanvas"></canvas>
       <canvas id="holdEnvCanvas"></canvas>
+      <div id="holdFlareLayer" aria-hidden="true">
+        <div id="holdSunBloom" class="holdFlareEl"></div>
+        <div id="holdSunStreak" class="holdFlareEl"></div>
+        <div id="holdSunCore" class="holdFlareEl"></div>
+        <div id="holdSunRays">
+          <span class="holdSunRay"></span><span class="holdSunRay"></span><span class="holdSunRay"></span><span class="holdSunRay"></span>
+          <span class="holdSunRay"></span><span class="holdSunRay"></span><span class="holdSunRay"></span><span class="holdSunRay"></span>
+        </div>
+        <div id="holdFlareGhost1" class="holdFlareGhost"><span class="holdFlareGhostShape"></span></div>
+        <div id="holdFlareGhost2" class="holdFlareGhost"><span class="holdFlareGhostShape"></span></div>
+        <div id="holdFlareGhost3" class="holdFlareGhost"><span class="holdFlareGhostShape"></span></div>
+        <div id="holdFlareGhost4" class="holdFlareGhost"><span class="holdFlareGhostShape"></span></div>
+      </div>
       <div id="holdEnvHotspots" aria-label="Woodgrain hotspots">
         <button class="holdHotspot" type="button" data-hotspot-index="0" aria-label="HEMLOCK">
           <span class="holdHotspotPulse"></span>
@@ -3205,6 +3422,8 @@
         { name: 'CHARWOOD', u: 1134.3846153846155 / HOLD_ENV_HOTSPOT_IMAGE_WIDTH, v: 428.61538461538464 / HOLD_ENV_HOTSPOT_IMAGE_HEIGHT },
         { name: 'COASTAL SAND', u: 1204.8666666666666 / HOLD_ENV_HOTSPOT_IMAGE_WIDTH, v: 465.53333333333336 / HOLD_ENV_HOTSPOT_IMAGE_HEIGHT }
       ];
+      const HOLD_ENV_SUN_IMAGE_WIDTH = 2048, HOLD_ENV_SUN_IMAGE_HEIGHT = 1152;
+      const HOLD_ENV_SUN_U = 713.2434782608696 / HOLD_ENV_SUN_IMAGE_WIDTH, HOLD_ENV_SUN_V = 525.408695652174 / HOLD_ENV_SUN_IMAGE_HEIGHT;
       const HOLD_ENV_HOTSPOT_SLOW_RADIUS_PX = 220;
       const HOLD_ENV_HOTSPOT_SLOW_STRENGTH = 0.76;
       const HOLD_ENV_HOTSPOT_RANGE_REDUCTION = 0.13;
@@ -3497,6 +3716,10 @@
 
       const flareGhost1 = $('flareGhost1'), flareGhost2 = $('flareGhost2'), flareGhost3 = $('flareGhost3'), flareGhost4 = $('flareGhost4');
       const flareGhostFront2 = $('flareGhostFront2'), flareGhostFront4 = $('flareGhostFront4');
+
+      const holdFlareLayer = $('holdFlareLayer');
+      const holdSunBloom = $('holdSunBloom'), holdSunCore = $('holdSunCore'), holdSunStreak = $('holdSunStreak'), holdSunRays = $('holdSunRays');
+      const holdFlareGhost1 = $('holdFlareGhost1'), holdFlareGhost2 = $('holdFlareGhost2'), holdFlareGhost3 = $('holdFlareGhost3'), holdFlareGhost4 = $('holdFlareGhost4');
 
 
 
@@ -7329,6 +7552,78 @@ void main(){
         holdEnvReverseFrameLock = true;
       }
 
+      function setHoldFlareGhostPosition(el, sunX, sunY, cx, cy, factor, opacity, scale, rotation = 0) {
+        if (!el) return;
+        el.style.left = `${sunX + (cx - sunX) * factor}px`;
+        el.style.top = `${sunY + (cy - sunY) * factor}px`;
+        el.style.opacity = String(opacity);
+        el.style.transform = `rotate(${rotation}deg) scale(${scale})`;
+      }
+
+      function hideHoldLensFlare() {
+        if (holdFlareLayer) holdFlareLayer.style.opacity = '0';
+        [holdSunBloom, holdSunCore, holdSunStreak, holdSunRays, holdFlareGhost1, holdFlareGhost2, holdFlareGhost3, holdFlareGhost4]
+          .forEach(el => { if (el) el.style.opacity = '0'; });
+      }
+
+      function updateHoldLensFlare() {
+        if (!holdFlareLayer || !holdEnvLoaded || !holdEnvCamera || holdEnvBlend <= .01 || holdEnvMode === 'inactive') {
+          hideHoldLensFlare();
+          return;
+        }
+
+        const sunPoint = getHoldEnvironmentLocalPoint(HOLD_ENV_SUN_U, HOLD_ENV_SUN_V);
+        if (sunPoint.clone().applyMatrix4(holdEnvCamera.matrixWorldInverse).z >= -.01) {
+          hideHoldLensFlare();
+          return;
+        }
+
+        const projected = sunPoint.clone().project(holdEnvCamera);
+        if (projected.z < -1 || projected.z > 1 || projected.x < -1.35 || projected.x > 1.35 || projected.y < -1.35 || projected.y > 1.35) {
+          hideHoldLensFlare();
+          return;
+        }
+
+        const sunX = (projected.x * .5 + .5) * viewportWidth;
+        const sunY = (-projected.y * .5 + .5) * viewportHeight;
+        const centerX = viewportWidth * .5, centerY = viewportHeight * .5;
+        const edgeX = clamp(1 - Math.abs(projected.x), 0, 1);
+        const edgeY = clamp(1 - Math.abs(projected.y), 0, 1);
+        const inside = smootherstep01(Math.min(edgeX, edgeY));
+        const growth = smootherstep01(clamp((inside - .02) / .70, 0, 1));
+        const intensity = clamp(holdEnvBlend * (.20 + growth * .80) * .90, 0, .95);
+        const axisAngle = Math.atan2(centerY - sunY, centerX - sunX) * 180 / Math.PI;
+
+        holdFlareLayer.style.opacity = '1';
+
+        [holdSunBloom, holdSunCore, holdSunStreak, holdSunRays].forEach(el => {
+          if (!el) return;
+          el.style.left = `${sunX}px`;
+          el.style.top = `${sunY}px`;
+        });
+
+        /* Deliberately stronger than the previous pass. These values are close to the
+           original 360 flare so the optical shapes are unmistakably visible. */
+        const flareStrength = clamp(.32 + intensity * .92, 0, 1.12);
+        holdSunBloom.style.opacity = String(clamp(flareStrength * .78, 0, .95));
+        holdSunCore.style.opacity = String(clamp(flareStrength * .98, 0, 1));
+        holdSunBloom.style.transform = `scale(${.52 + growth * .52})`;
+        holdSunCore.style.transform = `scale(${.72 + growth * .38})`;
+
+        holdSunStreak.style.opacity = String(clamp((.18 + growth * .62) * flareStrength, 0, .82));
+        holdSunStreak.style.transform = `rotate(${axisAngle * .055}deg) scaleX(${.34 + growth * .94}) scaleY(${.76 + growth * .30})`;
+
+        if (holdSunRays) {
+          holdSunRays.style.opacity = String(clamp(flareStrength * (.24 + growth * .76), 0, .96));
+          holdSunRays.style.transform = `rotate(${axisAngle * .025}deg) scale(${.16 + growth * 1.02})`;
+        }
+
+        setHoldFlareGhostPosition(holdFlareGhost1, sunX, sunY, centerX, centerY, .30, clamp(flareStrength * .86, 0, .92), .84 + growth * .16, axisAngle + 7);
+        setHoldFlareGhostPosition(holdFlareGhost2, sunX, sunY, centerX, centerY, .68, clamp(flareStrength * .68, 0, .80), .86 + growth * .18, axisAngle - 11);
+        setHoldFlareGhostPosition(holdFlareGhost3, sunX, sunY, centerX, centerY, 1.06, clamp(flareStrength * .52, 0, .64), .92 + growth * .16, axisAngle + 18);
+        setHoldFlareGhostPosition(holdFlareGhost4, sunX, sunY, centerX, centerY, 1.46, clamp(flareStrength * .38, 0, .48), .84 + growth * .20, axisAngle - 5);
+      }
+
       function updateHoldEnvironment(dt, nowMs = performance.now()) {
         if (!holdEnvLoaded || !holdEnvRenderer || !holdEnvCamera || !holdEnvMesh) return;
 
@@ -7508,6 +7803,9 @@ void main(){
           holdEnvCamera.rotation.y = holdEnvYaw;
           holdEnvCamera.rotation.x = holdEnvPitch;
           holdEnvRenderer.render(holdEnvScene, holdEnvCamera);
+          updateHoldLensFlare();
+        } else {
+          hideHoldLensFlare();
         }
       }
 
