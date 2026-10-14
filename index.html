@@ -137,9 +137,14 @@
 
     #stage {
       position: sticky;
-      top: -3px;
+      /* Keep the sticky anchor at the real viewport top. The old top:-3px correction
+         did not take effect until the first few pixels of scrolling, which exposed a
+         thin black seam above the opening panorama at page load. */
+      top: 0;
+      transform: translateY(-3px);
       width: 100vw;
       height: calc(100vh + 6px);
+      height: calc(100dvh + 6px);
       overflow: hidden;
       background: #000;
       /* Keep vertical page scrolling native while reserving horizontal gestures for panorama panning. */
