@@ -3950,6 +3950,7 @@
       let woodPanReleaseElapsed = 0;
       let woodPanReleaseDuration = 0;
       let woodPanReleaseStartVelocity = 34;
+      let woodViewerInteractionEnabled = false;
       const WOOD_PAN_AUTO_SPEED = 34;
       const WOOD_PAN_DRAG_SAMPLE_EASE = 0.58;
       const WOOD_PAN_DRAG_MAX_RELEASE_SPEED = 520;
@@ -4872,8 +4873,13 @@
         woodViewerCluster.style.transform = 'translateX(-50%)';
 
         woodViewerCluster.style.opacity = String(viewerOpacity);
+        /* Opacity does not disable hit testing. Keep the hidden viewer completely inert so
+           panorama drags at the top cannot be captured by the invisible thumbnail surface.
+           Re-enable only once the viewer is genuinely on screen. */
+        setWoodViewerInteractionEnabled(viewerOpacity > .72);
         if (moodBackgroundControl) {
           moodBackgroundControl.style.opacity = String(viewerOpacity);
+          moodBackgroundControl.style.pointerEvents = viewerOpacity > .72 ? 'auto' : 'none';
           moodBackgroundControl.classList.toggle('is-visible', viewerOpacity > .72);
         }
 
@@ -4881,6 +4887,26 @@
       }
 
 
+
+      function setWoodViewerInteractionEnabled(enabled) {
+        const next = !!enabled;
+        if (woodViewerCluster) woodViewerCluster.style.pointerEvents = next ? 'auto' : 'none';
+
+        if (next === woodViewerInteractionEnabled) return;
+        woodViewerInteractionEnabled = next;
+
+        /* The viewer exists throughout the whole experience, even while fully transparent.
+           Never let an opening-panorama drag leave hidden pointer-capture/drag state behind. */
+        woodPanDragging = false;
+        woodPanDragPointerId = null;
+        woodPanTouchMode = 'none';
+        woodPanReleaseActive = false;
+        woodPanReleaseElapsed = 0;
+        woodPanReleaseDuration = 0;
+        woodPanDragReleaseVelocity = WOOD_PAN_AUTO_SPEED * woodPanAutoDirection;
+        woodPanVelocity = WOOD_PAN_AUTO_SPEED * woodPanAutoDirection;
+        if (woodViewerShell) woodViewerShell.classList.remove('is-dragging');
+      }
 
       function wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
@@ -5234,8 +5260,10 @@
 
       function initWoodViewerInteraction() {
         if (!woodViewerShell) return;
+        if (woodViewerCluster) woodViewerCluster.style.pointerEvents = 'none';
 
         woodViewerShell.addEventListener('pointerdown', event => {
+          if (!woodViewerInteractionEnabled) return;
           if (event.pointerType === 'mouse' && event.button !== 0) return;
           if (event.target.closest('.woodDot, button, input, a, [role="button"]')) return;
           /* Mobile Safari is much more reliable with a direct touch path for this surface.
@@ -5340,6 +5368,7 @@
           let touchId = null, mode = 'none', startX = 0, startY = 0, lastX = 0, lastTime = 0, releaseVelocity = 0;
 
           woodViewerShell.addEventListener('touchstart', event => {
+            if (!woodViewerInteractionEnabled) return;
             if (!event.touches || event.touches.length !== 1) return;
             if (event.target.closest('.woodDot, button, input, a, [role="button"]')) return;
             const t = event.touches[0];
