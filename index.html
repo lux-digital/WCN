@@ -882,9 +882,35 @@
 
 
     #heroTextInner {
+      position: relative;
       width: min(840px, 68vw);
       margin: 0 auto;
       text-align: center;
+    }
+
+    /* The original HTML copy stays in the DOM only as a safe fallback and to preserve
+       the established mask bounds. Once opening text.json is ready, the Lottie becomes
+       the visible opening artwork. */
+    #openingTextLottie {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 158.6%;
+      height: 179.4%;
+      transform: translate(-50%, -50%);
+      transform-origin: 50% 50%;
+      pointer-events: none;
+      opacity: 0;
+      overflow: visible;
+    }
+
+    #heroText.opening-lottie-ready #openingTextLottie {
+      opacity: 1;
+    }
+
+    #heroText.opening-lottie-ready .heroLegacyText {
+      opacity: 0 !important;
+      visibility: hidden !important;
     }
 
 
@@ -2926,6 +2952,30 @@
       }
     }
 
+
+
+    /* FINAL MOOD TITLE SPACING FIX
+       Restore a deliberate gap between the woodgrain title and the product subhead.
+       Earlier mobile-polish rules used negative margins and unintentionally collapsed
+       the spacing on desktop too. */
+    #moodSeriesSubhead {
+      margin-top: 11px !important;
+      line-height: 1.08 !important;
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      #moodSeriesSubhead {
+        margin-top: 7px !important;
+        line-height: 1.05 !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #moodSeriesSubhead {
+        margin-top: 6px !important;
+      }
+    }
+
 </style>
 
 
@@ -3033,15 +3083,15 @@
 
 
 
-                <div class="eyebrow" id="eyebrow">LUX ARCHITECTURAL PRODUCTS</div>
+                <div class="eyebrow heroLegacyText" id="eyebrow">LUX ARCHITECTURAL PRODUCTS</div>
 
 
 
-                <h1 class="hero-title" id="heroTitle">West Coast<br>Natural Series</h1>
+                <h1 class="hero-title heroLegacyText" id="heroTitle">West Coast<br>Natural Series</h1>
 
 
 
-                <div class="hero-copy" id="heroCopy">
+                <div class="hero-copy heroLegacyText" id="heroCopy">
 
 
 
@@ -3062,6 +3112,8 @@
 
 
                   </div>
+
+          <div id="openingTextLottie" aria-hidden="true"></div>
 
 
 
@@ -3268,6 +3320,7 @@
 
       const PANORAMA_IMAGE = '360.jpg', PANORAMA_IMAGE_MOBILE = '360-mobile.jpg',
         SCROLL_FOLDER = 'Scroll_01', SCROLL_FOLDER_MOBILE = 'Scroll_01-mobile', MASK_FOLDER = 'Mask_01', SCROLL_FRAME_COUNT = 109,
+        OPENING_TEXT_LOTTIE = 'opening text.json',
         STORY_SEQUENCE_LOTTIE = 'square.json', STORY_SEQUENCE_FRAME_COUNT = 369;
 
       function isMobilePanoramaDevice() {
@@ -3702,6 +3755,7 @@
 
 
       const scrollIndicator = $('scrollIndicator'), loader = $('loader'), loaderProgress = $('loaderProgress');
+      const openingTextLottie = $('openingTextLottie');
       const storySequenceLottie = $('storySequenceLottie');
 
 
@@ -3825,6 +3879,7 @@
       const MOBILE_AUTOPLAY_WARMUP_FRAME = 34;
       let mobileSequenceUseTick = 0;
       let mobileSequenceDirection = 1;
+      let openingTextAnimation = null, openingTextReady = false, openingTextTotalFrames = 1, openingTextCurrentFrame = -1;
       let storySquareLottie = null, storySquareLottieReady = false, storySquareLottieTotalFrames = 1;
       let currentStorySequenceFrame = -1;
 
@@ -6775,35 +6830,78 @@ void main(){
 
 
       function animateHeroText() {
-
-
-
+        /* Opening Lottie entrance matched to the supplied After Effects graph:
+           a strong ease-out with a very fast initial rise and a long, soft approach
+           to the final value. No overshoot/bounce. The Lottie remains paused on frame 0. */
         heroText.animate([
-
-
-
-          { opacity: 0, transform: 'scale(.86)', offset: 0 }, { opacity: .04, transform: 'scale(.865)', offset: .08 },
-
-
-
-          { opacity: .18, transform: 'scale(.88)', offset: .22 }, { opacity: .48, transform: 'scale(.915)', offset: .42 },
-
-
-
-          { opacity: .76, transform: 'scale(.955)', offset: .62 }, { opacity: .92, transform: 'scale(.982)', offset: .79 },
-
-
-
-          { opacity: .985, transform: 'scale(.996)', offset: .94 }, { opacity: 1, transform: 'scale(1)', offset: 1 }
-
-
-
-        ], { duration: 6000, delay: 700, easing: 'cubic-bezier(.05,.78,.05,1)', fill: 'forwards' });
-
-
-
+          { opacity: 0,    transform: 'scale(.20)',  offset: 0 },
+          { opacity: .10,  transform: 'scale(.43)',  offset: .035 },
+          { opacity: .20,  transform: 'scale(.57)',  offset: .075 },
+          { opacity: .33,  transform: 'scale(.70)',  offset: .13 },
+          { opacity: .48,  transform: 'scale(.81)',  offset: .21 },
+          { opacity: .64,  transform: 'scale(.89)',  offset: .31 },
+          { opacity: .79,  transform: 'scale(.945)', offset: .44 },
+          { opacity: .90,  transform: 'scale(.977)', offset: .59 },
+          { opacity: .97,  transform: 'scale(.993)', offset: .76 },
+          { opacity: 1,    transform: 'scale(.999)', offset: .91 },
+          { opacity: 1,    transform: 'scale(1)',    offset: 1 }
+        ], {
+          duration: 3600,
+          easing: 'linear',
+          fill: 'forwards'
+        });
       }
 
+      async function loadOpeningTextLottie() {
+        if (openingTextAnimation || typeof lottie === 'undefined') return;
+
+        await new Promise(resolve => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+
+          openingTextAnimation = lottie.loadAnimation({
+            container: openingTextLottie,
+            renderer: 'svg',
+            loop: false,
+            autoplay: false,
+            path: OPENING_TEXT_LOTTIE,
+            rendererSettings: { preserveAspectRatio: 'xMidYMid meet' }
+          });
+
+          openingTextAnimation.addEventListener('DOMLoaded', () => {
+            openingTextTotalFrames = Math.max(1, Number(openingTextAnimation.totalFrames) || 1);
+            openingTextReady = true;
+            openingTextCurrentFrame = 0;
+            openingTextAnimation.goToAndStop(0, true);
+            heroText.classList.add('opening-lottie-ready');
+            buildTextSnapshot();
+            finish();
+          });
+
+          openingTextAnimation.addEventListener('data_failed', () => {
+            console.error(`Could not load ${OPENING_TEXT_LOTTIE}. Confirm it is in the same folder as this page.`);
+            finish();
+          });
+
+          setTimeout(finish, 8000);
+        });
+      }
+
+      function updateOpeningTextLottie() {
+        if (!openingTextReady || !openingTextAnimation) return;
+        /* Scrub the full opening-text animation across the user's manual Scroll_01 run.
+           By the time the authored background autoplay begins at frame 52, the opening
+           Lottie has reached its final frame. Reverse scrolling naturally scrubs it back. */
+        const progress = clamp(smoothScrollFrame / BACKGROUND_AUTOPLAY_START_FRAME, 0, 1);
+        const frame = progress * Math.max(0, openingTextTotalFrames - 1);
+        if (Math.abs(frame - openingTextCurrentFrame) < .02) return;
+        openingTextCurrentFrame = frame;
+        openingTextAnimation.goToAndStop(frame, true);
+      }
 
 
       function initializeLottie() {
@@ -7191,6 +7289,7 @@ void main(){
 
 
         const rects = [eyebrowElement, titleElement, copyElement].map(el => el.getBoundingClientRect());
+        if (openingTextReady && openingTextLottie) rects.push(openingTextLottie.getBoundingClientRect());
         const titleRect = titleElement.getBoundingClientRect();
 
         /* The title is transform-scaled during scroll. The old foreground-mask crop was
@@ -8189,7 +8288,7 @@ void main(){
 
 
 
-        updatePanoramaOpacity(); updateHeroScrollTypography(); updateTextMode(); updateStoryTextMotion(); updateMoodSectionMotion();
+        updatePanoramaOpacity(); updateHeroScrollTypography(); updateOpeningTextLottie(); updateTextMode(); updateStoryTextMotion(); updateMoodSectionMotion();
 
 
 
@@ -8816,16 +8915,17 @@ void main(){
 
 
           const scrollPromise = loadScrollAssets();
+          const openingTextPromise = loadOpeningTextLottie().catch(error => console.warn('[West Coast Naturals] Opening text Lottie preload failed.', error));
           loadStorySequenceAssets().catch(error => console.warn('[West Coast Naturals] Story sequence preload failed.', error));
 
           await initPanorama();
 
           if (MOBILE_RUNTIME) {
-            await scrollPromise;
+            await Promise.all([scrollPromise, openingTextPromise]);
             loader.classList.add('hidden'); animateHeroText(); initializeLottie();
             initHoldEnvironment().catch(error => console.warn('[West Coast Naturals] Mobile hold environment preload failed.', error));
           } else {
-            await initHoldEnvironment();
+            await Promise.all([initHoldEnvironment(), openingTextPromise]);
             loader.classList.add('hidden'); animateHeroText(); initializeLottie();
             await scrollPromise;
           }
@@ -8859,7 +8959,7 @@ void main(){
 
 
 
-          buildTextSnapshot(); updateHeroScrollTypography(true); renderFrame(0); renderPanorama(); updateStoryTextMotion(); updateMoodSectionMotion();
+          buildTextSnapshot(); updateHeroScrollTypography(true); updateOpeningTextLottie(); renderFrame(0); renderPanorama(); updateStoryTextMotion(); updateMoodSectionMotion();
           updateHoldEnvironment(1 / 60);
           updateHoldHotspots(1 / 60);
 
