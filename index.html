@@ -1051,7 +1051,15 @@
 
 
 
-    #moodVideo {
+    #moodVideo,
+    #moodVideoTobacco,
+    #moodVideoCharwood,
+    #moodVideoHemlock,
+    #moodVideoHeartwood,
+    #moodVideoFawn,
+    #moodVideoHickory,
+    #moodVideoIronwood,
+    #moodVideoMahogany {
       position: absolute;
       inset: 0;
       z-index: 22;
@@ -2325,6 +2333,14 @@
     /* Subtle mouse movement for all bottom-section mood backgrounds. The transform is
        updated in JS; the permanent overscale gives enough bleed to keep every edge covered. */
     #moodVideo,
+    #moodVideoTobacco,
+    #moodVideoCharwood,
+    #moodVideoHemlock,
+    #moodVideoHeartwood,
+    #moodVideoFawn,
+    #moodVideoHickory,
+    #moodVideoIronwood,
+    #moodVideoMahogany,
     #moodImage {
       transform-origin: 50% 50%;
       transform: translate3d(0,0,0) scale(1.075);
@@ -2976,7 +2992,444 @@
       }
     }
 
-</style>
+
+    /* =========================================================
+       AUDIO LOTTIE — opening hero -> persistent top-center control
+       The opening position is measured against the rendered opening SVG;
+       --volume-opening-top serves as a fallback until the artwork has loaded.
+       The docked icon has no dark circular plate.
+       This overlay is independent of the hero mask and scroll text.
+       ========================================================= */
+    #volumeControl {
+      --volume-opening-top: 60%;
+      position: absolute;
+      left: 50%;
+      top: var(--volume-opening-top);
+      z-index: 80;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: min(176px, 43vw);
+      transform: translate3d(-50%, 0, 0) scale(1);
+      transform-origin: 50% 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition:
+        opacity .36s cubic-bezier(.22, 1, .36, 1),
+        transform .42s cubic-bezier(.22, 1, .36, 1);
+      will-change: opacity, transform;
+    }
+    #volumeControl.is-ready {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+    #volumeControl.is-moving {
+      opacity: 0;
+      transform: translate3d(-50%, 0, 0) scale(.24);
+      pointer-events: none;
+    }
+    #volumeControl.is-docked {
+      top: max(9px, env(safe-area-inset-top));
+    }
+    #volumeButton {
+      -webkit-appearance: none;
+      appearance: none;
+      display: grid;
+      place-items: center;
+      width: 58px;
+      height: 58px;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: 0 !important;
+      border-radius: 50%;
+      background: transparent !important;
+      box-shadow: none !important;
+      color: white;
+      cursor: pointer;
+      touch-action: manipulation;
+      position: relative;
+      transform-origin: center;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
+    }
+    #volumeControl.is-docked #volumeButton {
+      width: 58px;
+      height: 58px;
+      background: transparent !important;
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+      box-shadow: none !important;
+      filter: none !important;
+    }
+    #volumeButton:focus-visible {
+      outline: 2px solid white;
+      outline-offset: 4px;
+    }
+    #volumeLottie {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #volumeLottie svg {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      pointer-events: none;
+    }
+    /* A functional icon remains if volume.json has not yet been supplied. */
+    #volumeFallbackIcon {
+      width: 42%;
+      height: 42%;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      color: #fff;
+    }
+    #volumeFallbackIcon svg { width: 100%; height: 100%; display: block; }
+    #volumeControl.has-lottie #volumeFallbackIcon { display: none; }
+    #volumeSliderRow {
+      width: 100%;
+      height: 26px;
+      max-height: 0;
+      opacity: 0;
+      transform: translate3d(0, -6px, 0) scale(.94);
+      pointer-events: none;
+      /* NEVER clip: range thumbs and their shadows exceed the 4px track. */
+      overflow: visible;
+      transition:
+        opacity .82s cubic-bezier(.22,1,.36,1),
+        transform .50s cubic-bezier(.22,1,.36,1),
+        max-height .46s cubic-bezier(.22,1,.36,1);
+    }
+    #volumeControl.is-active #volumeSliderRow {
+      max-height: 32px;
+      opacity: .27;
+      transform: translate3d(0, 0, 0) scale(1);
+      pointer-events: auto;
+    }
+    /* Only approaching the SLIDER, not clicking/focusing the icon, reveals it.
+       An input retains focus after dragging, so :focus-within is intentionally not
+       used: mouseout must dim immediately at the same existing .82s easing. */
+    @media (hover: hover) and (pointer: fine) {
+      #volumeControl.is-active #volumeSliderRow:hover { opacity: 1; }
+    }
+    #volumeControl.is-active #volumeSliderRow.is-keyboard-focus,
+    #volumeControl.is-active #volumeSliderRow.is-dragging { opacity: 1; }
+    #volumeSlider {
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+      width: 100%;
+      /* A real hit lane centers the thumb without clipping its shadow. */
+      height: 26px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: linear-gradient(rgba(255,255,255,.52), rgba(255,255,255,.52)) center / 100% 4px no-repeat;
+      box-shadow: none;
+      outline: none;
+      cursor: pointer;
+    }
+    #volumeSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border: 0;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.30);
+      cursor: pointer;
+    }
+    #volumeSlider::-moz-range-thumb {
+      width: 15px;
+      height: 15px;
+      border: 0;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.30);
+      cursor: pointer;
+    }
+    /* The background-clarity slider is now physically inside the woodgrain thumbnail,
+       separate from the docked audio control. No top-right relocation is needed. */
+    @media (max-width: 800px) {
+      #volumeControl {
+        --volume-opening-top: 60%;
+        width: min(138px, 40vw);
+      }
+      #volumeButton { width: 46px; height: 46px; }
+      #volumeControl.is-docked #volumeButton { width: 46px; height: 46px; }
+      #volumeSliderRow { height: 28px; }
+      #volumeSlider {
+        height: 28px;
+        margin: 0;
+        background: linear-gradient(rgba(255,255,255,.52), rgba(255,255,255,.52)) center / 100% 3px no-repeat;
+        box-shadow: none;
+        touch-action: none;
+      }
+      #volumeSlider::-webkit-slider-thumb { width: 13px; height: 13px; }
+      #volumeSlider::-moz-range-thumb { width: 13px; height: 13px; }
+    }
+    @media (max-width: 800px) and (orientation: landscape) {
+      #volumeControl { --volume-opening-top: 59%; }
+      #volumeControl.is-docked { top: max(2px, env(safe-area-inset-top)); }
+    }
+
+    /* =========================================================
+       VOLUME POLISH + RELOCATED WOODGRAIN CLARITY CONTROL
+       ========================================================= */
+    #volumeButton::before {
+      content: "";
+      position: absolute;
+      inset: 1px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0);
+      background: radial-gradient(circle, rgba(255,255,255,.11) 0%, rgba(255,255,255,.025) 42%, transparent 72%);
+      opacity: 0;
+      transform: scale(.78);
+      pointer-events: none;
+      transition: opacity .42s cubic-bezier(.22,1,.36,1),
+                  transform .58s cubic-bezier(.22,1,.36,1),
+                  border-color .38s ease;
+    }
+    #volumeLottie,
+    #volumeFallbackIcon {
+      transition: transform .58s cubic-bezier(.22,1,.36,1),
+                  filter .48s ease;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      #volumeButton:hover::before,
+      #volumeButton:focus-visible::before {
+        opacity: .95;
+        transform: scale(1.19);
+        border-color: rgba(255,255,255,.20);
+      }
+      #volumeButton:hover #volumeLottie,
+      #volumeButton:hover #volumeFallbackIcon,
+      #volumeButton:focus-visible #volumeLottie,
+      #volumeButton:focus-visible #volumeFallbackIcon {
+        transform: translate3d(0,-3px,0) scale(1.14);
+        filter: brightness(1.18) drop-shadow(0 0 10px rgba(255,255,255,.45));
+      }
+    }
+    #volumeButton:active #volumeLottie,
+    #volumeButton:active #volumeFallbackIcon {
+      transform: scale(.92);
+      transition-duration: .14s;
+    }
+    #volumeButton:focus-visible::before {
+      opacity: .9;
+      transform: scale(1.17);
+      border-color: rgba(255,255,255,.28);
+    }
+    #volumeButton:focus-visible #volumeLottie,
+    #volumeButton:focus-visible #volumeFallbackIcon {
+      filter: brightness(1.18) drop-shadow(0 0 10px rgba(255,255,255,.42));
+    }
+
+    /* Position inside the moving woodgrain strip's STATIC outer shell, not the scrolling
+       texture. This slider therefore remains centered even as the texture pans. */
+    #woodViewerShell #moodBackgroundControl {
+      position: absolute !important;
+      left: 50% !important;
+      right: auto !important;
+      top: auto !important;
+      bottom: clamp(49px, 7.2%, 66px) !important;
+      z-index: 10 !important;
+      width: min(171px, 46%) !important;
+      max-width: 171px !important;
+      transform: translateX(-50%) !important;
+      gap: 0 !important;
+      background: transparent !important;
+      transition: opacity .36s ease-in-out !important;
+    }
+    #woodViewerShell #moodBackgroundControlIcon {
+      width: 30px !important;
+      height: 30px !important;
+      margin: 0 !important;
+      object-fit: contain;
+    }
+    #woodViewerShell #moodBackgroundSliderRow {
+      width: 100% !important;
+      height: 24px !important;
+      min-height: 24px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      gap: 0 !important;
+    }
+    #woodViewerShell #moodBackgroundSlider {
+      width: 100% !important;
+      height: 24px !important;
+      min-height: 24px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      background: linear-gradient(rgba(255,255,255,.52),rgba(255,255,255,.52)) center / 100% 3px no-repeat !important;
+      box-shadow: none !important;
+      touch-action: none !important;
+    }
+    #woodViewerShell #moodBackgroundSlider::-webkit-slider-thumb {
+      width: 13px !important;
+      height: 13px !important;
+    }
+    #woodViewerShell #moodBackgroundSlider::-moz-range-thumb {
+      width: 13px !important;
+      height: 13px !important;
+    }
+    /* Quiet resting presentation; hovering the small icon or either slider surface
+       restores contrast with a relaxed fade. Keep the container opacity free for
+       the timeline reveal and the nine-dot title collision rule. */
+    #woodViewerShell #moodBackgroundControlIcon,
+    #woodViewerShell #moodBackgroundSliderRow {
+      opacity: .27;
+      transition: opacity .82s cubic-bezier(.22,1,.36,1) !important;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      #woodViewerShell #moodBackgroundControl:hover #moodBackgroundControlIcon,
+      #woodViewerShell #moodBackgroundControl:hover #moodBackgroundSliderRow {
+        opacity: 1;
+      }
+    }
+    /* Keyboard focus and active touch dragging receive the same affordance,
+       without leaving the control bright after a mouse/touch drag completes. */
+    #woodViewerShell #moodBackgroundControl.is-keyboard-focus #moodBackgroundControlIcon,
+    #woodViewerShell #moodBackgroundControl.is-keyboard-focus #moodBackgroundSliderRow,
+    #woodViewerShell #moodBackgroundControl.is-dragging #moodBackgroundControlIcon,
+    #woodViewerShell #moodBackgroundControl.is-dragging #moodBackgroundSliderRow {
+      opacity: 1;
+    }
+    /* Let the automatic-clarity completion pulse shine through the resting low
+       opacity; it drops back automatically without influencing hover timing. */
+    #woodViewerShell #moodBackgroundControl:has(#moodBackgroundSlider.is-pulsing) #moodBackgroundSliderRow {
+      opacity: .9;
+    }
+
+    /* A woodgrain title occupies exactly this lane when a dot is hovered or keyboard
+       focused. Hide the slider (and its hitbox) while that overstate is active. */
+    #woodViewerShell:has(#woodDotButtons .woodDot:hover) #moodBackgroundControl,
+    #woodViewerShell:has(#woodDotButtons .woodDot:focus-visible) #moodBackgroundControl {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    @media (hover: none) and (pointer: coarse) {
+      #woodViewerShell #moodBackgroundControl {
+        bottom: clamp(38px, 6.8%, 54px) !important;
+        width: min(132px, 38%) !important;
+        max-width: 132px !important;
+      }
+      #woodViewerShell #moodBackgroundControlIcon {
+        width: 23px !important;
+        height: 23px !important;
+        margin: 0 0 -5px !important;
+      }
+      #woodViewerShell #moodBackgroundSliderRow {
+        height: 28px !important;
+        min-height: 28px !important;
+        margin-top: -3px !important;
+      }
+      #woodViewerShell #moodBackgroundSlider {
+        height: 28px !important;
+        min-height: 28px !important;
+      }
+      #woodViewerShell #moodBackgroundSlider::-webkit-slider-thumb {
+        width: 12px !important;
+        height: 12px !important;
+      }
+      #woodViewerShell #moodBackgroundSlider::-moz-range-thumb {
+        width: 12px !important;
+        height: 12px !important;
+      }
+    }
+
+    /* Temporarily hide the changing product-profile caption immediately beneath
+       the large animated thumbnail. The JS is retained for easy re-enabling. */
+    #activeProductName { display: none !important; }
+
+    /* =========================================================
+       ALL-VIDEO MOOD POLISH
+       - True rounded ends on both native slider tracks (not square CSS gradients).
+       - Original low-opacity hover fades remain unchanged.
+       - Scale both mood heading lines AND their inter-line gap by about 30%.
+       ========================================================= */
+    #volumeSlider,
+    #woodViewerShell #moodBackgroundSlider {
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+    #volumeSlider::-webkit-slider-runnable-track,
+    #woodViewerShell #moodBackgroundSlider::-webkit-slider-runnable-track {
+      height: 4px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255,255,255,.52);
+      box-shadow: 0 1px 9px rgba(0,0,0,.24);
+    }
+    #volumeSlider::-moz-range-track,
+    #woodViewerShell #moodBackgroundSlider::-moz-range-track {
+      height: 4px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255,255,255,.52);
+      box-shadow: 0 1px 9px rgba(0,0,0,.24);
+    }
+    /* WebKit's custom track needs an explicit thumb offset to center its knob. */
+    #volumeSlider::-webkit-slider-thumb { margin-top: -5.5px; }
+    #woodViewerShell #moodBackgroundSlider::-webkit-slider-thumb { margin-top: -4.5px; }
+
+    #moodSeriesName {
+      font-size: clamp(17.5px, 1.505vw, 30.8px) !important;
+    }
+    #moodSeriesSubhead {
+      font-size: clamp(7px, .602vw, 11.9px) !important;
+      margin-top: 7.7px !important;
+    }
+    @media (max-width: 800px) {
+      #volumeSlider::-webkit-slider-runnable-track,
+      #volumeSlider::-moz-range-track {
+        height: 3px;
+      }
+      #volumeSlider::-webkit-slider-thumb { margin-top: -5px; }
+    }
+    @media (hover: none) and (pointer: coarse) {
+      #woodViewerShell #moodBackgroundSlider::-webkit-slider-runnable-track,
+      #woodViewerShell #moodBackgroundSlider::-moz-range-track {
+        height: 3px;
+      }
+      #woodViewerShell #moodBackgroundSlider::-webkit-slider-thumb { margin-top: -4.5px; }
+      #moodSeriesSubhead { margin-top: 4.9px !important; }
+    }
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      #moodSeriesName { font-size: clamp(15.4px, 4.34vw, 22.4px) !important; }
+      #moodSeriesSubhead { font-size: clamp(6.3px, 1.785vw, 8.4px) !important; }
+    }
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #moodSeriesName { font-size: clamp(14.7px, 2.87vh, 22.4px) !important; }
+      #moodSeriesSubhead {
+        font-size: clamp(6.3px, 1.33vh, 9.1px) !important;
+        margin-top: 4.2px !important;
+      }
+    }
+
+
+    /* NEO LUMBER uses true-alpha PNGs. Let their transparent pixels reveal the
+       active mood video rather than the viewer shell's pale backdrop. Keep this
+       scoped to NEO LUMBER; the remaining product viewers retain their styling. */
+    #woodViewerShell.is-neo-lumber {
+      background: transparent !important;
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+    }
+    #woodViewerStrip.is-neo-lumber::after,
+    #woodViewerStripIncoming.is-neo-lumber::after {
+      display: none !important;
+    }
+
+  </style>
 
 
 
@@ -3130,6 +3583,20 @@
 
       <canvas id="maskedTextCanvas"></canvas>
 
+      <!-- Audio control stays outside the masked opening text, so it can be clicked. -->
+      <div id="volumeControl" aria-label="Experience audio control">
+        <button id="volumeButton" type="button" aria-label="Turn sound on" aria-pressed="false" aria-controls="volumeSliderRow" aria-expanded="false">
+          <span id="volumeLottie" aria-hidden="true"></span>
+          <span id="volumeFallbackIcon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 12v8h6l8 6V6l-8 6H5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M23 11a8 8 0 0 1 0 10M26 7a13 13 0 0 1 0 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+        </button>
+        <div id="volumeSliderRow" aria-hidden="true">
+          <input id="volumeSlider" tabindex="-1" type="range" min="0" max="100" value="80" step="1" aria-label="Audio volume" aria-valuetext="80 percent">
+        </div>
+      </div>
+      <!-- Sound/ambient.mp3 plays throughout; ambient/ocean/woodgrain WAVs are mixed in JS. -->
+      <audio id="experienceAudio" loop preload="none"></audio>
+
+
 
 
           <div id="storyLayer">
@@ -3151,8 +3618,34 @@
 
                
         </video>
+        <!-- Separate video surfaces avoid source replacement during video-to-video fades. -->
+        <video id="moodVideoTobacco" muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="Mood/Tobacco.mp4" type="video/mp4">
+        </video>
+        <video id="moodVideoCharwood" muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="Mood/Charwood.mp4" type="video/mp4">
+        </video>
+        <video id="moodVideoHemlock" muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="Mood/HEMLOCK.mp4" type="video/mp4">
+        </video>
+        <video id="moodVideoHeartwood" muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="Mood/HEARTWOOD.mp4" type="video/mp4">
+        </video>
+        <video id="moodVideoFawn" muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="Mood/FAWN.mp4" type="video/mp4">
+        </video>
+        <video id="moodVideoHickory" muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="Mood/HICKORY.mp4" type="video/mp4">
+        </video>
+        <video id="moodVideoIronwood" muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="Mood/IRONWOOD.mp4" type="video/mp4">
+        </video>
+        <video id="moodVideoMahogany" muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="Mood/MAHOGANY.mp4" type="video/mp4">
+        </video>
 
-        <img id="moodImage" src="Mood/Tobacco.jpg" alt="" aria-hidden="true">
+        <!-- Retained only for compatibility with the original legacy image-transition code. -->
+        <img id="moodImage" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="" aria-hidden="true">
 
 
 
@@ -3168,13 +3661,6 @@
 
 
               <div id="moodContent">
-
-          <div id="moodBackgroundControl" aria-label="Background clarity">
-            <img id="moodBackgroundControlIcon" src="image.png" alt="" aria-hidden="true">
-            <div id="moodBackgroundSliderRow">
-              <input id="moodBackgroundSlider" type="range" min="0" max="100" value="100" step="0.1" aria-label="Background clarity">
-            </div>
-          </div>
 
                   <div id="woodViewerCluster">
 
@@ -3201,7 +3687,13 @@
                 <div id="woodViewerStripIncoming" aria-hidden="true"></div>
                 <div id="woodViewerOverlay" aria-hidden="true"></div>
 
-
+                <!-- Background-fade slider sits over the woodgrain and immediately above its nine selectors. -->
+                <div id="moodBackgroundControl" aria-label="Background clarity">
+                  <img id="moodBackgroundControlIcon" src="image.png" alt="" aria-hidden="true">
+                  <div id="moodBackgroundSliderRow">
+                    <input id="moodBackgroundSlider" type="range" min="0" max="100" value="100" step="0.1" aria-label="Background clarity">
+                  </div>
+                </div>
 
                           <div id="woodDotButtons" aria-label="Woodgrain options"></div>
 
@@ -3321,6 +3813,14 @@
       const PANORAMA_IMAGE = '360.jpg', PANORAMA_IMAGE_MOBILE = '360-mobile.jpg',
         SCROLL_FOLDER = 'Scroll_01', SCROLL_FOLDER_MOBILE = 'Scroll_01-mobile', MASK_FOLDER = 'Mask_01', SCROLL_FRAME_COUNT = 109,
         OPENING_TEXT_LOTTIE = 'opening text.json',
+        VOLUME_LOTTIE = 'volume.json',
+        AUDIO_TRACK_PATH = 'Sound/ambient.mp3', // continuous soundscape bed; loops across all scenes
+        OCEAN_SOUND_PATH = 'Sound/Ocean.wav',
+        OCEAN_START_LEVEL = 0.12, // low wave bed at the top; grows as water approaches
+        SOUND_AMBIENT_MIX = 0.72, // independent from foreground ocean/woodgrain effects
+        SOUND_ENVIRONMENT_MIX = 1.0,
+        SOUND_OCEAN_MIX = 0.30, // reduced again: 30% of original peak, independently adjustable
+        MOOD_AUDIO_CROSSFADE_MS = 1550,
         STORY_SEQUENCE_LOTTIE = 'square.json', STORY_SEQUENCE_FRAME_COUNT = 369;
 
       function isMobilePanoramaDevice() {
@@ -3543,14 +4043,14 @@
 
       const MOOD_ITEMS = [
         { name: 'COASTAL SAND', mediaType: 'video', media: MOOD_VIDEO_PATH, woodgrain: 'COASTAL SAND.jpg', dot: 0 },
-        { name: 'TOBACCO', mediaType: 'image', media: 'Mood/Tobacco.jpg', woodgrain: 'TOBACCO.jpg', dot: 1 },
-        { name: 'CHARWOOD', mediaType: 'image', media: 'Mood/Charwood.jpg', woodgrain: 'CHARWOOD.jpg', dot: 2 },
-        { name: 'HEMLOCK', mediaType: 'image', media: 'Mood/HEMLOCK.jpg', woodgrain: 'HEMLOCK.jpg', dot: 3 },
-        { name: 'FAWN', mediaType: 'image', media: 'Mood/FAWN.jpg', woodgrain: 'FAWN.jpg', dot: 4 },
-        { name: 'HEARTWOOD', mediaType: 'image', media: 'Mood/HEARTWOOD.jpg', woodgrain: 'HEARTWOOD.jpg', dot: 5 },
-        { name: 'HICKORY', mediaType: 'image', media: 'Mood/HICKORY.jpg', woodgrain: 'HICKORY.jpg', dot: 6 },
-        { name: 'IRONWOOD', mediaType: 'image', media: 'Mood/IRONWOOD.jpg', woodgrain: 'IRONWOOD.jpg', dot: 7 },
-        { name: 'MAHOGANY', mediaType: 'image', media: 'Mood/MAHOGANY.jpg', woodgrain: 'MAHOGANY.jpg', dot: 8 }
+        { name: 'TOBACCO', mediaType: 'video', media: 'Mood/Tobacco.mp4', woodgrain: 'TOBACCO.jpg', dot: 1 },
+        { name: 'CHARWOOD', mediaType: 'video', media: 'Mood/Charwood.mp4', woodgrain: 'CHARWOOD.jpg', dot: 2 },
+        { name: 'HEMLOCK', mediaType: 'video', media: 'Mood/HEMLOCK.mp4', woodgrain: 'HEMLOCK.jpg', dot: 3 },
+        { name: 'FAWN', mediaType: 'video', media: 'Mood/FAWN.mp4', woodgrain: 'FAWN.jpg', dot: 4 },
+        { name: 'HEARTWOOD', mediaType: 'video', media: 'Mood/HEARTWOOD.mp4', woodgrain: 'HEARTWOOD.jpg', dot: 5 },
+        { name: 'HICKORY', mediaType: 'video', media: 'Mood/HICKORY.mp4', woodgrain: 'HICKORY.jpg', dot: 6 },
+        { name: 'IRONWOOD', mediaType: 'video', media: 'Mood/IRONWOOD.mp4', woodgrain: 'IRONWOOD.jpg', dot: 7 },
+        { name: 'MAHOGANY', mediaType: 'video', media: 'Mood/MAHOGANY.mp4', woodgrain: 'MAHOGANY.jpg', dot: 8 }
       ];
 
       const MOOD_CHANGE_EASE = 'cubic-bezier(.45,0,.55,1)';
@@ -3756,11 +4256,50 @@
 
       const scrollIndicator = $('scrollIndicator'), loader = $('loader'), loaderProgress = $('loaderProgress');
       const openingTextLottie = $('openingTextLottie');
+      const volumeControl = $('volumeControl'), volumeButton = $('volumeButton'), volumeLottie = $('volumeLottie');
+      const volumeSlider = $('volumeSlider'), volumeSliderRow = $('volumeSliderRow'), experienceAudio = $('experienceAudio');
       const storySequenceLottie = $('storySequenceLottie');
 
 
 
       const moodSection = $('moodSection'), moodVideo = $('moodVideo'), moodImage = $('moodImage'), moodVideoShade = $('moodVideoShade'), moodBackgroundAdjust = $('moodBackgroundAdjust'), moodWhiteFade = $('moodWhiteFade'), moodBottomGradient = $('moodBottomGradient');
+      const moodVideoTobacco = $('moodVideoTobacco'), moodVideoCharwood = $('moodVideoCharwood');
+      const moodVideoHemlock = $('moodVideoHemlock'), moodVideoHeartwood = $('moodVideoHeartwood');
+      const moodVideoFawn = $('moodVideoFawn'), moodVideoHickory = $('moodVideoHickory');
+      const moodVideoIronwood = $('moodVideoIronwood'), moodVideoMahogany = $('moodVideoMahogany');
+      /* All nine backgrounds have independent muted, looping players. Outgoing and
+         incoming videos remain alive together during the established crossfade. */
+      const moodVideoByIndex = new Map([
+        [0, moodVideo], [1, moodVideoTobacco], [2, moodVideoCharwood],
+        [3, moodVideoHemlock], [4, moodVideoFawn], [5, moodVideoHeartwood],
+        [6, moodVideoHickory], [7, moodVideoIronwood], [8, moodVideoMahogany]
+      ]);
+      const moodVideoPlayers = [...moodVideoByIndex.values()];
+      const moodBackgroundMedia = [...moodVideoPlayers, moodImage];
+      function getMoodMediaElement(index) {
+        if (MOOD_ITEMS[index]?.mediaType !== 'video') return moodImage;
+        return moodVideoByIndex.get(index) || moodImage;
+      }
+      function playMoodVideo(video) {
+        if (!video) return;
+        video.muted = true;
+        video.loop = true;
+        const result = video.play();
+        if (result && typeof result.catch === 'function') result.catch(() => {});
+      }
+      function syncMoodMediaVisibility(visibleOpacity = 1) {
+        const active = getMoodMediaElement(activeMoodIndex);
+        moodBackgroundMedia.forEach(element => {
+          if (!element) return;
+          element.style.opacity = element === active ? String(visibleOpacity) : '0';
+          element.style.zIndex = '22';
+        });
+        moodVideoPlayers.forEach(video => {
+          if (!video) return;
+          if (video === active) playMoodVideo(video);
+          else video.pause();
+        });
+      }
 
 
 
@@ -3879,6 +4418,11 @@
       const MOBILE_AUTOPLAY_WARMUP_FRAME = 34;
       let mobileSequenceUseTick = 0;
       let mobileSequenceDirection = 1;
+      let volumeAnimation = null, volumeLottieReady = false;
+      let soundEnabled = false, volumeEverActivated = false, volumeDocked = false;
+      let moodAudioTransition = null;
+      const soundscapeTracks = new Map(); // Only the audible woodgrain and its incoming neighbor play.
+      let volumeMoveTimer = 0, volumeMoveRaf = 0, volumeIntroAnimation = null;
       let openingTextAnimation = null, openingTextReady = false, openingTextTotalFrames = 1, openingTextCurrentFrame = -1;
       let storySquareLottie = null, storySquareLottieReady = false, storySquareLottieTotalFrames = 1;
       let currentStorySequenceFrame = -1;
@@ -4690,8 +5234,7 @@
         moodBgParallaxY += (targetY - moodBgParallaxY) * ease;
 
         const transform = `translate3d(${moodBgParallaxX.toFixed(2)}px,${moodBgParallaxY.toFixed(2)}px,0) scale(${MOOD_BG_PARALLAX_SCALE})`;
-        moodVideo.style.transform = transform;
-        moodImage.style.transform = transform;
+        moodBackgroundMedia.forEach(media => { if (media) media.style.transform = transform; });
       }
 
 
@@ -4699,14 +5242,13 @@
         const numeric = clamp(Number(value), 0, 100);
         const clarity = numeric / 100;
         const effect = 1 - clarity;
-        /* Apply blur/darkening ONLY to the two mood background media elements. Using a
+        /* Apply blur/darkening ONLY to the mood background media elements. Using a
            full-screen backdrop-filter here also filtered the panorama/Lottie layers behind
            the mood section whenever the media itself was not fully opaque. */
         const blurPx = effect * 14;
         const brightness = 1 - effect * 0.62;
         const filter = `blur(${blurPx.toFixed(2)}px) brightness(${brightness.toFixed(3)})`;
-        if (moodVideo) moodVideo.style.filter = filter;
-        if (moodImage) moodImage.style.filter = filter;
+        moodBackgroundMedia.forEach(media => { if (media) media.style.filter = filter; });
         /* Keep the thumb visually continuous during the automatic 2 second glide. */
         if (syncSlider && moodBackgroundSlider) moodBackgroundSlider.value = numeric.toFixed(2);
       }
@@ -4734,7 +5276,7 @@
         }
 
         const startValue = 100;
-        const endValue = 50;
+        const endValue = 70;
         const duration = 2000;
         const startTime = performance.now();
         applyMoodBackgroundClarity(startValue);
@@ -4759,14 +5301,19 @@
       }
 
       function startMoodBackgroundAutoFade() {
-        /* Automatic darkening is disabled. Keep every newly revealed mood at 100% clear
-           unless the user has explicitly chosen a different slider value. */
+        /* Use the authored 100 -> 70 clarity glide. Wait until the
+           thumbnail is fully visible, then 600ms, then its original 2-second ease;
+           pulse the handle at the endpoint. A manual setting always wins. */
         cancelMoodBackgroundAutoFade();
         if (moodBackgroundUserInteracted) {
           applyMoodBackgroundClarity(moodBackgroundUserValue);
-        } else {
-          applyMoodBackgroundClarity(100);
+          return;
         }
+        applyMoodBackgroundClarity(100);
+        moodBackgroundAutoFadeTimer = window.setTimeout(() => {
+          moodBackgroundAutoFadeTimer = 0;
+          if (!moodBackgroundUserInteracted) beginMoodBackgroundAutoFadeAnimation();
+        }, 600);
       }
 
       if (moodBackgroundSlider) {
@@ -4802,18 +5349,13 @@
         /* 2) Fade Coastal Sand in over the white background. */
 
         const videoOpacity = smootherstep01(rangeProgress(p, MOOD_VIDEO_START, MOOD_VIDEO_END));
-        if (MOBILE_RUNTIME && activeMoodIndex === 0 && videoOpacity > .015 && moodVideo && moodVideo.paused) {
-          const playPromise = moodVideo.play();
-          if (playPromise && playPromise.catch) playPromise.catch(() => {});
+        const selectedMoodMedia = getMoodMediaElement(activeMoodIndex);
+        if (videoOpacity > .015 && selectedMoodMedia?.tagName === 'VIDEO' && selectedMoodMedia.paused) {
+          playMoodVideo(selectedMoodMedia);
         }
 
-        if (!moodBackgroundInitialRevealStarted && videoOpacity >= .999) {
-          moodBackgroundInitialRevealStarted = true;
-          startMoodBackgroundAutoFade();
-        }
-        if (videoOpacity <= .001 && !moodClipComplete && !moodClipActive) {
-          moodBackgroundInitialRevealStarted = false;
-        }
+        /* Arm the auto-fade only once the thumbnail controls are fully revealed,
+           not as soon as the backdrop video reaches full opacity. */
 
 
 
@@ -4832,7 +5374,18 @@
         /* 4) The remaining viewer controls simply fade in, already centered. */
 
         const viewerOpacity = smootherstep01(rangeProgress(p, MOOD_VIEWER_START, MOOD_VIEWER_END));
-
+        if (!moodBackgroundInitialRevealStarted && viewerOpacity >= .999) {
+          moodBackgroundInitialRevealStarted = true;
+          startMoodBackgroundAutoFade();
+        }
+        if (moodBackgroundInitialRevealStarted && viewerOpacity <= .001 &&
+            !moodClipComplete && !moodClipActive) {
+          moodBackgroundInitialRevealStarted = false;
+          if (!moodBackgroundUserInteracted) {
+            cancelMoodBackgroundAutoFade();
+            applyMoodBackgroundClarity(100);
+          }
+        }
 
 
         moodSection.style.opacity = '1';
@@ -4849,8 +5402,16 @@
         /* Respect whichever mood item is active. During a button transition the
            dedicated transition routine owns both media opacities. */
         if (!moodTransitioning) {
-          moodVideo.style.opacity = activeMoodIndex === 0 ? String(videoOpacity) : '0';
-          moodImage.style.opacity = activeMoodIndex !== 0 ? String(videoOpacity) : '0';
+          const activeMedia = getMoodMediaElement(activeMoodIndex);
+          moodBackgroundMedia.forEach(media => {
+            if (media) media.style.opacity = media === activeMedia ? String(videoOpacity) : '0';
+          });
+          /* The initial Coastal Sand movie is held paused on mobile during loading.
+             Start it when the mood is actually visible; muted playback is allowed
+             without unmuting or changing any of the separate WAV audio layers. */
+          if (videoOpacity > .02 && MOOD_ITEMS[activeMoodIndex].mediaType === 'video' && activeMedia.paused) {
+            playMoodVideo(activeMedia);
+          }
         }
 
 
@@ -4995,6 +5556,20 @@
         try { incoming.cancel(); } catch (e) {}
       }
 
+      /* The woodgrain viewer has a translucent white shell and a full-frame
+         highlight normally. NEO LUMBER is different: its PNGs have alpha areas
+         intended to look straight through to the mood background behind them.
+         Keep the shell clear while either outgoing or incoming texture is NEO,
+         and suppress the highlight only on individual NEO PNG texture layers. */
+      function syncNeoLumberTransparency(currentProduct, incomingProduct = null) {
+        if (!woodViewerShell) return;
+        const currentNeo = currentProduct === 'NEO LUMBER';
+        const incomingNeo = incomingProduct === 'NEO LUMBER';
+        woodViewerShell.classList.toggle('is-neo-lumber', currentNeo || incomingNeo);
+        woodViewerStrip.classList.toggle('is-neo-lumber', currentNeo);
+        woodViewerStripIncoming.classList.toggle('is-neo-lumber', incomingNeo);
+      }
+
       async function transitionWoodgrainProfile(productLabel, direction = 1) {
         const activeMood = MOOD_ITEMS[activeMoodIndex];
         const nextPath = resolveWoodgrainPath(productLabel, activeMood.name);
@@ -5014,6 +5589,7 @@
           console.warn('Could not preload product woodgrain:', productLabel, nextPath, error);
         }
 
+        syncNeoLumberTransparency(activeProductLabel, productLabel);
         woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(nextPath)}")`;
         woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
         woodViewerStripIncoming.style.opacity = '0';
@@ -5050,6 +5626,7 @@
         try { if (overlayOut) overlayOut.cancel(); } catch (e) {}
 
         activeProductLabel = productLabel;
+        syncNeoLumberTransparency(activeProductLabel);
         woodViewerStrip.style.backgroundImage = `url("${encodeURI(nextPath)}")`;
         woodViewerStrip.style.backgroundPosition = `${woodLoopOffset}px 0px`;
         woodViewerStrip.style.opacity = '1';
@@ -5101,6 +5678,7 @@
         if (targetIndex < 0 || targetIndex >= MOOD_ITEMS.length) return;
         if (getMoodVisualProgress() < MOOD_VIEWER_START - .006) return;
 
+        primeMoodAudioOnGesture(targetIndex);
         moodTransitioning = true;
         if (!moodBackgroundUserInteracted) {
           cancelMoodBackgroundAutoFade();
@@ -5112,6 +5690,13 @@
         const toWoodgrainPath = resolveWoodgrainPath(activeProductLabel, toItem.name);
         const activeOverlayPath = resolveWoodgrainOverlayPath(activeProductLabel);
 
+        /* Begin the incoming muted video as early as possible; each video has its
+           own media element, so even a video-to-video swap keeps the old one alive. */
+        if (toItem.mediaType === 'video') {
+          const upcoming = getMoodMediaElement(targetIndex);
+          try { upcoming.currentTime = 0; } catch (e) {}
+          playMoodVideo(upcoming);
+        }
         /* Preload the incoming background and woodgrain before anything moves. */
         try {
           if (toItem.mediaType === 'image') await preloadMoodImage(toItem.media);
@@ -5123,10 +5708,14 @@
         }
 
         /* Prepare the incoming woodgrain at the same live pan position. */
+        syncNeoLumberTransparency(activeProductLabel, activeProductLabel);
         woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(toWoodgrainPath)}")`;
         woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
         woodViewerStripIncoming.style.opacity = '0';
         woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
+
+        /* Blend to the matching WAV in lockstep with the thumbnail/image fade. */
+        startMoodAudioCrossfade(activeMoodIndex, targetIndex);
 
         /* No full-screen dark overlay in this comparison build. */
         freezeMoodShade();
@@ -5183,13 +5772,18 @@
           })();
         } else {
           backgroundPromise = (async () => {
-            const outgoingMedia = fromItem.mediaType === 'video' ? moodVideo : moodImage;
-            const incomingMedia = toItem.mediaType === 'video' ? moodVideo : moodImage;
+            const outgoingMedia = getMoodMediaElement(activeMoodIndex);
+            const incomingMedia = getMoodMediaElement(targetIndex);
+            /* Crossfade on two real surfaces; neither video source changes while
+               playing. Incoming remains above outgoing, with white behind both. */
+            moodBackgroundMedia.forEach(media => { if (media) media.style.zIndex = '21'; });
+            outgoingMedia.style.zIndex = '22';
+            incomingMedia.style.zIndex = '23';
+            outgoingMedia.style.opacity = '1';
+            incomingMedia.style.opacity = '0';
 
             if (toItem.mediaType === 'video') {
-              moodVideo.muted = true;
-              moodVideo.loop = true;
-              try { await moodVideo.play(); } catch (e) { }
+              playMoodVideo(incomingMedia);
             } else {
               moodImage.src = encodeURI(toItem.media);
             }
@@ -5220,9 +5814,11 @@
         await Promise.allSettled([backgroundPromise, woodOut.finished, woodIn.finished, titlePromise]);
 
         activeMoodIndex = targetIndex;
+        moodAudioTransition = null;
         woodLoopImageWidth = moodWoodWidths[targetIndex] || woodgrainWidthByPath.get(toWoodgrainPath) || 1600;
 
         /* Commit the incoming texture into the base panning layer. */
+        syncNeoLumberTransparency(activeProductLabel);
         try { woodOut.cancel(); } catch (e) { }
         try { woodIn.cancel(); } catch (e) { }
         woodViewerStrip.style.backgroundImage = `url("${encodeURI(toWoodgrainPath)}")`;
@@ -5233,10 +5829,9 @@
         woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
         setWoodViewerOverlay(activeOverlayPath);
 
-        /* Commit the active background with no full-screen dark overlay. */
-        moodVideo.style.opacity = activeMoodIndex === 0 ? '1' : '0';
-        moodImage.style.opacity = activeMoodIndex === 0 ? '0' : '1';
-        if (activeMoodIndex !== 0) moodVideo.pause();
+        /* Commit the active background. All unused videos pause, but retain their
+           sources for subsequent selections and reverse navigation. */
+        syncMoodMediaVisibility();
 
         resetMoodVideoShade();
         /* Keep the incoming background clear by default. The slider remains available
@@ -5460,9 +6055,11 @@
 
         initWoodViewerInteraction();
         woodViewerStrip.style.backgroundImage = `url("${encodeURI(WOODGRAIN_STRIP_IMAGE)}")`;
+        syncNeoLumberTransparency(activeProductLabel);
         woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(resolveWoodgrainPath(activeProductLabel, MOOD_ITEMS[1].name))}")`;
         setWoodViewerOverlay(resolveWoodgrainOverlayPath(activeProductLabel));
-        moodImage.src = encodeURI(MOOD_ITEMS[1].media);
+        /* No JPG mood backgrounds remain. Keep the legacy fallback as a transparent
+           pixel rather than trying to load a video URL into an <img> element. */
 
         /* Avoid a startup burst of large mood images on mobile; they load on demand. */
         if (!MOBILE_RUNTIME) {
@@ -5497,16 +6094,15 @@
 
 
 
-        if (moodVideo) {
-          moodVideo.muted = true;
-          moodVideo.loop = true;
-          if (!MOBILE_RUNTIME) {
-            const playPromise = moodVideo.play();
-            if (playPromise && playPromise.catch) playPromise.catch(() => { });
-          } else {
-            try { moodVideo.pause(); } catch (e) { }
-          }
-        }
+        /* Keep Coastal Sand primed; all nine independent video loops start when
+           selected and pause when no longer active. */
+        moodVideoPlayers.forEach(video => {
+          if (!video) return;
+          video.muted = true;
+          video.loop = true;
+          if (video !== moodVideo || MOBILE_RUNTIME) video.pause();
+        });
+        if (!MOBILE_RUNTIME) playMoodVideo(moodVideo);
 
 
 
@@ -6859,10 +7455,9 @@ void main(){
 
 
       function animateHeroText() {
-        /* Opening Lottie entrance matched to the supplied After Effects graph:
-           a strong ease-out with a very fast initial rise and a long, soft approach
-           to the final value. No overshoot/bounce. The Lottie remains paused on frame 0. */
-        heroText.animate([
+        /* Both elements use the exact same authored fade/scale entrance.
+           The volume Lottie itself loops; only its container entrance is timed. */
+        const openingKeyframes = [
           { opacity: 0,    transform: 'scale(.20)',  offset: 0 },
           { opacity: .10,  transform: 'scale(.43)',  offset: .035 },
           { opacity: .20,  transform: 'scale(.57)',  offset: .075 },
@@ -6874,11 +7469,376 @@ void main(){
           { opacity: .97,  transform: 'scale(.993)', offset: .76 },
           { opacity: 1,    transform: 'scale(.999)', offset: .91 },
           { opacity: 1,    transform: 'scale(1)',    offset: 1 }
-        ], {
-          duration: 3600,
-          easing: 'linear',
-          fill: 'forwards'
+        ];
+        const timing = { duration: 3600, easing: 'linear', fill: 'forwards' };
+        heroText.animate(openingKeyframes, timing);
+        volumeControl.classList.add('is-ready');
+        syncVolumeOpeningGap();
+        volumeIntroAnimation = volumeButton.animate(openingKeyframes, timing);
+      }
+
+      /* Keep a small, consistent gap beneath the ACTUAL opening animation content.
+         A fixed vh position overlapped on some screen sizes; the Lottie SVG contains
+         transparent padding, so its outer container is not a useful visual boundary.
+         getBoundingClientRect() on its top-level <g> uses the drawn artwork bounds. */
+      function syncVolumeOpeningGap() {
+        if (volumeDocked || !volumeControl || !heroTextInner ||
+            !volumeControl.classList.contains('is-ready')) return;
+
+        const stageRect = stage.getBoundingClientRect();
+        let artworkBottom = NaN;
+        if (openingTextReady && openingTextLottie) {
+          const svg = openingTextLottie.querySelector('svg');
+          const drawnGroup = svg && Array.from(svg.children).find(child =>
+            child.tagName && child.tagName.toLowerCase() === 'g'
+          );
+          if (drawnGroup) {
+            const bounds = drawnGroup.getBoundingClientRect();
+            if (bounds.height > 5 && bounds.width > 5 && Number.isFinite(bounds.bottom)) {
+              artworkBottom = bounds.bottom;
+            }
+          }
+        }
+        if (!Number.isFinite(artworkBottom)) {
+          artworkBottom = heroTextInner.getBoundingClientRect().bottom;
+        }
+
+        const gap = clamp(stageRect.height * .015, 11, 17);
+        const desired = Math.ceil(artworkBottom - stageRect.top + gap);
+        if (!Number.isFinite(desired)) return;
+        /* Follow the text itself, not an arbitrary 52%/70% guess. A little room at
+           the bottom keeps the button usable on short screens. */
+        const top = Math.max(0, desired);
+        const previous = Number.parseFloat(volumeControl.style.top);
+        if (!Number.isFinite(previous) || Math.abs(previous - top) > .75) {
+          volumeControl.style.top = `${top}px`;
+        }
+      }
+
+      /* The new volume control never joins #heroText or its foreground-mask canvas.
+         It remains interactive while the opening text animates/scrubs behind objects. */
+      async function loadVolumeLottie() {
+        if (volumeAnimation || typeof lottie === 'undefined') return;
+        await new Promise(resolve => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+          try {
+            volumeAnimation = lottie.loadAnimation({
+              container: volumeLottie,
+              renderer: 'svg',
+              loop: true,
+              autoplay: false,
+              path: VOLUME_LOTTIE,
+              rendererSettings: { preserveAspectRatio: 'xMidYMid meet' }
+            });
+            volumeAnimation.addEventListener('DOMLoaded', () => {
+              volumeLottieReady = true;
+              volumeControl.classList.add('has-lottie');
+              syncVolumeLottiePlayback();
+              finish();
+            });
+            volumeAnimation.addEventListener('data_failed', () => {
+              console.warn(`[West Coast Naturals] ${VOLUME_LOTTIE} is unavailable; displaying the fallback icon.`);
+              finish();
+            });
+            // Do not block the existing loading sequence if a future file is absent.
+            setTimeout(finish, 2400);
+          } catch (error) {
+            console.warn('[West Coast Naturals] Volume Lottie could not initialize.', error);
+            finish();
+          }
         });
+      }
+
+      function syncVolumeLottiePlayback() {
+        if (!volumeLottieReady || !volumeAnimation) return;
+        if (soundEnabled && volumeDocked && !volumeControl.classList.contains('is-moving')) {
+          /* Freeze at the midpoint as the permanent sound-on icon. */
+          const midpoint = Math.floor(Math.max(0, volumeAnimation.totalFrames - 1) * .5);
+          volumeAnimation.goToAndStop(midpoint, true);
+        } else {
+          /* Before first click, and whenever muted, the icon loops continuously. */
+          volumeAnimation.loop = true;
+          volumeAnimation.play();
+        }
+      }
+
+      function showVolumeAtDestination() {
+        volumeMoveTimer = 0;
+        volumeControl.classList.toggle('is-docked', volumeDocked);
+        stage.classList.toggle('volume-ui-docked', volumeDocked);
+        /* The slider appears only after the icon has arrived at top center. */
+        volumeControl.classList.toggle('is-active', soundEnabled && volumeDocked);
+        if (volumeMoveRaf) cancelAnimationFrame(volumeMoveRaf);
+        volumeMoveRaf = requestAnimationFrame(() => {
+          volumeMoveRaf = requestAnimationFrame(() => {
+            volumeMoveRaf = 0;
+            volumeControl.classList.remove('is-moving');
+            syncVolumeLottiePlayback();
+          });
+        });
+      }
+
+      function moveVolumeControlTo(dock, replay = false) {
+        if (!volumeControl.classList.contains('is-ready')) return;
+        if (volumeDocked === dock && !replay && !volumeMoveTimer) return;
+        volumeDocked = dock;
+        if (dock) volumeControl.style.removeProperty('top');
+        else syncVolumeOpeningGap();
+        if (volumeMoveTimer) clearTimeout(volumeMoveTimer);
+        if (volumeMoveRaf) cancelAnimationFrame(volumeMoveRaf);
+        volumeMoveRaf = 0;
+        volumeControl.classList.add('is-moving');
+        /* Location swaps only while invisible: shrink/fade out, then fade in. */
+        volumeMoveTimer = setTimeout(showVolumeAtDestination, 290);
+      }
+
+      function syncVolumePositionWithScroll() {
+        if (!scrollingReady || !volumeControl.classList.contains('is-ready')) return;
+        /* A small threshold avoids first-pixel jitter. Unclicked controls return to
+           the hero position on scrolling all the way back up. Once used, keep docked. */
+        const rawProgress = calculateRawScrollProgress();
+        const scrollingBeyondOpening = rawProgress > .004 || targetScrollFrame > .5 ||
+          smoothScrollFrame > .5 || backgroundAutoplayActive || backgroundAutoplayComplete ||
+          storySequenceAutoplayActive || moodClipActive || moodClipComplete;
+        const shouldDock = volumeEverActivated || scrollingBeyondOpening;
+        if (shouldDock !== volumeDocked) moveVolumeControlTo(shouldDock);
+      }
+
+      /* =========================================================
+         LAYERED SOUNDSCAPE — every track starts only after the user's
+         audio-button click (browser autoplay policy).
+
+         Sound/ambient.mp3  always loops while enabled.
+         Sound/Ocean.wav    loops; grows with Scroll_01 frame 0 -> 52.
+         Sound/<WOODGRAIN TITLE>.wav loops; enters as white begins, then
+                               smoothly crossfades when woodgrains change.
+
+         Use the exact MOOD_ITEMS names for future WAV filenames.
+         The 80% slider is the MASTER gain applied to all layers.
+         ========================================================= */
+      function makeSoundscapeTrack(key, relativePath, existingElement = null) {
+        if (soundscapeTracks.has(key)) return soundscapeTracks.get(key);
+        const audio = existingElement || new Audio();
+        audio.loop = true;
+        audio.preload = 'none';
+        audio.volume = 0;
+        audio.muted = false;
+        audio.src = encodeURI(relativePath);
+        const track = { audio, key, path: relativePath, pending: false, failed: false, retryAfter: 0 };
+        audio.addEventListener('error', () => {
+          if (!track.failed) {
+            track.failed = true;
+            console.warn(`[West Coast Naturals] Sound file unavailable: ${track.path}`);
+          }
+        });
+        soundscapeTracks.set(key, track);
+        return track;
+      }
+
+      function getMoodAudioTrack(index) {
+        if (index < 0 || index >= MOOD_ITEMS.length) return null;
+        const name = MOOD_ITEMS[index].name;
+        return makeSoundscapeTrack(`mood:${index}`, `Sound/${name}.wav`);
+      }
+
+      function tryPlaySoundscapeTrack(track, userGesture = false) {
+        if (!track || track.failed || !soundEnabled) return;
+        if (!track.audio.paused || track.pending) return;
+        if (!userGesture && performance.now() < track.retryAfter) return;
+        try {
+          const playResult = track.audio.play();
+          if (playResult && typeof playResult.then === 'function') {
+            track.pending = true;
+            playResult.then(() => {
+              track.pending = false;
+              track.retryAfter = 0;
+            }).catch(error => {
+              track.pending = false;
+              track.retryAfter = performance.now() + 8000;
+              if (error && error.name !== 'AbortError') {
+                console.warn(`[West Coast Naturals] Could not play ${track.path}:`, error);
+              }
+            });
+          }
+        } catch (error) {
+          track.retryAfter = performance.now() + 8000;
+          console.warn(`[West Coast Naturals] Could not start ${track.path}:`, error);
+        }
+      }
+
+      function primeMoodAudioOnGesture(index) {
+        /* This runs synchronously when a woodgrain button is clicked, BEFORE any
+           asynchronous image preloading, for reliable mobile audio permission. */
+        if (!soundEnabled) return;
+        const track = getMoodAudioTrack(index);
+        if (track) {
+          track.audio.volume = 0;
+          tryPlaySoundscapeTrack(track, true);
+        }
+      }
+
+      function startMoodAudioCrossfade(fromIndex, toIndex) {
+        moodAudioTransition = {
+          from: fromIndex,
+          to: toIndex,
+          startedAt: performance.now()
+        };
+        /* Other browsers permit this after the user's original audio gesture;
+           on mobile the destination has already been primed by the click. */
+        if (soundEnabled) tryPlaySoundscapeTrack(getMoodAudioTrack(toIndex));
+      }
+
+      function updateSoundscape(time = performance.now()) {
+        if (!soundEnabled) return;
+        const master = clamp(Number(volumeSlider.value) / 100, 0, 1);
+        const ambient = soundscapeTracks.get('ambient');
+        const ocean = soundscapeTracks.get('ocean');
+        if (!ambient || !ocean) return;
+
+        /* The real JPG playhead, including timed autoplay, drives the waves. At
+           Scroll052 they reach full strength (now capped at 30%) near the water. */
+        const displayedFrame = backgroundAutoplayActive
+          ? backgroundAutoplayFrame : smoothScrollFrame;
+        const oceanGrowth = smootherstep01(rangeProgress(
+          displayedFrame, 0, BACKGROUND_AUTOPLAY_START_FRAME
+        ));
+        const oceanBeforeMood = OCEAN_START_LEVEL + (1 - OCEAN_START_LEVEL) * oceanGrowth;
+
+        /* The same progress that drives the white wash and new mood image drives
+           the actual sound mix, in both scroll directions and the timed mood clip. */
+        const moodProgress = getMoodVisualProgress();
+        const moodFade = smootherstep01(rangeProgress(
+          moodProgress, MOOD_WHITE_START, MOOD_VIDEO_END
+        ));
+        const oceanGain = oceanBeforeMood * Math.cos(moodFade * Math.PI / 2);
+        const moodGain = Math.sin(moodFade * Math.PI / 2);
+
+        ambient.audio.volume = clamp(master * SOUND_AMBIENT_MIX, 0, 1);
+        ocean.audio.volume = clamp(master * SOUND_OCEAN_MIX * oceanGain, 0, 1);
+        tryPlaySoundscapeTrack(ambient);
+        tryPlaySoundscapeTrack(ocean);
+
+        const gains = new Map();
+        if (moodAudioTransition) {
+          const t = smootherstep01(clamp(
+            (time - moodAudioTransition.startedAt) / MOOD_AUDIO_CROSSFADE_MS, 0, 1
+          ));
+          gains.set(moodAudioTransition.from, Math.cos(t * Math.PI / 2));
+          gains.set(moodAudioTransition.to, Math.sin(t * Math.PI / 2));
+        } else {
+          gains.set(activeMoodIndex, 1);
+        }
+
+        for (const [key, track] of soundscapeTracks) {
+          if (!key.startsWith('mood:')) continue;
+          const index = Number(key.slice(5));
+          const gain = (gains.get(index) || 0) * moodGain;
+          const level = clamp(master * SOUND_ENVIRONMENT_MIX * gain, 0, 1);
+          track.audio.volume = level;
+          if (level > .001) {
+            tryPlaySoundscapeTrack(track);
+          } else if (index !== activeMoodIndex &&
+                     (!moodAudioTransition || index !== moodAudioTransition.to)) {
+            /* Do not leave old woodgrain WAVs silently streaming forever. */
+            if (!track.audio.paused) track.audio.pause();
+          }
+        }
+
+        /* Start the selected woodgrain when its fade becomes audible. If a user
+           enables sound after arriving at the thumbnail scene, it starts at once. */
+        if (moodGain > .001) {
+          for (const index of gains.keys()) tryPlaySoundscapeTrack(getMoodAudioTrack(index));
+        }
+      }
+
+      function setSoundEnabled(enabled) {
+        soundEnabled = Boolean(enabled);
+        volumeButton.setAttribute('aria-pressed', String(soundEnabled));
+        volumeButton.setAttribute('aria-expanded', String(soundEnabled));
+        volumeButton.setAttribute('aria-label', soundEnabled ? 'Turn sound off' : 'Turn sound on');
+        volumeSliderRow.setAttribute('aria-hidden', String(!soundEnabled));
+        volumeSlider.tabIndex = soundEnabled ? 0 : -1;
+        volumeSliderRow.classList.remove('is-keyboard-focus', 'is-dragging');
+
+        if (soundEnabled) {
+          /* IMPORTANT: play() is called directly inside the button event to unlock
+             the ambient, ocean and current woodgrain on desktop and mobile. */
+          tryPlaySoundscapeTrack(soundscapeTracks.get('ambient'), true);
+          tryPlaySoundscapeTrack(soundscapeTracks.get('ocean'), true);
+          primeMoodAudioOnGesture(activeMoodIndex);
+          if (moodAudioTransition) primeMoodAudioOnGesture(moodAudioTransition.to);
+          updateSoundscape();
+        } else {
+          for (const track of soundscapeTracks.values()) {
+            track.audio.pause();
+            track.audio.volume = 0;
+          }
+        }
+        if (soundEnabled) {
+          if (!volumeEverActivated) {
+            volumeEverActivated = true;
+            moveVolumeControlTo(true, true);
+          } else if (volumeMoveTimer) {
+            volumeDocked = true;
+          } else {
+            volumeControl.classList.toggle('is-active', volumeDocked);
+            syncVolumeLottiePlayback();
+          }
+        } else {
+          volumeControl.classList.remove('is-active');
+          syncVolumeLottiePlayback();
+        }
+      }
+
+      /* The ambient element already exists in the HTML; environmental audio
+         tracks are created only as needed, so future woodgrain WAV files can be
+         added without editing this code. */
+      makeSoundscapeTrack('ambient', AUDIO_TRACK_PATH, experienceAudio);
+      makeSoundscapeTrack('ocean', OCEAN_SOUND_PATH);
+      volumeButton.addEventListener('click', () => setSoundEnabled(!soundEnabled));
+      volumeSlider.addEventListener('input', () => {
+        const value = clamp(Number(volumeSlider.value), 0, 100);
+        volumeSlider.setAttribute('aria-valuetext', `${Math.round(value)} percent`);
+        updateSoundscape();
+      });
+      /* Slider focus should be bright for keyboard navigation only. Clicking a
+         range otherwise leaves native focus behind long after mouseout, which
+         previously froze both controls at 100% opacity. */
+      function wireTransientSliderOverstate(slider, target) {
+        if (!slider || !target) return;
+        const onPointerEnd = () => target.classList.remove('is-dragging');
+        slider.addEventListener('pointerdown', () => {
+          target.classList.remove('is-keyboard-focus');
+          target.classList.add('is-dragging');
+        });
+        slider.addEventListener('pointerup', onPointerEnd);
+        slider.addEventListener('pointercancel', onPointerEnd);
+        slider.addEventListener('blur', () => {
+          target.classList.remove('is-keyboard-focus');
+          onPointerEnd();
+        });
+        slider.addEventListener('focus', () => {
+          if (slider.matches(':focus-visible') && !target.classList.contains('is-dragging')) {
+            target.classList.add('is-keyboard-focus');
+          }
+        });
+        slider.addEventListener('keydown', () => target.classList.add('is-keyboard-focus'));
+        /* Pointer release outside the range may occur after pointer capture; the
+           document listener guarantees the visual doesn't remain forced bright. */
+        document.addEventListener('pointerup', onPointerEnd);
+        document.addEventListener('pointercancel', onPointerEnd);
+      }
+      wireTransientSliderOverstate(volumeSlider, volumeSliderRow);
+      wireTransientSliderOverstate(moodBackgroundSlider, moodBackgroundControl);
+
+      /* Keep controls out of the panorama drag and global touch timeline handlers. */
+      for (const type of ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+        volumeControl.addEventListener(type, event => event.stopPropagation(), { passive: true });
       }
 
       async function loadOpeningTextLottie() {
@@ -8898,6 +9858,9 @@ void main(){
         updateHoldEnvironment(dt, time);
         updateHoldHotspots(dt);
         updateMoodBackgroundParallax(dt);
+        syncVolumePositionWithScroll();
+        if (!volumeDocked) syncVolumeOpeningGap();
+        updateSoundscape(time);
 
         requestAnimationFrame(masterAnimationLoop);
 
@@ -8945,16 +9908,17 @@ void main(){
 
           const scrollPromise = loadScrollAssets();
           const openingTextPromise = loadOpeningTextLottie().catch(error => console.warn('[West Coast Naturals] Opening text Lottie preload failed.', error));
+          const volumePromise = loadVolumeLottie().catch(error => console.warn('[West Coast Naturals] Volume Lottie preload failed.', error));
           loadStorySequenceAssets().catch(error => console.warn('[West Coast Naturals] Story sequence preload failed.', error));
 
           await initPanorama();
 
           if (MOBILE_RUNTIME) {
-            await Promise.all([scrollPromise, openingTextPromise]);
+            await Promise.all([scrollPromise, openingTextPromise, volumePromise]);
             loader.classList.add('hidden'); animateHeroText(); initializeLottie();
             initHoldEnvironment().catch(error => console.warn('[West Coast Naturals] Mobile hold environment preload failed.', error));
           } else {
-            await Promise.all([initHoldEnvironment(), openingTextPromise]);
+            await Promise.all([initHoldEnvironment(), openingTextPromise, volumePromise]);
             loader.classList.add('hidden'); animateHeroText(); initializeLottie();
             await scrollPromise;
           }
