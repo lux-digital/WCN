@@ -3593,7 +3593,7 @@
           <input id="volumeSlider" tabindex="-1" type="range" min="0" max="100" value="80" step="1" aria-label="Audio volume" aria-valuetext="80 percent">
         </div>
       </div>
-      <!-- Sound/ambient.mp3 plays throughout; ambient/ocean/woodgrain WAVs are mixed in JS. -->
+      <!-- Sound/ambient.mp3 plays throughout; ambient/ocean/woodgrain MP3s are mixed in JS. -->
       <audio id="experienceAudio" loop preload="none"></audio>
 
 
@@ -3607,7 +3607,7 @@
 
 
 
-              <video id="moodVideo" muted loop playsinline autoplay preload="metadata">
+              <video id="moodVideo" muted loop playsinline preload="none">
 
 
 
@@ -3619,28 +3619,28 @@
                
         </video>
         <!-- Separate video surfaces avoid source replacement during video-to-video fades. -->
-        <video id="moodVideoTobacco" muted loop playsinline preload="metadata" aria-hidden="true">
+        <video id="moodVideoTobacco" muted loop playsinline preload="none" aria-hidden="true">
           <source src="Mood/Tobacco.mp4" type="video/mp4">
         </video>
-        <video id="moodVideoCharwood" muted loop playsinline preload="metadata" aria-hidden="true">
+        <video id="moodVideoCharwood" muted loop playsinline preload="none" aria-hidden="true">
           <source src="Mood/Charwood.mp4" type="video/mp4">
         </video>
-        <video id="moodVideoHemlock" muted loop playsinline preload="metadata" aria-hidden="true">
+        <video id="moodVideoHemlock" muted loop playsinline preload="none" aria-hidden="true">
           <source src="Mood/HEMLOCK.mp4" type="video/mp4">
         </video>
-        <video id="moodVideoHeartwood" muted loop playsinline preload="metadata" aria-hidden="true">
+        <video id="moodVideoHeartwood" muted loop playsinline preload="none" aria-hidden="true">
           <source src="Mood/HEARTWOOD.mp4" type="video/mp4">
         </video>
-        <video id="moodVideoFawn" muted loop playsinline preload="metadata" aria-hidden="true">
+        <video id="moodVideoFawn" muted loop playsinline preload="none" aria-hidden="true">
           <source src="Mood/FAWN.mp4" type="video/mp4">
         </video>
-        <video id="moodVideoHickory" muted loop playsinline preload="metadata" aria-hidden="true">
+        <video id="moodVideoHickory" muted loop playsinline preload="none" aria-hidden="true">
           <source src="Mood/HICKORY.mp4" type="video/mp4">
         </video>
-        <video id="moodVideoIronwood" muted loop playsinline preload="metadata" aria-hidden="true">
+        <video id="moodVideoIronwood" muted loop playsinline preload="none" aria-hidden="true">
           <source src="Mood/IRONWOOD.mp4" type="video/mp4">
         </video>
-        <video id="moodVideoMahogany" muted loop playsinline preload="metadata" aria-hidden="true">
+        <video id="moodVideoMahogany" muted loop playsinline preload="none" aria-hidden="true">
           <source src="Mood/MAHOGANY.mp4" type="video/mp4">
         </video>
 
@@ -3771,15 +3771,83 @@
 
 
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.1/three.min.js"></script>
-
-
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
-
-
+  <script>
+    /* West Coast Naturals: use a known, isolated THREE/Lottie version.
+       Elementor themes/widgets may have their own THREE or lottie globals;
+       accepting an unrelated build can crash startup inside vendor code.
+       Snapshot the page's existing globals, load pinned builds for this widget,
+       then restore the page globals so other widgets are not affected. */
+    window.__wcnLibrariesReady = (async () => {
+      const label = document.getElementById('loaderText');
+      const bar = document.getElementById('loaderProgress');
+      if (label) label.textContent = 'Loading 3D and animation libraries';
+      if (bar) bar.style.width = '5%';
+      const savedThree = window.THREE;
+      const savedLottie = window.lottie;
+      const loadScript = (url, valid, timeoutMs = 9000) => new Promise((resolve, reject) => {
+        const el = document.createElement('script');
+        let done = false;
+        const finish = (error) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          if (error) { el.remove(); reject(error); }
+          else resolve();
+        };
+        const timer = setTimeout(() => finish(new Error('Timed out loading ' + url)), timeoutMs);
+        el.async = true;
+        el.src = url;
+        el.onload = () => finish(valid() ? null : new Error('Unexpected library version at ' + url));
+        el.onerror = () => finish(new Error('Could not load ' + url));
+        document.head.appendChild(el);
+      });
+      const fallback = async (name, urls, valid) => {
+        let lastError;
+        for (const url of urls) {
+          try { await loadScript(url, valid); return; }
+          catch (error) { lastError = error; console.warn('[West Coast Naturals]', name, error.message); }
+        }
+        throw new Error(name + ' could not load. ' + (lastError?.message || 'All sources failed.'));
+      };
+      try {
+        // Do not use an arbitrary THREE version provided by Elementor or another widget.
+        if (savedThree && String(savedThree.REVISION) === '160' && typeof savedThree.WebGLRenderer === 'function') {
+          window.__wcnThree = savedThree;
+        } else {
+          await fallback('Three.js r160', [
+            'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.1/three.min.js',
+            'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js',
+            'https://unpkg.com/three@0.160.1/build/three.min.js'
+          ], () => window.THREE && String(window.THREE.REVISION) === '160' && typeof window.THREE.WebGLRenderer === 'function');
+          window.__wcnThree = window.THREE;
+        }
+        // Use an independent Lottie instance if a theme has installed a different player.
+        if (savedLottie && savedLottie.version === '5.12.2' && typeof savedLottie.loadAnimation === 'function') {
+          window.__wcnLottie = savedLottie;
+        } else {
+          await fallback('Lottie', [
+            'https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js',
+            'https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js',
+            'https://unpkg.com/lottie-web@5.12.2/build/player/lottie.min.js'
+          ], () => window.lottie && typeof window.lottie.loadAnimation === 'function');
+          window.__wcnLottie = window.lottie;
+        }
+        if (!window.__wcnThree || !window.__wcnLottie) throw new Error('Three.js or Lottie did not initialize.');
+        if (bar) bar.style.width = '8%';
+        return true;
+      } finally {
+        // Scope our dependencies in the main closure; avoid altering host widgets.
+        if (savedThree === undefined) delete window.THREE;
+        else window.THREE = savedThree;
+        if (savedLottie === undefined) delete window.lottie;
+        else window.lottie = savedLottie;
+      }
+    })();
+  </script>
 
   <script>
+    window.__wcnLibrariesReady.then(() => {
+
 
 
 
@@ -3788,6 +3856,14 @@
 
 
       'use strict';
+      /* This widget uses the pinned libraries captured by the bootstrap above.
+         Do not fall back to a possibly incompatible Elementor global. */
+      const THREE = window.__wcnThree;
+      const lottie = window.__wcnLottie;
+      if (!THREE || String(THREE.REVISION) !== '160' || !lottie) {
+        throw new Error('The required isolated Three.js r160/Lottie instances are unavailable.');
+      }
+
 
       /* Prevent accidental browser text/image selection while users drag around the experience.
          Buttons remain fully clickable/focusable; this only suppresses native selection/dragging. */
@@ -3815,7 +3891,7 @@
         OPENING_TEXT_LOTTIE = 'opening text.json',
         VOLUME_LOTTIE = 'volume.json',
         AUDIO_TRACK_PATH = 'Sound/ambient.mp3', // continuous soundscape bed; loops across all scenes
-        OCEAN_SOUND_PATH = 'Sound/Ocean.wav',
+        OCEAN_SOUND_PATH = 'Sound/Ocean.mp3',
         OCEAN_START_LEVEL = 0.12, // low wave bed at the top; grows as water approaches
         SOUND_AMBIENT_MIX = 0.72, // independent from foreground ocean/woodgrain effects
         SOUND_ENVIRONMENT_MIX = 1.0,
@@ -3866,8 +3942,8 @@
 
       const SCROLL_LENGTH_VH = 350, SCROLL_SENSITIVITY = 1.35, STORY_SCROLL_EASE = .085;
       const BACKGROUND_SCROLL_SLOWDOWN = 2.0; // only the manual Scroll_01 section
-      const PANORAMA_START_YAW_DEG = -20.874;
-      const PANORAMA_START_PITCH_DEG = 5.261;
+      const PANORAMA_START_YAW_DEG = 89.160;
+      const PANORAMA_START_PITCH_DEG = -29.563;
 
 
 
@@ -5408,7 +5484,7 @@
           });
           /* The initial Coastal Sand movie is held paused on mobile during loading.
              Start it when the mood is actually visible; muted playback is allowed
-             without unmuting or changing any of the separate WAV audio layers. */
+             without unmuting or changing any of the separate MP3 audio layers. */
           if (videoOpacity > .02 && MOOD_ITEMS[activeMoodIndex].mediaType === 'video' && activeMedia.paused) {
             playMoodVideo(activeMedia);
           }
@@ -5714,7 +5790,7 @@
         woodViewerStripIncoming.style.opacity = '0';
         woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
 
-        /* Blend to the matching WAV in lockstep with the thumbnail/image fade. */
+        /* Blend to the matching MP3 in lockstep with the thumbnail/image fade. */
         startMoodAudioCrossfade(activeMoodIndex, targetIndex);
 
         /* No full-screen dark overlay in this comparison build. */
@@ -6061,15 +6137,18 @@
         /* No JPG mood backgrounds remain. Keep the legacy fallback as a transparent
            pixel rather than trying to load a video URL into an <img> element. */
 
-        /* Avoid a startup burst of large mood images on mobile; they load on demand. */
+        /* Do not compete with the opening panorama and Scroll_01 requests. All
+           woodgrains still preload, but only AFTER the essential intro is ready. */
         if (!MOBILE_RUNTIME) {
-          MOOD_ITEMS.forEach((item, itemIndex) => {
-            if (item.mediaType === 'image') preloadMoodImage(item.media).catch(() => {});
-            const defaultWoodPath = resolveWoodgrainPath('LUX LAP', item.name);
-            preloadWoodgrainPath(defaultWoodPath).then(image => {
-              moodWoodWidths[itemIndex] = Math.max(1, image.naturalWidth || image.width || 1600);
-            }).catch(() => {});
-          });
+          window.addEventListener('wcn-intro-ready', () => {
+            MOOD_ITEMS.forEach((item, itemIndex) => {
+              if (item.mediaType === 'image') preloadMoodImage(item.media).catch(() => {});
+              const defaultWoodPath = resolveWoodgrainPath('LUX LAP', item.name);
+              preloadWoodgrainPath(defaultWoodPath).then(image => {
+                moodWoodWidths[itemIndex] = Math.max(1, image.naturalWidth || image.width || 1600);
+              }).catch(() => {});
+            });
+          }, { once: true });
         }
 
         const woodDotButtons = $('woodDotButtons');
@@ -6102,7 +6181,8 @@
           video.loop = true;
           if (video !== moodVideo || MOBILE_RUNTIME) video.pause();
         });
-        if (!MOBILE_RUNTIME) playMoodVideo(moodVideo);
+        /* The selected video's existing section-reveal logic starts it later.
+           Playing it now would download and decode MP4 during intro loading. */
 
 
 
@@ -7614,11 +7694,11 @@ void main(){
          audio-button click (browser autoplay policy).
 
          Sound/ambient.mp3  always loops while enabled.
-         Sound/Ocean.wav    loops; grows with Scroll_01 frame 0 -> 52.
-         Sound/<WOODGRAIN TITLE>.wav loops; enters as white begins, then
+         Sound/Ocean.mp3    loops; grows with Scroll_01 frame 0 -> 52.
+         Sound/<WOODGRAIN TITLE>.mp3 loops; enters as white begins, then
                                smoothly crossfades when woodgrains change.
 
-         Use the exact MOOD_ITEMS names for future WAV filenames.
+         Use the exact MOOD_ITEMS names for future MP3 filenames.
          The 80% slider is the MASTER gain applied to all layers.
          ========================================================= */
       function makeSoundscapeTrack(key, relativePath, existingElement = null) {
@@ -7643,7 +7723,7 @@ void main(){
       function getMoodAudioTrack(index) {
         if (index < 0 || index >= MOOD_ITEMS.length) return null;
         const name = MOOD_ITEMS[index].name;
-        return makeSoundscapeTrack(`mood:${index}`, `Sound/${name}.wav`);
+        return makeSoundscapeTrack(`mood:${index}`, `Sound/${name}.mp3`);
       }
 
       function tryPlaySoundscapeTrack(track, userGesture = false) {
@@ -7744,7 +7824,7 @@ void main(){
             tryPlaySoundscapeTrack(track);
           } else if (index !== activeMoodIndex &&
                      (!moodAudioTransition || index !== moodAudioTransition.to)) {
-            /* Do not leave old woodgrain WAVs silently streaming forever. */
+            /* Do not leave old woodgrain MP3s silently streaming forever. */
             if (!track.audio.paused) track.audio.pause();
           }
         }
@@ -7796,7 +7876,7 @@ void main(){
       }
 
       /* The ambient element already exists in the HTML; environmental audio
-         tracks are created only as needed, so future woodgrain WAV files can be
+         tracks are created only as needed, so future woodgrain MP3 files can be
          added without editing this code. */
       makeSoundscapeTrack('ambient', AUDIO_TRACK_PATH, experienceAudio);
       makeSoundscapeTrack('ocean', OCEAN_SOUND_PATH);
@@ -8039,13 +8119,22 @@ void main(){
           const initialFrames = Array.from({ length: Math.min(MOBILE_SEQUENCE_INITIAL_COUNT, SCROLL_FRAME_COUNT) }, (_, i) => i);
           await Promise.all(initialFrames.map(frame => loadMobileSequencePair(frame).then(() => {
             loaded++;
-            loaderProgress.style.width = `${40 + loaded / initialFrames.length * 60}%`;
+            loaderProgress.style.width = `${15 + loaded / initialFrames.length * 83}%`;
+            const status = $('loaderText');
+            if (status) status.textContent = `Loading mobile images ${loaded} / ${initialFrames.length}`;
           })));
           scrollingReady = true;
           prefetchMobileSequenceWindow(initialFrames.length - 1, 1);
         } else {
           let loaded = 0; const total = SCROLL_FRAME_COUNT * 2;
-          const track = () => { loaded++; loaderProgress.style.width = `${40 + loaded / total * 60}%`; };
+          const track = () => {
+            loaded++;
+            loaderProgress.style.width = `${15 + loaded / total * 83}%`;
+            if (loaded === 1 || loaded % 12 === 0 || loaded === total) {
+              const status = $('loaderText');
+              if (status) status.textContent = `Loading image sequence ${loaded} / ${total}`;
+            }
+          };
           const promises = [];
           for (let frame = 0; frame < SCROLL_FRAME_COUNT; frame++) {
             promises.push(Promise.all([
@@ -9871,54 +9960,62 @@ void main(){
 
 
       async function init() {
-
-
-
         window.scrollTo(0, 0);
-
-
-
-        if (document.fonts) {
-          try {
-            await Promise.all([
-              document.fonts.load('400 16px "Futura PT"'),
-              document.fonts.load('600 16px "Futura PT"'),
-              document.fonts.load('400 16px "FuturaPTBook"'),
-              document.fonts.load('600 16px "FuturaPTDemi"')
-            ]);
-            await document.fonts.ready;
-          } catch (error) {
-            console.warn('[West Coast Naturals] Futura PT webfont preload failed.', error);
-          }
-        }
-
-
-
-        resizeEverything();
-
-
-
-        initMoodSection();
-
-
+        const loadLabel = $('loaderText');
+        const setLoading = (label, progress) => {
+          if (loadLabel) loadLabel.textContent = label;
+          if (loaderProgress && progress != null) loaderProgress.style.width = `${progress}%`;
+        };
 
         try {
+          setLoading('Preparing experience', 10);
+          if (document.fonts) {
+            try {
+              /* Elementor-hosted font paths can be slow or unavailable. Do not let
+                 an optional font request keep the entire loading bar at zero. */
+              const fontsReady = Promise.all([
+                document.fonts.load('400 16px "Futura PT"'),
+                document.fonts.load('600 16px "Futura PT"'),
+                document.fonts.load('400 16px "FuturaPTBook"'),
+                document.fonts.load('600 16px "FuturaPTDemi"')
+              ]).then(() => document.fonts.ready);
+              await Promise.race([
+                fontsReady,
+                new Promise(resolve => setTimeout(resolve, 3500))
+              ]);
+            } catch (error) {
+              console.warn('[West Coast Naturals] Font preload unavailable; continuing.', error);
+            }
+          }
+          resizeEverything();
+          initMoodSection();
 
-
-
+          setLoading('Loading opening panorama and images', 12);
+          /* Critical ordering: request the 360 panorama BEFORE queuing the 218
+             scroll JPG/mask files, or the opening image can be starved by them. */
+          const panoramaPromise = initPanorama();
           const scrollPromise = loadScrollAssets();
+          scrollPromise.catch(error => console.error('[West Coast Naturals] Initial sequence loading error:', error));
           const openingTextPromise = loadOpeningTextLottie().catch(error => console.warn('[West Coast Naturals] Opening text Lottie preload failed.', error));
           const volumePromise = loadVolumeLottie().catch(error => console.warn('[West Coast Naturals] Volume Lottie preload failed.', error));
           loadStorySequenceAssets().catch(error => console.warn('[West Coast Naturals] Story sequence preload failed.', error));
 
-          await initPanorama();
+          await Promise.race([
+            panoramaPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Opening panorama 360.jpg did not load in 25 seconds. Check its path and the browser network tab.')), 25000))
+          ]);
 
           if (MOBILE_RUNTIME) {
             await Promise.all([scrollPromise, openingTextPromise, volumePromise]);
             loader.classList.add('hidden'); animateHeroText(); initializeLottie();
             initHoldEnvironment().catch(error => console.warn('[West Coast Naturals] Mobile hold environment preload failed.', error));
           } else {
-            await Promise.all([initHoldEnvironment(), openingTextPromise, volumePromise]);
+            const holdReady = initHoldEnvironment().catch(error =>
+              console.warn('[West Coast Naturals] Hold environment can continue loading after intro.', error));
+            await Promise.all([
+              Promise.race([holdReady, new Promise(resolve => setTimeout(resolve, 12000))]),
+              openingTextPromise, volumePromise
+            ]);
             loader.classList.add('hidden'); animateHeroText(); initializeLottie();
             await scrollPromise;
           }
@@ -9961,8 +10058,7 @@ void main(){
 
 
           updateScrollTarget();
-
-
+          window.dispatchEvent(new Event('wcn-intro-ready'));
 
         } catch (error) {
 
@@ -9972,7 +10068,19 @@ void main(){
 
 
 
-          loader.innerHTML = '<div style="max-width:600px;padding:30px;text-align:center;line-height:1.6">One or more assets could not be loaded.<br>Check the browser console for the missing filename.</div>';
+          const message = error && error.message ? error.message : String(error);
+          loader.innerHTML = '';
+          const errorBox = document.createElement('div');
+          errorBox.style.cssText = 'max-width:600px;padding:30px;text-align:center;line-height:1.6;font-family:Arial,sans-serif';
+          const heading = document.createElement('strong');
+          heading.textContent = 'Experience could not finish loading';
+          const detail = document.createElement('p');
+          detail.style.cssText = 'margin-top:12px;font-size:13px;letter-spacing:normal;overflow-wrap:anywhere';
+          detail.textContent = error && error.stack ? error.stack : message;
+          detail.style.whiteSpace = 'pre-wrap';
+          detail.style.textAlign = 'left';
+          errorBox.append(heading, detail);
+          loader.appendChild(errorBox);
 
 
 
@@ -9993,12 +10101,25 @@ void main(){
 
 
     })();
-
-
-
+    }).catch(error => {
+      console.error('[West Coast Naturals] Startup failed:', error);
+      const loader = document.getElementById('loader');
+      if (!loader) return;
+      loader.classList.remove('hidden');
+      loader.innerHTML = '';
+      const box = document.createElement('div');
+      box.style.cssText = 'max-width:600px;padding:30px;text-align:center;line-height:1.6;font-family:Arial,sans-serif';
+      const heading = document.createElement('strong');
+      heading.textContent = 'Experience could not start';
+      const details = document.createElement('p');
+      details.style.cssText = 'margin-top:12px;font-size:13px;letter-spacing:normal;overflow-wrap:anywhere';
+      details.textContent = error && error.stack ? error.stack : (error && error.message ? error.message : String(error));
+      details.style.whiteSpace = 'pre-wrap';
+      details.style.textAlign = 'left';
+      box.append(heading, details);
+      loader.appendChild(box);
+    });
   </script>
-
-
 
 </body>
 
