@@ -3895,7 +3895,8 @@
         OCEAN_START_LEVEL = 0.12, // low wave bed at the top; grows as water approaches
         SOUND_AMBIENT_MIX = 0.72, // independent from foreground ocean/woodgrain effects
         SOUND_ENVIRONMENT_MIX = 1.0,
-        SOUND_OCEAN_MIX = 0.30, // reduced again: 30% of original peak, independently adjustable
+        SOUND_OCEAN_MIX = 0.30, // preserve the existing ocean/ambience/woodgrain balance
+        MASTER_AUDIO_BOOST = 3.5, // ~+10.9 dB before compression, across ALL sound layers
         MOOD_AUDIO_CROSSFADE_MS = 1550,
         STORY_SEQUENCE_LOTTIE = 'square.json', STORY_SEQUENCE_FRAME_COUNT = 369;
 
@@ -3959,6 +3960,13 @@
       const STORY_SEQUENCE_HOLD_END = .978;
       const BACKGROUND_AUTOPLAY_FPS = 24;
       const BACKGROUND_RETURN_FPS = 48;
+      /* Ordinary scroll is unchanged. Rapid repeated gestures temporarily accelerate
+         authored autoplay sections (both directions), rather than being discarded. */
+      const FAST_SCROLL_ENERGY_THRESHOLD = 230;
+      const FAST_SCROLL_ENERGY_RANGE = 470;
+      const FAST_SCROLL_MAX_PLAYBACK_RATE = 5.0;
+      const FAST_SCROLL_ACCUMULATE_MS = 440;
+      const FAST_SCROLL_RELEASE_MS = 560;
       const BACKGROUND_AUTOPLAY_END_FRAME = SCROLL_FRAME_COUNT - 1;
       const HOLD_ENV_AUTOPLAY_FADE_START_FRAME = 101;
 
@@ -4498,6 +4506,11 @@
       let soundEnabled = false, volumeEverActivated = false, volumeDocked = false;
       let moodAudioTransition = null;
       const soundscapeTracks = new Map(); // Only the audible woodgrain and its incoming neighbor play.
+      let masterAudioContext = null, masterAudioInput = null, masterAudioLimiter = null;
+      const connectedAudioElements = new WeakSet();
+      let scrollInputEnergy = 0, scrollInputLastAt = 0, timelinePlaybackRate = 1;
+      let mobileTimelineTouchLastY = 0;
+      let storyAutoScrollElapsedMs = 0, panoramaReturnElapsedMs = 0, panoramaReturnLastRafTime = 0;
       let volumeMoveTimer = 0, volumeMoveRaf = 0, volumeIntroAnimation = null;
       let openingTextAnimation = null, openingTextReady = false, openingTextTotalFrames = 1, openingTextCurrentFrame = -1;
       let storySquareLottie = null, storySquareLottieReady = false, storySquareLottieTotalFrames = 1;
@@ -4601,6 +4614,29 @@
 
 
       function smootherstep01(v) { const x = clamp(v, 0, 1); return x * x * x * (x * (x * 6 - 15) + 10); }
+
+      function registerFastScrollGesture(deltaPixels, now = performance.now()) {
+        const amount = Math.abs(deltaPixels);
+        if (!Number.isFinite(amount) || amount < .1) return;
+        const elapsed = scrollInputLastAt ? Math.max(0, now - scrollInputLastAt) : 5000;
+        scrollInputEnergy = Math.min(1400,
+          scrollInputEnergy * Math.exp(-elapsed / FAST_SCROLL_ACCUMULATE_MS) + Math.min(260, amount)
+        );
+        scrollInputLastAt = now;
+      }
+
+      function updateTimelinePlaybackRate(time, dt) {
+        const idle = scrollInputLastAt ? Math.max(0, time - scrollInputLastAt) : 5000;
+        const currentEnergy = scrollInputEnergy * Math.exp(-idle / FAST_SCROLL_RELEASE_MS);
+        const effort = smootherstep01(clamp(
+          (currentEnergy - FAST_SCROLL_ENERGY_THRESHOLD) / FAST_SCROLL_ENERGY_RANGE, 0, 1
+        ));
+        const desired = 1 + effort * (FAST_SCROLL_MAX_PLAYBACK_RATE - 1);
+        const response = desired > timelinePlaybackRate ? 14 : 3.5;
+        timelinePlaybackRate += (desired - timelinePlaybackRate) * (1 - Math.exp(-response * dt));
+        if (Math.abs(timelinePlaybackRate - 1) < .001 && desired === 1) timelinePlaybackRate = 1;
+      }
+
 
 
 
@@ -4897,6 +4933,7 @@
         storyAutoScrollStartY = storyFrameToPageY(fromFrame);
         storyAutoScrollEndY = storyFrameToPageY(toFrame);
         storyAutoScrollStartTime = performance.now();
+        storyAutoScrollElapsedMs = 0;
         storyAutoScrollDuration = Math.max(280, Math.abs(toFrame - fromFrame) / STORY_SEQUENCE_AUTOPLAY_FPS * 1000);
 
         /* Snap only to the authored boundary itself. From this point onward the autoplay
@@ -4939,9 +4976,10 @@
         }
       }
 
-      function updateStorySequenceAutoplay(time) {
+      function updateStorySequenceAutoplay(time, dt) {
         if (!storySequenceAutoplayActive) return;
-        const t = clamp((time - storyAutoScrollStartTime) / Math.max(1, storyAutoScrollDuration), 0, 1);
+        storyAutoScrollElapsedMs += Math.max(0, dt) * 1000 * timelinePlaybackRate;
+        const t = clamp(storyAutoScrollElapsedMs / Math.max(1, storyAutoScrollDuration), 0, 1);
         const frame = lerp(storySequenceAutoplayFrom, storySequenceAutoplayTo, t);
         const y = lerp(storyAutoScrollStartY, storyAutoScrollEndY, t);
         const raw = storyFrameToRawProgress(frame);
@@ -4973,6 +5011,7 @@
         storyAutoScrollStartY = window.scrollY;
         storyAutoScrollEndY = storyFrameToPageY(nextTarget);
         storyAutoScrollStartTime = performance.now();
+        storyAutoScrollElapsedMs = 0;
         storyAutoScrollDuration = Math.max(220, Math.abs(nextTarget - currentFrame) / STORY_SEQUENCE_AUTOPLAY_FPS * 1000);
       }
 
@@ -4994,13 +5033,18 @@
         panoramaReturnStartY = window.scrollY;
         panoramaReturnTargetY = targetY;
         panoramaReturnStartTime = performance.now();
+        panoramaReturnLastRafTime = panoramaReturnStartTime;
+        panoramaReturnElapsedMs = 0;
         panoramaReturnDuration = clamp(PANORAMA_RETURN_MIN_DURATION + distance * .30, PANORAMA_RETURN_MIN_DURATION, PANORAMA_RETURN_MAX_DURATION);
         requestAnimationFrame(updatePanoramaReturnAutoplay);
       }
 
       function updatePanoramaReturnAutoplay(time) {
         if (!panoramaReturnActive) return;
-        const t = clamp((time - panoramaReturnStartTime) / Math.max(1, panoramaReturnDuration), 0, 1);
+        const elapsed = Math.max(0, Math.min(50, time - panoramaReturnLastRafTime));
+        panoramaReturnLastRafTime = time;
+        panoramaReturnElapsedMs += elapsed * timelinePlaybackRate;
+        const t = clamp(panoramaReturnElapsedMs / Math.max(1, panoramaReturnDuration), 0, 1);
         const eased = easeOutExpo(t);
         window.scrollTo(0, lerp(panoramaReturnStartY, panoramaReturnTargetY, eased));
 
@@ -7701,9 +7745,64 @@ void main(){
          Use the exact MOOD_ITEMS names for future MP3 filenames.
          The 80% slider is the MASTER gain applied to all layers.
          ========================================================= */
+      /* HTMLMediaElement.volume is capped at 1.0; it cannot amplify quiet MP3s.
+         Route the existing layered mix through ONE Web Audio preamp + gentle limiter.
+         Create/resume the AudioContext only during the user's sound-button gesture. */
+      function connectTrackToMasterAudio(track) {
+        if (!track || !masterAudioContext || !masterAudioInput || connectedAudioElements.has(track.audio)) return;
+        try {
+          const source = masterAudioContext.createMediaElementSource(track.audio);
+          source.connect(masterAudioInput);
+          connectedAudioElements.add(track.audio);
+          track.mediaSource = source;
+        } catch (error) {
+          console.warn('[West Coast Naturals] Unable to connect sound to master output:', error);
+        }
+      }
+
+      function unlockMasterAudio() {
+        if (!masterAudioContext) {
+          const Context = window.AudioContext || window.webkitAudioContext;
+          if (!Context) {
+            console.warn('[West Coast Naturals] Web Audio is unavailable; using native audio levels.');
+            return;
+          }
+          try {
+            const context = new Context();
+            const preamp = context.createGain();
+            const limiter = context.createDynamicsCompressor();
+            preamp.gain.value = MASTER_AUDIO_BOOST;
+            limiter.threshold.value = -9;
+            limiter.knee.value = 12;
+            limiter.ratio.value = 10;
+            limiter.attack.value = .003;
+            limiter.release.value = .19;
+            preamp.connect(limiter);
+            limiter.connect(context.destination);
+            masterAudioContext = context;
+            masterAudioInput = preamp;
+            masterAudioLimiter = limiter;
+            for (const track of soundscapeTracks.values()) connectTrackToMasterAudio(track);
+          } catch (error) {
+            console.warn('[West Coast Naturals] Could not start amplified audio output:', error);
+            try { if (masterAudioContext) masterAudioContext.close(); } catch (_) {}
+            masterAudioContext = masterAudioInput = masterAudioLimiter = null;
+            return;
+          }
+        }
+        if (masterAudioContext.state === 'suspended') {
+          masterAudioContext.resume().catch(error => {
+            console.warn('[West Coast Naturals] Audio output unlock was blocked:', error);
+          });
+        }
+      }
+
       function makeSoundscapeTrack(key, relativePath, existingElement = null) {
         if (soundscapeTracks.has(key)) return soundscapeTracks.get(key);
-        const audio = existingElement || new Audio();
+        /* Elementor's FVDEMV media plugin replaces window.Audio with its own
+           constructor. Always create a genuine browser HTMLAudioElement instead
+           of calling the potentially overwritten global Audio function. */
+        const audio = existingElement || document.createElement('audio');
         audio.loop = true;
         audio.preload = 'none';
         audio.volume = 0;
@@ -7717,6 +7816,7 @@ void main(){
           }
         });
         soundscapeTracks.set(key, track);
+        connectTrackToMasterAudio(track);
         return track;
       }
 
@@ -7846,6 +7946,7 @@ void main(){
         volumeSliderRow.classList.remove('is-keyboard-focus', 'is-dragging');
 
         if (soundEnabled) {
+          unlockMasterAudio();
           /* IMPORTANT: play() is called directly inside the button event to unlock
              the ambient, ocean and current woodgrain on desktop and mobile. */
           tryPlaySoundscapeTrack(soundscapeTracks.get('ambient'), true);
@@ -9352,11 +9453,18 @@ void main(){
              109-frame JPG sequence look like it is stuttering through a long dramatic ease. */
           const frameDelta = targetScrollFrame - smoothScrollFrame;
           if (Math.abs(frameDelta) <= SCROLL_SETTLE_THRESHOLD) smoothScrollFrame = targetScrollFrame;
-          else smoothScrollFrame += clamp(frameDelta * SCROLL_FRAME_VISUAL_EASE, -SCROLL_FRAME_MAX_STEP, SCROLL_FRAME_MAX_STEP);
+          else {
+            /* Let fast wheel input reduce visual lag during manual image/story scrubbing,
+               while preserving the exact existing ease for normal scroll speed. */
+            const catchupEase = Math.min(.85, SCROLL_FRAME_VISUAL_EASE * Math.sqrt(timelinePlaybackRate));
+            const catchupMaxStep = SCROLL_FRAME_MAX_STEP * timelinePlaybackRate;
+            smoothScrollFrame += clamp(frameDelta * catchupEase, -catchupMaxStep, catchupMaxStep);
+          }
         }
-        smoothStoryProgress += sd * STORY_SCROLL_EASE;
+        const storyEase = Math.min(.70, STORY_SCROLL_EASE * timelinePlaybackRate);
+        smoothStoryProgress += sd * storyEase;
         if (storySequenceAutoplayActive) smoothStorySequenceProgress = targetStorySequenceProgress;
-        else smoothStorySequenceProgress += qd * STORY_SCROLL_EASE;
+        else smoothStorySequenceProgress += qd * storyEase;
 
         const frame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
 
@@ -9421,6 +9529,17 @@ void main(){
          text sequence and page position remain synchronized. */
       window.addEventListener('wheel', event => {
         if (event.ctrlKey || !scrollingReady) return;
+        /* Measure deliberate wheel/trackpad effort BEFORE autoplay intercepts the event.
+           Single slow ticks retain the established speed; rapid successive movement
+           temporarily accelerates all authored forward/reverse autoplay sections. */
+        const viewportBounds = experience.getBoundingClientRect();
+        const overTimeline = viewportBounds.top < window.innerHeight && viewportBounds.bottom > 0;
+        const controlTarget = event.target instanceof Element &&
+          event.target.closest('#volumeControl, #moodBackgroundControl, #woodViewerShell, #woodDotButtons, #productThumbButtons');
+        if (overTimeline && !controlTarget) {
+          const wheelPixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1);
+          registerFastScrollGesture(wheelPixels);
+        }
 
         /* The one-gesture mood escape is valid only while we are still close to the
            thumbnail -> semi-panorama handoff. Once the user has genuinely travelled up
@@ -9511,6 +9630,7 @@ void main(){
         mobileTimelineTouchId = touch.identifier;
         mobileTimelineTouchStartX = touch.clientX;
         mobileTimelineTouchStartY = touch.clientY;
+        mobileTimelineTouchLastY = touch.clientY;
         mobileTimelineTouchDirection = 0;
 
         /* Controls that are intrinsically horizontal must NEVER steer the master timeline.
@@ -9533,6 +9653,8 @@ void main(){
         const touch = Array.from(event.touches || []).find(item => item.identifier === mobileTimelineTouchId) || (event.touches && event.touches[0]);
         if (!touch) return;
 
+        const incrementalTouchY = touch.clientY - mobileTimelineTouchLastY;
+        mobileTimelineTouchLastY = touch.clientY;
         const totalX = touch.clientX - mobileTimelineTouchStartX;
         const totalY = touch.clientY - mobileTimelineTouchStartY;
         const absX = Math.abs(totalX), absY = Math.abs(totalY);
@@ -9547,6 +9669,9 @@ void main(){
            a vertical-dominant gesture here removes the old left/right -> timeline leak. */
         if (absX > absY * 1.08) return;
         if (absY < 16 || absY < absX * 1.02) return;
+        if (isTimelineAutoplayLocked() || panoramaReturnActive) {
+          registerFastScrollGesture(incrementalTouchY * 2.5);
+        }
 
         const desiredDirection = totalY < 0 ? 1 : -1;
 
@@ -9800,7 +9925,7 @@ void main(){
           const previousBackgroundAutoplayFrame = backgroundAutoplayFrame;
           backgroundAutoplayFrame = Math.min(
             BACKGROUND_AUTOPLAY_END_FRAME,
-            backgroundAutoplayFrame + BACKGROUND_AUTOPLAY_FPS * dt
+            backgroundAutoplayFrame + BACKGROUND_AUTOPLAY_FPS * dt * timelinePlaybackRate
           );
           smoothScrollFrame = backgroundAutoplayFrame;
           /* The first story clip is explicitly armed when the Scroll_01 autoplay begins.
@@ -9866,7 +9991,9 @@ void main(){
             /* Never advance more than one JPG per RAF. Even if the wheel multiplier or a
                slow frame produces a large target jump, every Scroll_01 frame is rendered
                in sequence instead of visually skipping. */
-            const maxStep = Math.min(1, BACKGROUND_RETURN_FPS * dt);
+            /* At ordinary speed preserve one-image-per-frame return; rapid scrolling
+               deliberately permits skipping frames to make the reverse truly faster. */
+            const maxStep = Math.min(5, BACKGROUND_RETURN_FPS * dt * timelinePlaybackRate);
             smoothScrollFrame += Math.max(delta, -maxStep);
             backgroundAutoplayFrame = smoothScrollFrame;
 
@@ -9940,10 +10067,11 @@ void main(){
         const lockedY = getTimelineAutoplayLockY();
         if (lockedY !== null && Math.abs(window.scrollY - lockedY) > .5) window.scrollTo(0, lockedY);
 
+        updateTimelinePlaybackRate(time, dt);
         updateWoodStripLoop(dt);
         updateBackgroundSequenceAutoplay(dt);
-        updateStorySequenceAutoplay(time);
-        updateMoodClip(dt);
+        updateStorySequenceAutoplay(time, dt);
+        updateMoodClip(dt * timelinePlaybackRate);
         updateHoldEnvironment(dt, time);
         updateHoldHotspots(dt);
         updateMoodBackgroundParallax(dt);
@@ -10033,6 +10161,8 @@ void main(){
           lastUserScrollProgress = 0; userScrollDirection = 0; lastUserTravelledPx = 0;
           storySequenceAutoplayActive = false; storySequenceAutoplayFrame = 0; storySequenceAutoplayKind = '';
           storyAutoScrollStartY = storyAutoScrollEndY = storyAutoScrollStartTime = storyAutoScrollDuration = 0;
+          storyAutoScrollElapsedMs = 0;
+          scrollInputEnergy = scrollInputLastAt = 0; timelinePlaybackRate = 1;
           lastManualStoryFrame = 0;
           storyFirstSegmentComplete = false; storyMidSegmentHigh = false; storyThirdSegmentHigh = false; storyFourthSegmentHigh = false; storyFifthSegmentHigh = false;
           storyStartAnchorY = storyMidAnchorY = storyThirdAnchorY = storyFourthAnchorY = storyFifthAnchorY = null;
