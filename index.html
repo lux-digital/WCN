@@ -1525,6 +1525,9 @@
        This white layer tracks that overlap so transparent gallery areas resolve to a
        clean white page rather than continuing to show the interactive background. */
     #elementorExitWhiteFade {
+      /* In the Elementor v9 integration, the parent page owns the visible wash.
+         Keep the child layer unused to avoid double-fading the image. */
+      display: none !important;
       position: absolute;
       inset: 0;
       z-index: 75;
