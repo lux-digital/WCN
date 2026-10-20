@@ -1150,7 +1150,10 @@
 
 
 
-      background: rgba(255, 255, 255, .14);
+      /* A pale translucent underlay was peeking through as a bright antialiased
+         1–2px line at the clipped bottom edge of the woodgrain. Keep the shell dark;
+         NEO LUMBER's transparent mode still overrides this independently. */
+      background: rgba(0, 0, 0, .17);
       box-shadow: 0 24px 65px rgba(0, 0, 0, .22), 0 8px 18px rgba(0, 0, 0, .12);
       backdrop-filter: blur(2px);
     }
@@ -2307,8 +2310,10 @@
     #woodViewerStrip,
     #woodViewerStripIncoming {
       position: absolute;
-      top: 0;
-      bottom: 0;
+      /* Two pixel bleed eliminates subpixel white seams at the rounded bottom
+         during fractional transforms, without moving the viewer or its controls. */
+      top: -2px;
+      bottom: -2px;
       left: -10%;
       right: -10%;
       background-repeat: repeat-x;
@@ -2330,8 +2335,8 @@
 
     #woodViewerOverlay {
       position: absolute;
-      top: 0;
-      bottom: 0;
+      top: -2px;
+      bottom: -2px;
       left: -10%;
       right: -10%;
       z-index: 2;
@@ -4618,6 +4623,11 @@
       let moodClipLockY = 0, moodClipAnchorY = null, moodClipReverseSuppressed = false;
       let moodExitReadyAt = Infinity, moodExitReadyTimer = 0;
       let moodExitLastBlockedWheelAt = -Infinity, moodExitTouchStartAt = 0;
+      /* The reverse journey needs the same intentional moment of rest. The timer is
+         armed when the Gallery has fully returned, not while it is still moving. */
+      let moodReturnReadyAt = 0;
+      let moodReturnLastBlockedWheelAt = -Infinity;
+      let moodReturnHolding = false;
       /* Cross-frame Elementor handoff. The WCN timeline stays frozen on its final scene
          while the parent WordPress page scrolls the next Elementor container over it. */
       const ELEMENTOR_HANDOFF_CHANNEL = 'WCN_ELEMENTOR_HANDOFF_V1';
@@ -5145,6 +5155,29 @@
         return moodClipComplete && !moodClipActive && performance.now() >= moodExitReadyAt;
       }
 
+      function beginMoodReturnHold() {
+        /* Re-arm only on an actual transition from Gallery covering WCN to the Gallery
+           fully returned. Do not restart the hold for unrelated configure messages. */
+        moodReturnHolding = true;
+        moodReturnReadyAt = performance.now() + MOOD_EXIT_SETTLE_MS;
+        moodReturnLastBlockedWheelAt = -Infinity;
+      }
+
+      function clearMoodReturnHold() {
+        moodReturnHolding = false;
+        moodReturnReadyAt = 0;
+        moodReturnLastBlockedWheelAt = -Infinity;
+      }
+
+      function moodReturnCanReverse(isNewTouch = false) {
+        if (!moodReturnHolding) return true;
+        if (performance.now() < moodReturnReadyAt) return false;
+        if (isNewTouch) return moodExitTouchStartAt >= moodReturnReadyAt;
+        /* A rapid trackpad stream must settle first; the NEXT deliberate upward
+           gesture after the pause can reverse the clip. */
+        return performance.now() - moodReturnLastBlockedWheelAt >= MOOD_EXIT_WHEEL_FRESH_GESTURE_MS;
+      }
+
       function clearMoodExitSettle() {
         if (moodExitReadyTimer) window.clearTimeout(moodExitReadyTimer);
         moodExitReadyTimer = 0;
@@ -5236,13 +5269,19 @@
         if (!data || data.channel !== ELEMENTOR_HANDOFF_CHANNEL) return;
 
         if (data.type === 'configure') {
+          const wasOverlayActive = parentOverlayActive;
           parentScrollHandoffEnabled = !!data.enabled;
           parentOverlayActive = !!data.overlayActive;
+          if (wasOverlayActive && !parentOverlayActive && moodClipComplete) beginMoodReturnHold();
+          else if (parentOverlayActive) clearMoodReturnHold();
           applyParentOverlayProgress(data.overlayProgress ?? (parentOverlayActive ? parentOverlayProgress : 0));
           if (parentScrollHandoffEnabled && moodClipComplete) notifyParentMoodHandoffReady();
           updateMoodExitScrollIndicator();
         } else if (data.type === 'overlay-state') {
+          const wasOverlayActive = parentOverlayActive;
           parentOverlayActive = !!data.active;
+          if (wasOverlayActive && !parentOverlayActive && moodClipComplete) beginMoodReturnHold();
+          else if (parentOverlayActive) clearMoodReturnHold();
           if (!parentOverlayActive) applyParentOverlayProgress(0);
           updateMoodExitScrollIndicator();
         } else if (data.type === 'overlay-progress') {
@@ -5260,6 +5299,7 @@
       function startMoodClip(direction) {
         if (moodClipActive) return;
         clearMoodExitSettle();
+        clearMoodReturnHold();
         moodClipActive = true;
         moodClipDirection = direction >= 0 ? 1 : -1;
         moodClipLockY = window.scrollY;
@@ -9830,6 +9870,10 @@ void main(){
 
         if (event.deltaY < 0 && moodClipComplete && !moodClipActive) {
           event.preventDefault();
+          if (!moodReturnCanReverse()) {
+            moodReturnLastBlockedWheelAt = performance.now();
+            return;
+          }
           startMoodClip(-1);
           return;
         }
@@ -9923,6 +9967,8 @@ void main(){
         if (moodClipComplete && !moodClipActive && desiredDirection < 0) {
           event.preventDefault();
           mobileTimelineTouchDirection = desiredDirection;
+          /* Require a new upward swipe after the returning Gallery has rested. */
+          if (!moodReturnCanReverse(true)) return;
           startMoodClip(-1);
           return;
         }
