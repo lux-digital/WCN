@@ -4276,6 +4276,10 @@
 
       const MOOD_VIEWER_END = 1.0;
       const MOOD_CLIP_DURATION = 4.0;
+      /* Let the complete thumbnail composition breathe before Wordpress/Elementor
+         can rise over it. Only the final, fully revealed frame starts this clock. */
+      const MOOD_EXIT_SETTLE_MS = 2000;
+      const MOOD_EXIT_WHEEL_FRESH_GESTURE_MS = 230;
 
       const PRODUCT_THUMBS = [
 
@@ -4612,6 +4616,8 @@
 
       let moodClipActive = false, moodClipComplete = false, moodClipDirection = 0, moodClipProgress = 0;
       let moodClipLockY = 0, moodClipAnchorY = null, moodClipReverseSuppressed = false;
+      let moodExitReadyAt = Infinity, moodExitReadyTimer = 0;
+      let moodExitLastBlockedWheelAt = -Infinity, moodExitTouchStartAt = 0;
       /* Cross-frame Elementor handoff. The WCN timeline stays frozen on its final scene
          while the parent WordPress page scrolls the next Elementor container over it. */
       const ELEMENTOR_HANDOFF_CHANNEL = 'WCN_ELEMENTOR_HANDOFF_V1';
@@ -5135,17 +5141,45 @@
         }
       }
 
+      function moodExitIsReady() {
+        return moodClipComplete && !moodClipActive && performance.now() >= moodExitReadyAt;
+      }
+
+      function clearMoodExitSettle() {
+        if (moodExitReadyTimer) window.clearTimeout(moodExitReadyTimer);
+        moodExitReadyTimer = 0;
+        moodExitReadyAt = Infinity;
+        moodExitLastBlockedWheelAt = -Infinity;
+      }
+
+      function beginMoodExitSettle() {
+        clearMoodExitSettle();
+        moodExitReadyAt = performance.now() + MOOD_EXIT_SETTLE_MS;
+        /* No queued scroll inputs: the Gallery is released only after full opacity,
+           then a visible beat on screen. The scroll indicator appears at unlock. */
+        moodExitReadyTimer = window.setTimeout(() => {
+          moodExitReadyTimer = 0;
+          if (!moodExitIsReady()) return;
+          notifyParentMoodHandoffReady();
+          updateMoodExitScrollIndicator();
+        }, MOOD_EXIT_SETTLE_MS + 18);
+        updateMoodExitScrollIndicator();
+      }
+
       function requestParentPageScroll(deltaY) {
         if (!parentScrollHandoffEnabled) return false;
         const amount = clamp(Number(deltaY) || 0, -900, 900);
         if (Math.abs(amount) < .1) return false;
+        /* Once Elementor has begun covering WCN, reverse scrolling remains instant.
+           Before that first handoff, wait for the entire final-reveal hold. */
+        if (amount > 0 && !parentOverlayActive && !moodExitIsReady()) return false;
         return postElementorHandoffMessage('scroll-parent', { deltaY: amount });
       }
 
       function updateMoodExitScrollIndicator() {
         if (!moodExitScrollIndicator) return;
 
-        const visible = moodClipComplete && !moodClipActive && !parentOverlayActive &&
+        const visible = moodExitIsReady() && !parentOverlayActive &&
           getMoodVisualProgress() >= MOOD_VIEWER_END - .0005;
 
         if (!visible || !woodViewerShell || !moodSeriesName || !stage) {
@@ -5180,7 +5214,7 @@
       }
 
       function notifyParentMoodHandoffReady() {
-        if (!parentScrollHandoffEnabled || !moodClipComplete) return;
+        if (!parentScrollHandoffEnabled || !moodExitIsReady()) return;
         postElementorHandoffMessage('handoff-ready');
       }
 
@@ -5225,6 +5259,7 @@
 
       function startMoodClip(direction) {
         if (moodClipActive) return;
+        clearMoodExitSettle();
         moodClipActive = true;
         moodClipDirection = direction >= 0 ? 1 : -1;
         moodClipLockY = window.scrollY;
@@ -5256,11 +5291,12 @@
           moodClipActive = false;
           moodClipComplete = true;
           updateMoodSectionMotion();
-          notifyParentMoodHandoffReady();
+          beginMoodExitSettle();
         } else if (moodClipDirection < 0 && moodClipProgress <= .0001) {
           moodClipProgress = 0;
           moodClipActive = false;
           moodClipComplete = false;
+          clearMoodExitSettle();
           moodClipReverseSuppressed = true;
           /* Stay exactly where the reverse clip was triggered. There is no stored anchor
              to jump back to; the next real upward gesture continues from this same state. */
@@ -9741,6 +9777,7 @@ void main(){
              of the document because there is nowhere farther down for the browser to move. */
           event.preventDefault();
           if (desiredMoodDirection !== moodClipDirection) {
+            clearMoodExitSettle();
             moodClipDirection = desiredMoodDirection;
             moodClipComplete = false;
             moodClipReverseSuppressed = false;
@@ -9777,6 +9814,16 @@ void main(){
           if (event.deltaMode === 1) deltaPx *= 16;
           else if (event.deltaMode === 2) deltaPx *= window.innerHeight;
           event.preventDefault();
+          if (deltaPx > 0 && !parentOverlayActive) {
+            const now = performance.now();
+            const heldRecently = now - moodExitLastBlockedWheelAt < MOOD_EXIT_WHEEL_FRESH_GESTURE_MS;
+            if (!moodExitIsReady() || heldRecently) {
+              /* Hold on the completed thumbnail scene. Trackpad inertia/ticks that
+                 started during the hold must stop before a new gesture can exit. */
+              moodExitLastBlockedWheelAt = now;
+              return;
+            }
+          }
           requestParentPageScroll(deltaPx);
           return;
         }
@@ -9814,6 +9861,7 @@ void main(){
         mobileTimelineTouchId = touch.identifier;
         mobileTimelineTouchStartX = touch.clientX;
         mobileTimelineTouchStartY = touch.clientY;
+        moodExitTouchStartAt = performance.now();
         mobileTimelineTouchLastY = touch.clientY;
         mobileTimelineTouchDirection = 0;
 
@@ -9863,6 +9911,10 @@ void main(){
             (parentOverlayActive || desiredDirection > 0)) {
           event.preventDefault();
           mobileTimelineTouchDirection = desiredDirection;
+          /* A swipe begun during the hold may NOT suddenly push the Gallery in the
+             middle of that same gesture when the hold timer expires. */
+          if (desiredDirection > 0 && !parentOverlayActive &&
+              (!moodExitIsReady() || moodExitTouchStartAt < moodExitReadyAt)) return;
           /* Finger upward = page downward, matching native touch-page direction. */
           requestParentPageScroll(-incrementalTouchY * 1.55);
           return;
@@ -10362,6 +10414,7 @@ void main(){
           cameraScrollVisualProgress = 0; panoramaReturnCameraGlideActive = false;
           panoramaReturnActive = false;
           moodClipActive = moodClipComplete = false; moodClipDirection = 0; moodClipProgress = 0;
+          clearMoodExitSettle();
           parentOverlayActive = false;
           postElementorHandoffMessage('handoff-cancel');
           moodClipAnchorY = null; moodClipReverseSuppressed = false;
