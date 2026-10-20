@@ -997,8 +997,7 @@
 
     #storyLayer {
       position: absolute;
-      inset: 0;
-      z-index: 8;
+      inset: 0;z-index: 8;
       overflow: hidden;
       pointer-events: none;
     }
@@ -1476,6 +1475,49 @@
       opacity: 1;
       visibility: visible;
       pointer-events: none;
+    }
+
+
+    /* Final-page scroll cue. Unlike the original bottom scroll indicator, this copy is
+       shown only once the animated-thumbnail scene is completely established. JS keeps
+       it mathematically centered in the live gap between the thumbnail and mood title. */
+    #moodExitScrollIndicator {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 88px;
+      height: 88px;
+      z-index: 58;
+      opacity: 0;
+      visibility: hidden;
+      transform: translate(-50%, -50%) scale(.92);
+      transform-origin: 50% 50%;
+      pointer-events: none;
+      transition:
+        opacity .72s cubic-bezier(.22,1,.36,1),
+        transform .92s cubic-bezier(.22,1,.36,1),
+        visibility 0s linear .72s;
+      filter: drop-shadow(0 3px 12px rgba(0,0,0,.22));
+    }
+
+    #moodExitScrollIndicator.is-visible {
+      opacity: .94;
+      visibility: visible;
+      transform: translate(-50%, -50%) scale(1);
+      transition-delay: 0s;
+    }
+
+    #moodExitScrollIndicator svg {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      #moodExitScrollIndicator {
+        width: 68px;
+        height: 68px;
+      }
     }
 
 
@@ -1997,8 +2039,7 @@
     }
 
     /* Stack the copy and thumbnail row in normal layout flow so they can NEVER intersect,
-       regardless of viewport height/aspect ratio. The thumbnail row remains flush to bottom. */
-    #moodFooter {
+       regardless of viewport height/aspect ratio. The thumbnail row remains flush to bottom. */#moodFooter {
       left: 0 !important;
       right: 0 !important;
       top: auto !important;
@@ -2997,8 +3038,7 @@
        AUDIO LOTTIE — opening hero -> persistent top-center control
        The opening position is measured against the rendered opening SVG;
        --volume-opening-top serves as a fallback until the artwork has loaded.
-       The docked icon has no dark circular plate.
-       This overlay is independent of the hero mask and scroll text.
+       The docked icon has no dark circular plate.This overlay is independent of the hero mask and scroll text.
        ========================================================= */
     #volumeControl {
       --volume-opening-top: 60%;
@@ -3759,6 +3799,7 @@
 
 
           <div id="scrollIndicator"></div>
+          <div id="moodExitScrollIndicator" aria-hidden="true"></div>
 
 
 
@@ -3997,8 +4038,7 @@
       const SCROLL_FRAME_MAX_STEP = 0.95;
       const PANORAMA_RETURN_TRIGGER_FRAME = PANORAMA_FADE_END_FRAME + 0.35;
       const PANORAMA_RETURN_MIN_DURATION = 1700;
-      const PANORAMA_RETURN_MAX_DURATION = 2850;
-      const PANORAMA_RETURN_CAMERA_EASE_RATE = 1.18;
+      const PANORAMA_RETURN_MAX_DURATION = 2850;const PANORAMA_RETURN_CAMERA_EASE_RATE = 1.18;
       const PANORAMA_NORMAL_CAMERA_EASE_RATE = 7.5;
 
       const HOLD_ENV_IMAGE = 'hold-extended.jpg';
@@ -4338,7 +4378,7 @@
 
 
 
-      const scrollIndicator = $('scrollIndicator'), loader = $('loader'), loaderProgress = $('loaderProgress');
+      const scrollIndicator = $('scrollIndicator'), moodExitScrollIndicator = $('moodExitScrollIndicator'), loader = $('loader'), loaderProgress = $('loaderProgress');
       const openingTextLottie = $('openingTextLottie');
       const volumeControl = $('volumeControl'), volumeButton = $('volumeButton'), volumeLottie = $('volumeLottie');
       const volumeSlider = $('volumeSlider'), volumeSliderRow = $('volumeSliderRow'), experienceAudio = $('experienceAudio');
@@ -4547,6 +4587,10 @@
 
       let moodClipActive = false, moodClipComplete = false, moodClipDirection = 0, moodClipProgress = 0;
       let moodClipLockY = 0, moodClipAnchorY = null, moodClipReverseSuppressed = false;
+      /* Cross-frame Elementor handoff. The WCN timeline stays frozen on its final scene
+         while the parent WordPress page scrolls the next Elementor container over it. */
+      const ELEMENTOR_HANDOFF_CHANNEL = 'WCN_ELEMENTOR_HANDOFF_V1';
+      let parentScrollHandoffEnabled = false, parentOverlayActive = false;
       let moodBackgroundUserInteracted = false;
       let moodBackgroundUserValue = 100;
       let moodBackgroundAutoFadeRaf = 0;
@@ -4997,9 +5041,7 @@
         if (!storySequenceAutoplayActive) return;
         const desiredDirection = direction >= 0 ? 1 : -1;
         const currentDirection = Math.sign(storySequenceAutoplayTo - storySequenceAutoplayFrom) || 1;
-        if (desiredDirection === currentDirection) return;
-
-        const low = Math.min(storySequenceAutoplayFrom, storySequenceAutoplayTo);
+        if (desiredDirection === currentDirection) return;const low = Math.min(storySequenceAutoplayFrom, storySequenceAutoplayTo);
         const high = Math.max(storySequenceAutoplayFrom, storySequenceAutoplayTo);
         const currentFrame = clamp(storySequenceAutoplayFrame, low, high);
         const nextTarget = desiredDirection > 0 ? high : low;
@@ -5058,6 +5100,84 @@
         }
       }
 
+      function postElementorHandoffMessage(type, payload = {}) {
+        if (window.parent === window) return false;
+        try {
+          window.parent.postMessage({ channel: ELEMENTOR_HANDOFF_CHANNEL, type, ...payload }, '*');
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function requestParentPageScroll(deltaY) {
+        if (!parentScrollHandoffEnabled) return false;
+        const amount = clamp(Number(deltaY) || 0, -900, 900);
+        if (Math.abs(amount) < .1) return false;
+        return postElementorHandoffMessage('scroll-parent', { deltaY: amount });
+      }
+
+      function updateMoodExitScrollIndicator() {
+        if (!moodExitScrollIndicator) return;
+
+        const visible = moodClipComplete && !moodClipActive && !parentOverlayActive &&
+          getMoodVisualProgress() >= MOOD_VIEWER_END - .0005;
+
+        if (!visible || !woodViewerShell || !moodSeriesName || !stage) {
+          moodExitScrollIndicator.classList.remove('is-visible');
+          return;
+        }
+
+        const shellRect = woodViewerShell.getBoundingClientRect();
+        const titleRect = moodSeriesName.getBoundingClientRect();
+        const stageRect = stage.getBoundingClientRect();
+        const gapTop = shellRect.bottom;
+        const gapBottom = titleRect.top;
+        const gap = Math.max(0, gapBottom - gapTop);
+
+        /* Use the true live geometry rather than a viewport percentage. This keeps the cue
+           centered in exactly the lane requested even when Elementor/header height, mobile
+           orientation or responsive thumbnail dimensions change. */
+        let centerY = gap > 4 ? gapTop + gap * .50 : gapTop + 28;
+        centerY = clamp(centerY, stageRect.top + 24, stageRect.bottom - 24);
+        moodExitScrollIndicator.style.top = `${centerY - stageRect.top}px`;
+
+        const maxCueSize = MOBILE_RUNTIME ? 68 : 88;
+        const minCueSize = MOBILE_RUNTIME ? 38 : 44;
+        const cueSize = clamp(gap * .72, minCueSize, maxCueSize);
+        moodExitScrollIndicator.style.width = `${cueSize}px`;
+        moodExitScrollIndicator.style.height = `${cueSize}px`;
+        moodExitScrollIndicator.classList.add('is-visible');
+      }
+
+      function notifyParentMoodHandoffReady() {
+        if (!parentScrollHandoffEnabled || !moodClipComplete) return;
+        postElementorHandoffMessage('handoff-ready');
+      }
+
+      window.addEventListener('message', event => {
+        if (event.source !== window.parent) return;
+        const data = event.data;
+        if (!data || data.channel !== ELEMENTOR_HANDOFF_CHANNEL) return;
+
+        if (data.type === 'configure') {
+          parentScrollHandoffEnabled = !!data.enabled;
+          parentOverlayActive = !!data.overlayActive;
+          if (parentScrollHandoffEnabled && moodClipComplete) notifyParentMoodHandoffReady();
+          updateMoodExitScrollIndicator();
+        } else if (data.type === 'overlay-state') {
+          parentOverlayActive = !!data.active;
+          updateMoodExitScrollIndicator();
+        }
+      });
+
+      /* The parent Elementor widget may load before or after this file. A ready message lets
+         either ordering establish the handoff without polling or same-origin assumptions. */
+      if (window.parent !== window) {
+        postElementorHandoffMessage('child-ready');
+        window.setTimeout(() => postElementorHandoffMessage('child-ready'), 500);
+      }
+
       function startMoodClip(direction) {
         if (moodClipActive) return;
         moodClipActive = true;
@@ -5091,6 +5211,7 @@
           moodClipActive = false;
           moodClipComplete = true;
           updateMoodSectionMotion();
+          notifyParentMoodHandoffReady();
         } else if (moodClipDirection < 0 && moodClipProgress <= .0001) {
           moodClipProgress = 0;
           moodClipActive = false;
@@ -5565,6 +5686,7 @@
         }
 
         updateMoodVideoShade(viewerOpacity);
+        updateMoodExitScrollIndicator();
       }
 
 
@@ -5997,9 +6119,7 @@
             woodPanTouchStartX = event.clientX;
             woodPanTouchStartY = event.clientY;
             return;
-          }
-
-          woodPanTouchMode = 'pan';
+          }woodPanTouchMode = 'pan';
           woodPanDragging = true;
           woodViewerShell.classList.add('is-dragging');
           try { woodViewerShell.setPointerCapture(event.pointerId); } catch (e) {}
@@ -6994,11 +7114,7 @@ void main(){
 
 
 
-        const cp = Math.cos(pitch), direction = new THREE.Vector3(Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
-
-
-
-        const lookTarget = camera.position.clone().add(direction.multiplyScalar(100));
+        const cp = Math.cos(pitch), direction = new THREE.Vector3(Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);const lookTarget = camera.position.clone().add(direction.multiplyScalar(100));
 
 
 
@@ -7997,8 +8113,7 @@ void main(){
           target.classList.remove('is-keyboard-focus');
           target.classList.add('is-dragging');
         });
-        slider.addEventListener('pointerup', onPointerEnd);
-        slider.addEventListener('pointercancel', onPointerEnd);
+        slider.addEventListener('pointerup', onPointerEnd);slider.addEventListener('pointercancel', onPointerEnd);
         slider.addEventListener('blur', () => {
           target.classList.remove('is-keyboard-focus');
           onPointerEnd();
@@ -8096,6 +8211,20 @@ void main(){
         scrollLottie.addEventListener('data_failed', () => {
           console.error('Could not load Scroll.json. Confirm Scroll.json is in the same folder as this page.');
         });
+
+        if (moodExitScrollIndicator) {
+          const moodExitScrollLottie = lottie.loadAnimation({
+            container: moodExitScrollIndicator,
+            renderer: 'svg',
+            loop: true,
+            autoplay: true,
+            path: 'Scroll.json',
+            rendererSettings: { preserveAspectRatio: 'xMidYMid meet' }
+          });
+          moodExitScrollLottie.addEventListener('data_failed', () => {
+            console.error('Could not load the final Scroll.json cue.');
+          });
+        }
 
       }
 
@@ -8997,8 +9126,7 @@ void main(){
         }
 
         if (MOBILE_RUNTIME) {
-          const mobileHoldInteractive = holdEnvBlend > .04 &&
-            (holdEnvMode === 'active' || holdEnvMode === 'entering') &&
+          const mobileHoldInteractive = holdEnvBlend > .04 &&(holdEnvMode === 'active' || holdEnvMode === 'entering') &&
             smoothStoryProgress < MOOD_WHITE_START;
           stage.classList.toggle('mobile-hold-touch', mobileHoldInteractive);
         }
@@ -9597,6 +9725,16 @@ void main(){
           return;
         }
 
+        if (moodClipComplete && !moodClipActive && parentScrollHandoffEnabled &&
+            (parentOverlayActive || event.deltaY > 0)) {
+          let deltaPx = event.deltaY;
+          if (event.deltaMode === 1) deltaPx *= 16;
+          else if (event.deltaMode === 2) deltaPx *= window.innerHeight;
+          event.preventDefault();
+          requestParentPageScroll(deltaPx);
+          return;
+        }
+
         if (event.deltaY < 0 && moodClipComplete && !moodClipActive) {
           event.preventDefault();
           startMoodClip(-1);
@@ -9674,6 +9812,15 @@ void main(){
         }
 
         const desiredDirection = totalY < 0 ? 1 : -1;
+
+        if (moodClipComplete && !moodClipActive && parentScrollHandoffEnabled &&
+            (parentOverlayActive || desiredDirection > 0)) {
+          event.preventDefault();
+          mobileTimelineTouchDirection = desiredDirection;
+          /* Finger upward = page downward, matching native touch-page direction. */
+          requestParentPageScroll(-incrementalTouchY * 1.55);
+          return;
+        }
 
         if (moodClipComplete && !moodClipActive && desiredDirection < 0) {
           event.preventDefault();
@@ -9997,8 +10144,7 @@ void main(){
             smoothScrollFrame += Math.max(delta, -maxStep);
             backgroundAutoplayFrame = smoothScrollFrame;
 
-            const frame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);
-            if (frame !== currentScrollFrame) {
+            const frame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);if (frame !== currentScrollFrame) {
               currentScrollFrame = frame;
               renderFrame(frame);
             }
@@ -10170,6 +10316,8 @@ void main(){
           cameraScrollVisualProgress = 0; panoramaReturnCameraGlideActive = false;
           panoramaReturnActive = false;
           moodClipActive = moodClipComplete = false; moodClipDirection = 0; moodClipProgress = 0;
+          parentOverlayActive = false;
+          postElementorHandoffMessage('handoff-cancel');
           moodClipAnchorY = null; moodClipReverseSuppressed = false;
 
 
