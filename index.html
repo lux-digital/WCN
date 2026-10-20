@@ -1485,8 +1485,8 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 88px;
-      height: 88px;
+      width: 160px;
+      height: 160px;
       z-index: 58;
       opacity: 0;
       visibility: hidden;
@@ -1515,8 +1515,8 @@
 
     @media (hover: none) and (pointer: coarse) {
       #moodExitScrollIndicator {
-        width: 68px;
-        height: 68px;
+        width: 120px;
+        height: 120px;
       }
     }
 
@@ -5142,9 +5142,13 @@
         centerY = clamp(centerY, stageRect.top + 24, stageRect.bottom - 24);
         moodExitScrollIndicator.style.top = `${centerY - stageRect.top}px`;
 
-        const maxCueSize = MOBILE_RUNTIME ? 68 : 88;
-        const minCueSize = MOBILE_RUNTIME ? 38 : 44;
-        const cueSize = clamp(gap * .72, minCueSize, maxCueSize);
+        /* Size from the same live gap used for positioning. The previous JS cap of
+           104px/80px silently overrode the larger CSS sizes, which is why changing the
+           stylesheet appeared to do nothing. Allow the final cue to occupy most of the
+           available lane while retaining a safe margin above/below. */
+        const maxCueSize = MOBILE_RUNTIME ? 120 : 160;
+        const minCueSize = MOBILE_RUNTIME ? 52 : 68;
+        const cueSize = clamp(gap * .90, minCueSize, maxCueSize);
         moodExitScrollIndicator.style.width = `${cueSize}px`;
         moodExitScrollIndicator.style.height = `${cueSize}px`;
         moodExitScrollIndicator.classList.add('is-visible');
