@@ -1520,6 +1520,27 @@
       }
     }
 
+    /* Elementor exit wash. The parent WordPress page sends the amount that the
+       following Elementor container has travelled over the final thumbnail scene.
+       This white layer tracks that overlap so transparent gallery areas resolve to a
+       clean white page rather than continuing to show the interactive background. */
+    #elementorExitWhiteFade {
+      position: absolute;
+      inset: 0;
+      z-index: 75;
+      background: #fff;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      will-change: opacity;
+      transition: opacity 90ms linear, visibility 0s linear 100ms;
+    }
+
+    #elementorExitWhiteFade.is-active {
+      visibility: visible;
+      transition: opacity 90ms linear, visibility 0s;
+    }
+
 
 
     #loader {
@@ -3800,6 +3821,7 @@
 
           <div id="scrollIndicator"></div>
           <div id="moodExitScrollIndicator" aria-hidden="true"></div>
+          <div id="elementorExitWhiteFade" aria-hidden="true"></div>
 
 
 
@@ -4378,7 +4400,7 @@
 
 
 
-      const scrollIndicator = $('scrollIndicator'), moodExitScrollIndicator = $('moodExitScrollIndicator'), loader = $('loader'), loaderProgress = $('loaderProgress');
+      const scrollIndicator = $('scrollIndicator'), moodExitScrollIndicator = $('moodExitScrollIndicator'), elementorExitWhiteFade = $('elementorExitWhiteFade'), loader = $('loader'), loaderProgress = $('loaderProgress');
       const openingTextLottie = $('openingTextLottie');
       const volumeControl = $('volumeControl'), volumeButton = $('volumeButton'), volumeLottie = $('volumeLottie');
       const volumeSlider = $('volumeSlider'), volumeSliderRow = $('volumeSliderRow'), experienceAudio = $('experienceAudio');
@@ -4590,7 +4612,7 @@
       /* Cross-frame Elementor handoff. The WCN timeline stays frozen on its final scene
          while the parent WordPress page scrolls the next Elementor container over it. */
       const ELEMENTOR_HANDOFF_CHANNEL = 'WCN_ELEMENTOR_HANDOFF_V1';
-      let parentScrollHandoffEnabled = false, parentOverlayActive = false;
+      let parentScrollHandoffEnabled = false, parentOverlayActive = false, parentOverlayProgress = 0;
       let moodBackgroundUserInteracted = false;
       let moodBackgroundUserValue = 100;
       let moodBackgroundAutoFadeRaf = 0;
@@ -5159,6 +5181,18 @@
         postElementorHandoffMessage('handoff-ready');
       }
 
+      function applyParentOverlayProgress(value) {
+        parentOverlayProgress = clamp(Number(value) || 0, 0, 1);
+        if (!elementorExitWhiteFade) return;
+
+        /* A smootherstep curve gives the requested slow, soft transition: almost no
+           abrupt change at the instant the Gallery begins moving, then a steady wash to
+           white as it covers the experience, with a soft landing near full white. */
+        const visualFade = smootherstep01(parentOverlayProgress);
+        elementorExitWhiteFade.style.opacity = String(visualFade);
+        elementorExitWhiteFade.classList.toggle('is-active', visualFade > .001);
+      }
+
       window.addEventListener('message', event => {
         if (event.source !== window.parent) return;
         const data = event.data;
@@ -5167,11 +5201,15 @@
         if (data.type === 'configure') {
           parentScrollHandoffEnabled = !!data.enabled;
           parentOverlayActive = !!data.overlayActive;
+          applyParentOverlayProgress(data.overlayProgress ?? (parentOverlayActive ? parentOverlayProgress : 0));
           if (parentScrollHandoffEnabled && moodClipComplete) notifyParentMoodHandoffReady();
           updateMoodExitScrollIndicator();
         } else if (data.type === 'overlay-state') {
           parentOverlayActive = !!data.active;
+          if (!parentOverlayActive) applyParentOverlayProgress(0);
           updateMoodExitScrollIndicator();
+        } else if (data.type === 'overlay-progress') {
+          applyParentOverlayProgress(data.progress);
         }
       });
 
@@ -7995,7 +8033,8 @@ void main(){
 
       function updateSoundscape(time = performance.now()) {
         if (!soundEnabled) return;
-        const master = clamp(Number(volumeSlider.value) / 100, 0, 1);
+        const exitFadeGain = 1 - smootherstep01(parentOverlayProgress);
+        const master = clamp(Number(volumeSlider.value) / 100, 0, 1) * exitFadeGain;
         const ambient = soundscapeTracks.get('ambient');
         const ocean = soundscapeTracks.get('ocean');
         if (!ambient || !ocean) return;
