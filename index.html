@@ -3498,6 +3498,106 @@
       display: none !important;
     }
 
+
+    /* ===========================================================
+       WCN v13 — MOBILE SAFARI/CHROME POLISH
+       Parent Elementor iframe extends the VISUAL scene behind mobile toolbar;
+       all controls stay within the pre-extension viewport. Desktop untouched.
+       =========================================================== */
+    @media (hover: none) and (pointer: coarse) {
+      :root { --wcn-mobile-visual-bleed: 76px; }
+      html, body { overscroll-behavior-y: none; }
+      #experience, #stage { overscroll-behavior-y: contain; }
+      /* Prevent iOS sticky hover after tapping a profile: titles never disappear. */
+      #moodFooter:has(.productThumbButton:hover) #moodLabelBlock,
+      #moodFooter:has(.productThumbButton:focus-visible) #moodLabelBlock,
+      #moodFooter #moodLabelBlock {
+        opacity: 1 !important;
+        transform: translateX(-50%) !important;
+        visibility: visible !important;
+      }
+      /* Reduce the usable *controls* area only. WebGL/video mood background fills
+         the entire expanded iframe and extends behind the mobile URL toolbar. */
+      #moodFooter {
+        height: calc(100% - var(--wcn-mobile-visual-bleed)) !important;
+        max-height: calc(100% - var(--wcn-mobile-visual-bleed)) !important;
+        min-height: 0 !important;
+      }
+      #moodBackgroundControl { top: 8px !important; }
+      /* The active product labels should remain available to screen readers;
+         they're hidden visually as in the approved desktop design. */
+      #moodExitScrollIndicator svg,
+      #moodExitScrollIndicator canvas {
+        transform-origin: 50% 50% !important;
+        transform: scale(2.1) !important;
+      }
+      /* Main story scroll icon also benefits from a stronger mobile presence. */
+      #scrollIndicator svg,
+      #scrollIndicator canvas {
+        transform-origin: 50% 50% !important;
+        transform: scale(1.45) !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      #woodViewerCluster {
+        top: calc((100vh - var(--wcn-mobile-visual-bleed)) * .115) !important;
+      }
+      #woodViewerShell {
+        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .53), 720px) !important;
+      }
+      /* Preserve the title position within the original safe viewport, not the
+         overdraw; title stays visible after selecting any profile. */
+      #moodLabelBlock {
+        top: calc((100vh - var(--wcn-mobile-visual-bleed)) * .70) !important;
+      }
+      /* Four genuinely larger profiles per row, with measured spacing. The two
+         rows still finish ABOVE Safari's toolbar, not inside the scene overdraw. */
+      #productThumbButtons {
+        width: min(94vw, 430px) !important;
+        max-width: 94vw !important;
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        justify-items: center !important;
+        justify-content: center !important;
+        align-items: end !important;
+        column-gap: clamp(10px, 3vw, 17px) !important;
+        row-gap: clamp(5px, 1.1vh, 12px) !important;
+        bottom: 8px !important;
+        margin-top: 0 !important;
+        overflow: visible !important;
+      }
+      .productThumbButton {
+        width: 100% !important;
+        max-width: 86px !important;
+        min-width: 0 !important;
+        flex-basis: auto !important;
+      }
+      .productThumbButton img {
+        width: 100% !important;
+        height: clamp(65px, 9.0vh, 85px) !important;
+        max-width: 86px !important;
+        object-fit: contain !important;
+        object-position: center bottom !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #woodViewerCluster {
+        top: calc((100vh - var(--wcn-mobile-visual-bleed)) * .135) !important;
+      }
+      #woodViewerShell {
+        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .42) !important;
+      }
+      #moodLabelBlock {
+        top: calc((100vh - var(--wcn-mobile-visual-bleed)) * .585) !important;
+      }
+      #productThumbButtons {
+        bottom: 7px !important;
+        gap: clamp(8px, 1.4vw, 15px) !important;
+      }
+    }
+
   </style>
 
 
@@ -5241,7 +5341,7 @@
         /* Scale the dynamically measured cue by 10% too; otherwise this JS
            immediately undoes any increase made in the stylesheet. */
         const maxCueSize = MOBILE_RUNTIME ? 132 : 176;
-        const minCueSize = MOBILE_RUNTIME ? 57.2 : 74.8;
+        const minCueSize = MOBILE_RUNTIME ? 104 : 74.8;
         const cueSize = clamp(gap * .99, minCueSize, maxCueSize);
         moodExitScrollIndicator.style.width = `${cueSize}px`;
         moodExitScrollIndicator.style.height = `${cueSize}px`;
@@ -9953,6 +10053,21 @@ void main(){
 
         const desiredDirection = totalY < 0 ? 1 : -1;
 
+        /* MOBILE REVERSE JPG SCRUB: iOS native rubber-band scroll could move
+           the entire sticky experience, then snap it back while the JPGs were
+           *also* running backwards. Own only this narrow manual JPG segment;
+           do NOT intercept panoramas, Lottie autoplay, or thumbnail gestures. */
+        if (desiredDirection < 0 && !isTimelineAutoplayLocked() &&
+            !moodClipActive && !moodClipComplete && !parentOverlayActive &&
+            smoothScrollFrame > PANORAMA_FADE_END_FRAME + 2 &&
+            calculateRawScrollProgress() < STORY_SEQUENCE_START - .007 &&
+            mobileTimelineTouchSource === 'page') {
+          event.preventDefault();
+          const reverseStep = clamp(-incrementalTouchY * 1.10, -76, 76);
+          if (Math.abs(reverseStep) > .01) window.scrollBy(0, reverseStep);
+          return;
+        }
+
         if (moodClipComplete && !moodClipActive && parentScrollHandoffEnabled &&
             (parentOverlayActive || desiredDirection > 0)) {
           event.preventDefault();
@@ -9962,7 +10077,10 @@ void main(){
           if (desiredDirection > 0 && !parentOverlayActive &&
               (!moodExitIsReady() || moodExitTouchStartAt < moodExitReadyAt)) return;
           /* Finger upward = page downward, matching native touch-page direction. */
-          requestParentPageScroll(-incrementalTouchY * 1.55);
+          /* iOS iframe scroll-parent messages were moving the gallery only a few
+             pixels per long finger stroke. Multiply the real incremental finger
+             displacement; parent owns the actual DOM scroll and white/audio fade. */
+          requestParentPageScroll(-incrementalTouchY * 3.35);
           return;
         }
 
