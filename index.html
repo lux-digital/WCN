@@ -3612,6 +3612,83 @@
       }
     }
 
+
+    /* =========================================================
+       WCN v16 — FINAL MOBILE THUMBNAIL COMPOSITION
+       Keep the title physically attached to the woodgrain viewer, give the
+       final Scroll cue its own lane, and separate the clarity slider from dots.
+       Desktop remains unchanged.
+       ========================================================= */
+    @media (hover: none) and (pointer: coarse) {
+      /* JS moves the label block into the shell on touch devices. Anchor it to
+         the actual viewer so different phone heights cannot make it drift. */
+      #woodViewerShell #moodLabelBlock {
+        position: absolute !important;
+        left: 50% !important;
+        top: 17px !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: calc(100% - 44px) !important;
+        transform: translateX(-50%) !important;
+        z-index: 16 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        visibility: visible !important;
+        text-align: center !important;
+        pointer-events: none !important;
+      }
+
+      #woodViewerShell #moodSeriesName {
+        margin: 0 !important;
+        transform: none !important;
+        text-align: center !important;
+        font-size: clamp(20px, 5.5vw, 29px) !important;
+        line-height: 1 !important;
+        letter-spacing: -.025em !important;
+        text-shadow: 0 2px 8px rgba(0,0,0,.48), 0 5px 18px rgba(0,0,0,.32) !important;
+      }
+
+      /* There is no hover-only supporting copy on mobile. The freed lane belongs
+         to the Scroll cue instead. */
+      #woodViewerShell #moodSeriesSubhead {
+        display: none !important;
+      }
+
+      /* Give the final Scroll animation its real dimensions. v14 scaled the SVG
+         itself to 2.1x, which made it overlap both the viewer and title. */
+      #moodExitScrollIndicator svg,
+      #moodExitScrollIndicator canvas {
+        transform: none !important;
+        transform-origin: 50% 50% !important;
+      }
+
+      /* Raise clarity control farther away from the nine selector dots while
+         preserving the existing large invisible/touch range-input lane. */
+      #woodViewerShell #moodBackgroundControl {
+        bottom: clamp(66px, 12.5%, 92px) !important;
+      }
+
+      /* Slightly narrower viewer leaves a cleaner side margin and creates a more
+         comfortable visual lane beneath it for the Scroll cue. */
+      #woodViewerShell {
+        width: 88vw !important;
+      }
+      #woodPrevButton { left: 7.5vw !important; }
+      #woodNextButton { right: 7.5vw !important; }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      #woodViewerShell {
+        width: 88vw !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #woodViewerShell {
+        width: 88vw !important;
+      }
+    }
+
   </style>
 
 
@@ -4583,6 +4660,12 @@
       const moodContent = $('moodContent');
       const moodBackgroundControl = $('moodBackgroundControl'), moodBackgroundSlider = $('moodBackgroundSlider'), moodBackgroundSliderValue = $('moodBackgroundSliderValue');
 
+      /* Mobile title belongs to the thumbnail itself, not the footer lane. This is a
+         structural move rather than a viewport-position approximation, so it remains
+         centered on the woodgrain across iPhone sizes/orientations. */
+      if (MOBILE_RUNTIME && moodLabelBlock && woodViewerShell && moodLabelBlock.parentElement !== woodViewerShell) {
+        woodViewerShell.appendChild(moodLabelBlock);
+      }
 
 
       const woodPrevButton = $('woodPrevButton'), woodNextButton = $('woodNextButton');
@@ -4705,6 +4788,7 @@
       let volumeMoveTimer = 0, volumeMoveRaf = 0, volumeIntroAnimation = null;
       let openingTextAnimation = null, openingTextReady = false, openingTextTotalFrames = 1, openingTextCurrentFrame = -1;
       let storySquareLottie = null, storySquareLottieReady = false, storySquareLottieTotalFrames = 1;
+      let moodExitScrollLottieAnimation = null, moodExitScrollWasVisible = false;
       let currentStorySequenceFrame = -1;
 
 
@@ -5336,35 +5420,51 @@
 
         if (!visible || !woodViewerShell || !moodSeriesName || !stage) {
           moodExitScrollIndicator.classList.remove('is-visible');
+          if (moodExitScrollWasVisible) {
+            moodExitScrollWasVisible = false;
+            if (moodExitScrollLottieAnimation) moodExitScrollLottieAnimation.goToAndStop(0, true);
+          }
           return;
         }
 
         const shellRect = woodViewerShell.getBoundingClientRect();
-        const titleRect = moodSeriesName.getBoundingClientRect();
         const stageRect = stage.getBoundingClientRect();
-        const gapTop = shellRect.bottom;
-        const gapBottom = titleRect.top;
-        const gap = Math.max(0, gapBottom - gapTop);
+        let gapTop = shellRect.bottom;
+        let gapBottom;
 
-        /* Use the true live geometry rather than a viewport percentage. This keeps the cue
-           centered in exactly the lane requested even when Elementor/header height, mobile
-           orientation or responsive thumbnail dimensions change. */
+        if (MOBILE_RUNTIME && productThumbButtons) {
+          /* On touch layouts the title now lives INSIDE the woodgrain viewer. The freed
+             title/subhead lane is therefore the clean gap between the viewer and the
+             product-profile buttons. Put Scroll.json there instead. */
+          const buttonsRect = productThumbButtons.getBoundingClientRect();
+          gapBottom = buttonsRect.top;
+        } else {
+          const titleRect = moodSeriesName.getBoundingClientRect();
+          gapBottom = titleRect.top;
+        }
+
+        const gap = Math.max(0, gapBottom - gapTop);
         let centerY = gap > 4 ? gapTop + gap * .50 : gapTop + 28;
         centerY = clamp(centerY, stageRect.top + 24, stageRect.bottom - 24);
         moodExitScrollIndicator.style.top = `${centerY - stageRect.top}px`;
 
-        /* Size from the same live gap used for positioning. The previous JS cap of
-           104px/80px silently overrode the larger CSS sizes, which is why changing the
-           stylesheet appeared to do nothing. Allow the final cue to occupy most of the
-           available lane while retaining a safe margin above/below. */
-        /* Scale the dynamically measured cue by 10% too; otherwise this JS
-           immediately undoes any increase made in the stylesheet. */
-        const maxCueSize = MOBILE_RUNTIME ? 132 : 176;
-        const minCueSize = MOBILE_RUNTIME ? 104 : 74.8;
-        const cueSize = clamp(gap * .99, minCueSize, maxCueSize);
+        /* Mobile no longer scales the inner SVG 2.1x. Keep enough presence to read as
+           the next-scroll cue, but leave breathing room above/below it. */
+        const maxCueSize = MOBILE_RUNTIME ? 108 : 176;
+        const minCueSize = MOBILE_RUNTIME ? 82 : 74.8;
+        const cueScale = MOBILE_RUNTIME ? .70 : .99;
+        const cueSize = clamp(gap * cueScale, minCueSize, maxCueSize);
         moodExitScrollIndicator.style.width = `${cueSize}px`;
         moodExitScrollIndicator.style.height = `${cueSize}px`;
         moodExitScrollIndicator.classList.add('is-visible');
+
+        /* The final Scroll Lottie is hidden while the reveal/hold is running. Restart it
+           from frame zero the instant this cue becomes visible instead of revealing a
+           random mid-loop frame that has been playing invisibly since page load. */
+        if (!moodExitScrollWasVisible) {
+          moodExitScrollWasVisible = true;
+          if (moodExitScrollLottieAnimation) moodExitScrollLottieAnimation.goToAndPlay(0, true);
+        }
       }
 
       function notifyParentMoodHandoffReady() {
@@ -5752,7 +5852,16 @@
         window.setTimeout(() => moodBackgroundSlider && moodBackgroundSlider.classList.remove('is-pulsing'), 760);
       }
 
+      /* Temporarily disabled by request. Keep the complete authored auto-fade
+         system in place so it can be switched back on with one flag later. */
+      const MOOD_BACKGROUND_AUTO_FADE_ENABLED = false;
+
       function beginMoodBackgroundAutoFadeAnimation() {
+        if (!MOOD_BACKGROUND_AUTO_FADE_ENABLED) {
+          cancelMoodBackgroundAutoFade();
+          applyMoodBackgroundClarity(moodBackgroundUserInteracted ? moodBackgroundUserValue : 100);
+          return;
+        }
         if (moodBackgroundUserInteracted) {
           applyMoodBackgroundClarity(moodBackgroundUserValue);
           return;
@@ -5784,6 +5893,11 @@
       }
 
       function startMoodBackgroundAutoFade() {
+        if (!MOOD_BACKGROUND_AUTO_FADE_ENABLED) {
+          cancelMoodBackgroundAutoFade();
+          applyMoodBackgroundClarity(moodBackgroundUserInteracted ? moodBackgroundUserValue : 100);
+          return;
+        }
         /* Use the authored 100 -> 70 clarity glide. Wait until the
            thumbnail is fully visible, then 600ms, then its original 2-second ease;
            pulse the handle at the endpoint. A manual setting always wins. */
@@ -5907,6 +6021,11 @@
 
 
         moodFooter.style.opacity = String(footerOpacity);
+
+        /* On mobile the woodgrain title has been moved into the viewer shell, so it
+           no longer inherits moodFooter opacity. Keep the original authored reveal
+           timing explicitly. */
+        if (MOBILE_RUNTIME && moodLabelBlock) moodLabelBlock.style.opacity = String(footerOpacity);
 
         moodFooter.style.transform = `translate3d(0,${footerY}px,0)`;
 
@@ -8456,15 +8575,18 @@ void main(){
         });
 
         if (moodExitScrollIndicator) {
-          const moodExitScrollLottie = lottie.loadAnimation({
+          moodExitScrollLottieAnimation = lottie.loadAnimation({
             container: moodExitScrollIndicator,
             renderer: 'svg',
             loop: true,
-            autoplay: true,
+            autoplay: false,
             path: 'Scroll.json',
             rendererSettings: { preserveAspectRatio: 'xMidYMid meet' }
           });
-          moodExitScrollLottie.addEventListener('data_failed', () => {
+          moodExitScrollLottieAnimation.addEventListener('DOMLoaded', () => {
+            moodExitScrollLottieAnimation.goToAndStop(0, true);
+          });
+          moodExitScrollLottieAnimation.addEventListener('data_failed', () => {
             console.error('Could not load the final Scroll.json cue.');
           });
         }
