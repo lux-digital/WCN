@@ -3689,6 +3689,145 @@
       }
     }
 
+
+    /* =========================================================
+       WCN v17 — MOBILE THUMBNAIL + TOUCH CONTROL REFINEMENT
+       Larger real touch lanes without enlarging the visible tracks.
+       ========================================================= */
+    @media (hover: none) and (pointer: coarse) {
+      /* Smaller, quieter title inside the woodgrain viewer. */
+      #woodViewerShell #moodLabelBlock {
+        top: 14px !important;
+        width: calc(100% - 52px) !important;
+      }
+      #woodViewerShell #moodSeriesName {
+        font-size: clamp(16px, 4.45vw, 22px) !important;
+        line-height: 1.02 !important;
+        letter-spacing: -.018em !important;
+        text-shadow: 0 1px 3px rgba(0,0,0,.30), 0 2px 7px rgba(0,0,0,.18) !important;
+      }
+
+      /* Give the final Scroll cue more room without letting it collide with either
+         the viewer or product-profile row. JS now sizes the cue to fill this lane. */
+      #woodViewerShell {
+        width: 84vw !important;
+      }
+      #woodPrevButton { left: 9.5vw !important; }
+      #woodNextButton { right: 9.5vw !important; }
+
+      /* Background clarity control: roughly a 50px finger lane while the actual
+         track stays 4px and the thumb remains visually compact. */
+      #woodViewerShell #moodBackgroundControl {
+        width: min(154px, 43%) !important;
+        max-width: 154px !important;
+        bottom: clamp(72px, 14%, 102px) !important;
+      }
+      #woodViewerShell #moodBackgroundControlIcon {
+        width: 23px !important;
+        height: 23px !important;
+        margin-bottom: -8px !important;
+      }
+      #woodViewerShell #moodBackgroundSliderRow {
+        height: 50px !important;
+        min-height: 50px !important;
+        margin-top: -5px !important;
+        overflow: visible !important;
+        display: flex !important;
+        align-items: center !important;
+      }
+      #woodViewerShell #moodBackgroundSlider {
+        height: 50px !important;
+        min-height: 50px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        touch-action: none !important;
+      }
+      #woodViewerShell #moodBackgroundSlider::-webkit-slider-runnable-track {
+        height: 4px !important;
+      }
+      #woodViewerShell #moodBackgroundSlider::-moz-range-track {
+        height: 4px !important;
+      }
+      #woodViewerShell #moodBackgroundSlider::-webkit-slider-thumb {
+        width: 15px !important;
+        height: 15px !important;
+        margin-top: -5.5px !important;
+      }
+      #woodViewerShell #moodBackgroundSlider::-moz-range-thumb {
+        width: 15px !important;
+        height: 15px !important;
+      }
+
+      /* Audio: enlarge the actual button/slider hit areas while keeping the icon
+         artwork approximately the same visual size as before. */
+      #volumeControl {
+        width: min(154px, 46vw) !important;
+      }
+      #volumeButton,
+      #volumeControl.is-docked #volumeButton {
+        width: 58px !important;
+        height: 58px !important;
+        min-width: 58px !important;
+        min-height: 58px !important;
+      }
+      #volumeLottie {
+        inset: 6px !important;
+        width: auto !important;
+        height: auto !important;
+      }
+      #volumeFallbackIcon {
+        width: 36% !important;
+        height: 36% !important;
+      }
+      #volumeSliderRow {
+        height: 50px !important;
+        min-height: 50px !important;
+        overflow: visible !important;
+        display: flex !important;
+        align-items: center !important;
+      }
+      #volumeControl.is-active #volumeSliderRow {
+        max-height: 54px !important;
+      }
+      #volumeSlider {
+        height: 50px !important;
+        min-height: 50px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        touch-action: none !important;
+      }
+      #volumeSlider::-webkit-slider-runnable-track {
+        height: 4px !important;
+      }
+      #volumeSlider::-moz-range-track {
+        height: 4px !important;
+      }
+      #volumeSlider::-webkit-slider-thumb {
+        width: 15px !important;
+        height: 15px !important;
+        margin-top: -5.5px !important;
+      }
+      #volumeSlider::-moz-range-thumb {
+        width: 15px !important;
+        height: 15px !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      /* A modest height reduction creates a proper lane for the larger Scroll cue. */
+      #woodViewerShell {
+        width: 84vw !important;
+        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .495), 680px) !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #woodViewerShell {
+        width: 84vw !important;
+        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .39) !important;
+      }
+    }
+
   </style>
 
 
@@ -5450,9 +5589,9 @@
 
         /* Mobile no longer scales the inner SVG 2.1x. Keep enough presence to read as
            the next-scroll cue, but leave breathing room above/below it. */
-        const maxCueSize = MOBILE_RUNTIME ? 108 : 176;
-        const minCueSize = MOBILE_RUNTIME ? 82 : 74.8;
-        const cueScale = MOBILE_RUNTIME ? .70 : .99;
+        const maxCueSize = MOBILE_RUNTIME ? 142 : 176;
+        const minCueSize = MOBILE_RUNTIME ? 112 : 74.8;
+        const cueScale = MOBILE_RUNTIME ? .90 : .99;
         const cueSize = clamp(gap * cueScale, minCueSize, maxCueSize);
         moodExitScrollIndicator.style.width = `${cueSize}px`;
         moodExitScrollIndicator.style.height = `${cueSize}px`;
