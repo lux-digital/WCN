@@ -3944,6 +3944,232 @@
       #woodNextButton { right: 10.5vw !important; }
     }
 
+
+    /* =========================================================
+       WCN v19 — MOBILE COLLAPSIBLE PROFILE TRAY
+       The default mobile composition gives the woodgrain viewer more room. The
+       eight profile thumbnails live behind a single AVAILABLE PROFILES control
+       and open with a fully eased resize/reveal animation. Desktop is unchanged.
+       ========================================================= */
+    #mobileProfilesToggle {
+      display: none;
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      /* Smaller visible arrow discs, unchanged 48px touch targets. */
+      .woodNavButton {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+        overflow: visible !important;
+      }
+      .woodNavButton::before {
+        content: '' !important;
+        position: absolute !important;
+        left: 50% !important;
+        top: 50% !important;
+        width: 31px !important;
+        height: 31px !important;
+        transform: translate(-50%, -50%) !important;
+        border-radius: 50% !important;
+        background: rgba(0,0,0,.31) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        backdrop-filter: blur(8px) !important;
+        box-shadow: 0 6px 16px rgba(0,0,0,.16) !important;
+        pointer-events: none !important;
+      }
+      .woodNavIcon {
+        position: relative !important;
+        z-index: 2 !important;
+        width: 11px !important;
+        height: 17px !important;
+        background-size: 11px 17px !important;
+      }
+
+      /* Slightly quieter title, still locked to the thumbnail itself. */
+      #woodViewerShell #moodSeriesName {
+        font-size: clamp(13.5px, 3.85vw, 18.5px) !important;
+        letter-spacing: -.012em !important;
+      }
+
+      /* Move the manual background-clarity control a little lower. */
+      #woodViewerShell #moodBackgroundControl {
+        bottom: clamp(39px, 7.2%, 53px) !important;
+      }
+
+      /* The viewer itself owns the open/closed transition. Symmetric cubic-bezier
+         gives visible ease-in and ease-out instead of a one-sided spring. */
+      #woodViewerShell {
+        transition:
+          width .78s cubic-bezier(.65,0,.35,1),
+          height .78s cubic-bezier(.65,0,.35,1),
+          border-radius .78s cubic-bezier(.65,0,.35,1) !important;
+      }
+
+      /* Closed/default mobile state: make the product viewer the hero. */
+      #moodContent:not(.mobile-profiles-open) #woodViewerShell {
+        width: 90vw !important;
+      }
+      #moodContent:not(.mobile-profiles-open) #woodPrevButton { left: 5vw !important; }
+      #moodContent:not(.mobile-profiles-open) #woodNextButton { right: 5vw !important; }
+
+      /* White AVAILABLE PROFILES pill replaces the eight profile images by default. */
+      #mobileProfilesToggle {
+        display: inline-flex !important;
+        position: absolute !important;
+        left: 50% !important;
+        bottom: calc(var(--wcn-mobile-visual-bleed) + 18px) !important;
+        z-index: 32 !important;
+        min-height: 44px !important;
+        padding: 0 24px !important;
+        margin: 0 !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 0 !important;
+        border-radius: 999px !important;
+        background: #fff !important;
+        color: #111 !important;
+        font: 600 11px/1 Arial, Helvetica, sans-serif !important;
+        letter-spacing: .12em !important;
+        white-space: nowrap !important;
+        box-shadow: 0 7px 22px rgba(0,0,0,.18) !important;
+        transform: translate3d(-50%,0,0) scale(1) !important;
+        transform-origin: 50% 50% !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transition:
+          opacity .34s ease,
+          transform .62s cubic-bezier(.65,0,.35,1),
+          visibility 0s linear !important;
+      }
+      #mobileProfilesToggle:active {
+        transform: translate3d(-50%,0,0) scale(.96) !important;
+      }
+      #moodContent.mobile-profiles-open #mobileProfilesToggle {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transform: translate3d(-50%,10px,0) scale(.95) !important;
+        transition:
+          opacity .24s ease,
+          transform .42s cubic-bezier(.65,0,.35,1),
+          visibility 0s linear .28s !important;
+      }
+
+      /* Profile tray: keep the same safe bottom anchor but hide it completely until
+         requested. The tighter gaps make the eight profiles read as one palette. */
+      #productThumbButtons {
+        column-gap: 4px !important;
+        row-gap: 3px !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transform: translate3d(-50%,18px,0) scale(.96) !important;
+        transform-origin: 50% 100% !important;
+        transition:
+          opacity .34s ease,
+          transform .68s cubic-bezier(.65,0,.35,1),
+          visibility 0s linear .38s !important;
+      }
+      #productThumbButtons .productThumbButton {
+        opacity: 0 !important;
+        transform: translate3d(0,16px,0) scale(.90) !important;
+        transition:
+          opacity .32s ease,
+          transform .62s cubic-bezier(.65,0,.35,1),
+          filter .32s ease !important;
+        transition-delay: 0s !important;
+      }
+      #moodContent.mobile-profiles-open #productThumbButtons {
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transform: translate3d(-50%,0,0) scale(1) !important;
+        transition:
+          opacity .38s ease .18s,
+          transform .72s cubic-bezier(.65,0,.35,1) .06s,
+          visibility 0s linear !important;
+      }
+      #moodContent.mobile-profiles-open #productThumbButtons .productThumbButton {
+        opacity: .98 !important;
+        transform: translate3d(0,0,0) scale(1) !important;
+        transition-delay: calc(var(--profile-i, 0) * 38ms + 170ms) !important;
+      }
+
+      /* Small visual X, generous touch target. It is attached to the tray itself so it
+         always sits at the true top-right of the eight profiles. */
+      #mobileProfilesClose {
+        position: absolute !important;
+        right: -7px !important;
+        top: -38px !important;
+        z-index: 4 !important;
+        width: 42px !important;
+        height: 42px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-radius: 50% !important;
+        background: rgba(0,0,0,.20) !important;
+        color: #fff !important;
+        font: 300 25px/40px Arial, Helvetica, sans-serif !important;
+        text-align: center !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        backdrop-filter: blur(8px) !important;
+        opacity: 0 !important;
+        transform: translate3d(0,9px,0) rotate(-24deg) scale(.85) !important;
+        pointer-events: none !important;
+        transition:
+          opacity .30s ease,
+          transform .58s cubic-bezier(.65,0,.35,1) !important;
+      }
+      #moodContent.mobile-profiles-open #mobileProfilesClose {
+        opacity: 1 !important;
+        transform: translate3d(0,0,0) rotate(0deg) scale(1) !important;
+        pointer-events: auto !important;
+        transition-delay: .28s !important;
+      }
+
+      /* Scroll cue belongs to the default browse state. Hide it during profile selection
+         so the tray gets all of the available vertical room. */
+      #moodContent.mobile-profiles-open #moodExitScrollIndicator {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transition: opacity .24s ease, visibility 0s linear .25s !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      #moodContent:not(.mobile-profiles-open) #woodViewerShell {
+        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .545), 720px) !important;
+      }
+      #moodContent.mobile-profiles-open #woodViewerShell {
+        width: 82vw !important;
+        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .405), 590px) !important;
+      }
+      #moodContent.mobile-profiles-open #woodPrevButton { left: 10.5vw !important; }
+      #moodContent.mobile-profiles-open #woodNextButton { right: 10.5vw !important; }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #moodContent:not(.mobile-profiles-open) #woodViewerShell {
+        width: 90vw !important;
+        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .455) !important;
+      }
+      #moodContent.mobile-profiles-open #woodViewerShell {
+        width: 82vw !important;
+        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .34) !important;
+      }
+      #moodContent.mobile-profiles-open #woodPrevButton { left: 10.5vw !important; }
+      #moodContent.mobile-profiles-open #woodNextButton { right: 10.5vw !important; }
+    }
+
   </style>
 
 
@@ -4257,6 +4483,8 @@
 
 
                       <div id="productThumbButtons" aria-label="Available products"></div>
+
+                      <button id="mobileProfilesToggle" type="button" aria-expanded="false" aria-controls="productThumbButtons">AVAILABLE PROFILES</button>
 
 
 
@@ -4913,6 +5141,9 @@
 
       const moodLabelBlock = $('moodLabelBlock'), moodSeriesName = $('moodSeriesName'), productThumbButtons = $('productThumbButtons'), activeProductName = $('activeProductName');
       const moodContent = $('moodContent');
+      const mobileProfilesToggle = $('mobileProfilesToggle');
+      let mobileProfilesClose = null;
+      let mobileProfilesOpen = false;
       const moodBackgroundControl = $('moodBackgroundControl'), moodBackgroundSlider = $('moodBackgroundSlider'), moodBackgroundSliderValue = $('moodBackgroundSliderValue');
 
       /* Mobile title belongs to the thumbnail itself, not the footer lane. This is a
@@ -5671,6 +5902,7 @@
         if (!moodExitScrollIndicator) return;
 
         const visible = moodExitIsReady() && !parentOverlayActive &&
+          (!MOBILE_RUNTIME || !mobileProfilesOpen) &&
           getMoodVisualProgress() >= MOOD_VIEWER_END - .0005;
 
         if (!visible || !woodViewerShell || !moodSeriesName || !stage) {
@@ -5688,11 +5920,16 @@
         let gapBottom;
 
         if (MOBILE_RUNTIME && productThumbButtons) {
-          /* On touch layouts the title now lives INSIDE the woodgrain viewer. The freed
-             title/subhead lane is therefore the clean gap between the viewer and the
-             product-profile buttons. Put Scroll.json there instead. */
-          const buttonsRect = productThumbButtons.getBoundingClientRect();
-          gapBottom = buttonsRect.top;
+          /* In the default mobile state the eight profiles are collapsed behind the
+             AVAILABLE PROFILES pill. Use that button as the bottom of Scroll.json's
+             lane. When the tray is open the Scroll cue is intentionally hidden. */
+          if (!mobileProfilesOpen && mobileProfilesToggle) {
+            const toggleRect = mobileProfilesToggle.getBoundingClientRect();
+            gapBottom = toggleRect.top;
+          } else {
+            const buttonsRect = productThumbButtons.getBoundingClientRect();
+            gapBottom = buttonsRect.top;
+          }
         } else {
           const titleRect = moodSeriesName.getBoundingClientRect();
           gapBottom = titleRect.top;
@@ -5756,6 +5993,7 @@
         } else if (data.type === 'overlay-state') {
           const wasOverlayActive = parentOverlayActive;
           parentOverlayActive = !!data.active;
+          if (MOBILE_RUNTIME && parentOverlayActive && mobileProfilesOpen) setMobileProfilesOpen(false);
           if (wasOverlayActive && !parentOverlayActive && moodClipComplete) beginMoodReturnHold();
           else if (parentOverlayActive) clearMoodReturnHold();
           if (!parentOverlayActive) applyParentOverlayProgress(0);
@@ -6313,6 +6551,7 @@
 
         if (next === woodViewerInteractionEnabled) return;
         woodViewerInteractionEnabled = next;
+        if (MOBILE_RUNTIME && !next && mobileProfilesOpen) setMobileProfilesOpen(false, { immediate: true });
 
         /* The viewer exists throughout the whole experience, even while fully transparent.
            Never let an opening-panorama drag leave hidden pointer-capture/drag state behind. */
@@ -6893,6 +7132,57 @@
 
 
 
+      function setMobileProfilesOpen(open, options = {}) {
+        if (!MOBILE_RUNTIME || !moodContent) return;
+        const next = !!open;
+        mobileProfilesOpen = next;
+        moodContent.classList.toggle('mobile-profiles-open', next);
+        if (mobileProfilesToggle) mobileProfilesToggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+        if (productThumbButtons) productThumbButtons.setAttribute('aria-hidden', next ? 'false' : 'true');
+
+        /* Recalculate the final Scroll cue after the viewer finishes resizing so its
+           lane uses the new thumbnail/profile geometry rather than stale bounds. */
+        updateMoodExitScrollIndicator();
+        if (!options.immediate) {
+          window.setTimeout(updateMoodExitScrollIndicator, 90);
+          window.setTimeout(updateMoodExitScrollIndicator, 420);
+          window.setTimeout(updateMoodExitScrollIndicator, 820);
+        }
+      }
+
+      function ensureMobileProfileControls() {
+        if (!MOBILE_RUNTIME || !productThumbButtons) return;
+
+        productThumbButtons.querySelectorAll('.productThumbButton').forEach((button, index) => {
+          button.style.setProperty('--profile-i', String(index));
+        });
+
+        if (!mobileProfilesClose) {
+          mobileProfilesClose = document.createElement('button');
+          mobileProfilesClose.type = 'button';
+          mobileProfilesClose.id = 'mobileProfilesClose';
+          mobileProfilesClose.setAttribute('aria-label', 'Close available profiles');
+          mobileProfilesClose.textContent = '×';
+          productThumbButtons.appendChild(mobileProfilesClose);
+          mobileProfilesClose.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            setMobileProfilesOpen(false);
+          });
+        }
+
+        if (mobileProfilesToggle && !mobileProfilesToggle.dataset.ready) {
+          mobileProfilesToggle.dataset.ready = '1';
+          mobileProfilesToggle.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            setMobileProfilesOpen(true);
+          });
+        }
+
+        setMobileProfilesOpen(false, { immediate: true });
+      }
+
       function initMoodSection() {
 
         /* Keep the full-stage panorama / semi-panorama pointer handlers from stealing
@@ -7025,6 +7315,8 @@
             transitionWoodgrainProfile(label, direction);
           });
         });
+
+        ensureMobileProfileControls();
 
         woodNextButton.addEventListener('click', () => {
           const nextIndex = (activeMoodIndex + 1) % MOOD_ITEMS.length;
