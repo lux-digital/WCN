@@ -4698,6 +4698,9 @@
       const connectedAudioElements = new WeakSet();
       let scrollInputEnergy = 0, scrollInputLastAt = 0, timelinePlaybackRate = 1;
       let mobileTimelineTouchLastY = 0;
+      let mobileTimelineTouchLastAt = 0;
+      let mobileHandoffGestureActive = false;
+      let mobileHandoffVelocityY = 0;
       let storyAutoScrollElapsedMs = 0, panoramaReturnElapsedMs = 0, panoramaReturnLastRafTime = 0;
       let volumeMoveTimer = 0, volumeMoveRaf = 0, volumeIntroAnimation = null;
       let openingTextAnimation = null, openingTextReady = false, openingTextTotalFrames = 1, openingTextCurrentFrame = -1;
@@ -5286,9 +5289,11 @@
       function moodReturnCanReverse(isNewTouch = false) {
         if (!moodReturnHolding) return true;
         if (performance.now() < moodReturnReadyAt) return false;
-        if (isNewTouch) return moodExitTouchStartAt >= moodReturnReadyAt;
-        /* A rapid trackpad stream must settle first; the NEXT deliberate upward
-           gesture after the pause can reverse the clip. */
+        /* Touch has no wheel-style tick stream. If the user is still deliberately
+           swiping after the return hold expires, let that SAME gesture reverse WCN
+           instead of forcing an extra lift-and-swipe. Trackpad/wheel still requires a
+           genuinely fresh gesture so residual momentum cannot skip the pause. */
+        if (isNewTouch) return true;
         return performance.now() - moodReturnLastBlockedWheelAt >= MOOD_EXIT_WHEEL_FRESH_GESTURE_MS;
       }
 
@@ -10023,6 +10028,9 @@ void main(){
         mobileTimelineTouchStartY = touch.clientY;
         moodExitTouchStartAt = performance.now();
         mobileTimelineTouchLastY = touch.clientY;
+        mobileTimelineTouchLastAt = moodExitTouchStartAt;
+        mobileHandoffGestureActive = false;
+        mobileHandoffVelocityY = 0;
         mobileTimelineTouchDirection = 0;
 
         /* Controls that are intrinsically horizontal must NEVER steer the master timeline.
@@ -10045,8 +10053,11 @@ void main(){
         const touch = Array.from(event.touches || []).find(item => item.identifier === mobileTimelineTouchId) || (event.touches && event.touches[0]);
         if (!touch) return;
 
+        const nowTouchMove = performance.now();
         const incrementalTouchY = touch.clientY - mobileTimelineTouchLastY;
+        const incrementalTouchDt = clamp(nowTouchMove - mobileTimelineTouchLastAt, 8, 80);
         mobileTimelineTouchLastY = touch.clientY;
+        mobileTimelineTouchLastAt = nowTouchMove;
         const totalX = touch.clientX - mobileTimelineTouchStartX;
         const totalY = touch.clientY - mobileTimelineTouchStartY;
         const absX = Math.abs(totalX), absY = Math.abs(totalY);
@@ -10055,12 +10066,19 @@ void main(){
            slightly diagonal finger movement pull the page/story away from the mood section. */
         if (mobileTimelineTouchSource === 'control') return;
 
-        if (Math.max(absX, absY) < 14) return;
+        /* The completed thumbnail scene is a handoff surface, so it should react as
+           readily as a normal webpage. Older 14/16px gates made the first part of each
+           swipe feel ignored and encouraged repeated swipes. Everywhere else keep the
+           more conservative threshold used to distinguish panning from page travel. */
+        const moodHandoffGesture = moodClipComplete && !moodClipActive && parentScrollHandoffEnabled;
+        const gestureWakePx = moodHandoffGesture ? 6 : 14;
+        const verticalWakePx = moodHandoffGesture ? 7 : 16;
+        if (Math.max(absX, absY) < gestureWakePx) return;
 
         /* Horizontal-dominant gestures belong to panoramas / woodgrain panning. Requiring
            a vertical-dominant gesture here removes the old left/right -> timeline leak. */
         if (absX > absY * 1.08) return;
-        if (absY < 16 || absY < absX * 1.02) return;
+        if (absY < verticalWakePx || absY < absX * 1.02) return;
         if (isTimelineAutoplayLocked() || panoramaReturnActive) {
           registerFastScrollGesture(incrementalTouchY * 2.5);
         }
@@ -10088,13 +10106,18 @@ void main(){
           mobileTimelineTouchDirection = desiredDirection;
           /* A swipe begun during the hold may NOT suddenly push the Gallery in the
              middle of that same gesture when the hold timer expires. */
-          if (desiredDirection > 0 && !parentOverlayActive &&
-              (!moodExitIsReady() || moodExitTouchStartAt < moodExitReadyAt)) return;
-          /* Finger upward = page downward, matching native touch-page direction. */
-          /* iOS iframe scroll-parent messages were moving the gallery only a few
-             pixels per long finger stroke. Multiply the real incremental finger
-             displacement; parent owns the actual DOM scroll and white/audio fade. */
-          requestParentPageScroll(-incrementalTouchY);
+          if (desiredDirection > 0 && !parentOverlayActive && !moodExitIsReady()) return;
+          /* Finger upward = page downward, matching native touch-page direction.
+             Send true 1:1 travel DURING the swipe, plus a filtered velocity sample.
+             Elementor uses that release velocity to continue coasting with native-like
+             deceleration after the finger lifts. */
+          const parentDeltaY = -incrementalTouchY;
+          const instantParentVelocity = clamp(parentDeltaY / incrementalTouchDt * 1000, -5200, 5200);
+          mobileHandoffVelocityY = mobileHandoffGestureActive
+            ? mobileHandoffVelocityY * .58 + instantParentVelocity * .42
+            : instantParentVelocity;
+          mobileHandoffGestureActive = true;
+          requestParentPageScroll(parentDeltaY);
           return;
         }
 
@@ -10128,14 +10151,28 @@ void main(){
       }, { passive: false });
 
       window.addEventListener('touchend', () => {
+        if (MOBILE_RUNTIME && mobileHandoffGestureActive && parentScrollHandoffEnabled) {
+          postElementorHandoffMessage('scroll-parent-end', {
+            velocityY: clamp(mobileHandoffVelocityY, -5200, 5200)
+          });
+        }
         mobileTimelineTouchId = null;
         mobileTimelineTouchDirection = 0;
         mobileTimelineTouchSource = 'page';
+        mobileHandoffGestureActive = false;
+        mobileHandoffVelocityY = 0;
+        mobileTimelineTouchLastAt = 0;
       }, { passive: true });
       window.addEventListener('touchcancel', () => {
+        if (MOBILE_RUNTIME && mobileHandoffGestureActive && parentScrollHandoffEnabled) {
+          postElementorHandoffMessage('scroll-parent-end', { velocityY: 0 });
+        }
         mobileTimelineTouchId = null;
         mobileTimelineTouchDirection = 0;
         mobileTimelineTouchSource = 'page';
+        mobileHandoffGestureActive = false;
+        mobileHandoffVelocityY = 0;
+        mobileTimelineTouchLastAt = 0;
       }, { passive: true });
 
       window.addEventListener('scroll', updateScrollTarget, { passive: true });
