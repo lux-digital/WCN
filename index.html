@@ -3500,15 +3500,18 @@
 
 
     /* ===========================================================
-       WCN v13 — MOBILE SAFARI/CHROME POLISH
-       Parent Elementor iframe extends the VISUAL scene behind mobile toolbar;
-       all controls stay within the pre-extension viewport. Desktop untouched.
+       WCN v14 — MOBILE SAFE VISUAL OVERDRAW
+       The iframe is intentionally taller than the visible mobile browser area so
+       imagery continues behind Safari/Chrome browser chrome. Interactive controls
+       stay inside the original safe viewing area. Desktop is untouched.
        =========================================================== */
     @media (hover: none) and (pointer: coarse) {
-      :root { --wcn-mobile-visual-bleed: 76px; }
+      :root { --wcn-mobile-visual-bleed: 118px; }
       html, body { overscroll-behavior-y: none; }
       #experience, #stage { overscroll-behavior-y: contain; }
-      /* Prevent iOS sticky hover after tapping a profile: titles never disappear. */
+
+      /* iOS can retain a simulated :hover after tapping. Mobile has no hover-driven
+         title state, so keep the woodgrain copy permanently visible. */
       #moodFooter:has(.productThumbButton:hover) #moodLabelBlock,
       #moodFooter:has(.productThumbButton:focus-visible) #moodLabelBlock,
       #moodFooter #moodLabelBlock {
@@ -3516,22 +3519,32 @@
         transform: translateX(-50%) !important;
         visibility: visible !important;
       }
-      /* Reduce the usable *controls* area only. WebGL/video mood background fills
-         the entire expanded iframe and extends behind the mobile URL toolbar. */
+
+      /* Keep the footer as the full positioning layer. Only bottom-anchored controls
+         are lifted above the browser-toolbar overdraw. */
       #moodFooter {
-        height: calc(100% - var(--wcn-mobile-visual-bleed)) !important;
-        max-height: calc(100% - var(--wcn-mobile-visual-bleed)) !important;
+        height: 100% !important;
+        max-height: none !important;
         min-height: 0 !important;
       }
+
+      #productThumbButtons {
+        bottom: calc(var(--wcn-mobile-visual-bleed) + 8px) !important;
+      }
+
+      /* The main Scroll cue is bottom-anchored, so keep it in the safe viewport too. */
+      #scrollIndicator {
+        bottom: calc(25px + var(--wcn-mobile-visual-bleed)) !important;
+      }
+
       #moodBackgroundControl { top: 8px !important; }
-      /* The active product labels should remain available to screen readers;
-         they're hidden visually as in the approved desktop design. */
+
+      /* Preserve the larger Scroll artwork requested earlier. */
       #moodExitScrollIndicator svg,
       #moodExitScrollIndicator canvas {
         transform-origin: 50% 50% !important;
         transform: scale(2.1) !important;
       }
-      /* Main story scroll icon also benefits from a stronger mobile presence. */
       #scrollIndicator svg,
       #scrollIndicator canvas {
         transform-origin: 50% 50% !important;
@@ -3540,19 +3553,20 @@
     }
 
     @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      /* All vertical placement is calculated from the original safe viewport, not
+         from the extra imagery that continues behind Safari's URL bar. */
       #woodViewerCluster {
         top: calc((100vh - var(--wcn-mobile-visual-bleed)) * .115) !important;
       }
       #woodViewerShell {
         height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .53), 720px) !important;
       }
-      /* Preserve the title position within the original safe viewport, not the
-         overdraw; title stays visible after selecting any profile. */
       #moodLabelBlock {
         top: calc((100vh - var(--wcn-mobile-visual-bleed)) * .70) !important;
       }
-      /* Four genuinely larger profiles per row, with measured spacing. The two
-         rows still finish ABOVE Safari's toolbar, not inside the scene overdraw. */
+
+      /* Slightly larger profile thumbnails than the older mobile layout, with a clear
+         two-row gap, but the whole row is explicitly lifted above browser chrome. */
       #productThumbButtons {
         width: min(94vw, 430px) !important;
         max-width: 94vw !important;
@@ -3562,27 +3576,27 @@
         justify-content: center !important;
         align-items: end !important;
         column-gap: clamp(10px, 3vw, 17px) !important;
-        row-gap: clamp(5px, 1.1vh, 12px) !important;
-        bottom: 8px !important;
+        row-gap: clamp(8px, 1.35vh, 14px) !important;
         margin-top: 0 !important;
         overflow: visible !important;
       }
       .productThumbButton {
         width: 100% !important;
-        max-width: 86px !important;
+        max-width: 82px !important;
         min-width: 0 !important;
         flex-basis: auto !important;
       }
       .productThumbButton img {
         width: 100% !important;
-        height: clamp(65px, 9.0vh, 85px) !important;
-        max-width: 86px !important;
+        height: clamp(61px, 8.4vh, 80px) !important;
+        max-width: 82px !important;
         object-fit: contain !important;
         object-position: center bottom !important;
       }
     }
 
     @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      :root { --wcn-mobile-visual-bleed: 64px; }
       #woodViewerCluster {
         top: calc((100vh - var(--wcn-mobile-visual-bleed)) * .135) !important;
       }
@@ -3593,7 +3607,7 @@
         top: calc((100vh - var(--wcn-mobile-visual-bleed)) * .585) !important;
       }
       #productThumbButtons {
-        bottom: 7px !important;
+        bottom: calc(var(--wcn-mobile-visual-bleed) + 7px) !important;
         gap: clamp(8px, 1.4vw, 15px) !important;
       }
     }
@@ -10080,7 +10094,7 @@ void main(){
           /* iOS iframe scroll-parent messages were moving the gallery only a few
              pixels per long finger stroke. Multiply the real incremental finger
              displacement; parent owns the actual DOM scroll and white/audio fade. */
-          requestParentPageScroll(-incrementalTouchY * 3.35);
+          requestParentPageScroll(-incrementalTouchY);
           return;
         }
 
