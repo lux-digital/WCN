@@ -3828,6 +3828,122 @@
       }
     }
 
+
+    /* =========================================================
+       WCN v18 — MOBILE CONTROL TUNING
+       Larger invisible slider thumb hitboxes, tighter audio spacing,
+       larger final Scroll cue lane, and faster square.json scrubbing.
+       ========================================================= */
+    @media (hover: none) and (pointer: coarse) {
+      /* Move the clarity control DOWN from v17. Keep the nine selector dots clear,
+         but stop wasting the vertical area above the control. */
+      #woodViewerShell #moodBackgroundControl {
+        bottom: clamp(50px, 9.5%, 72px) !important;
+        width: min(158px, 45%) !important;
+        max-width: 158px !important;
+      }
+      #woodViewerShell #moodBackgroundControlIcon {
+        margin-bottom: -10px !important;
+      }
+      #woodViewerShell #moodBackgroundSliderRow,
+      #woodViewerShell #moodBackgroundSlider {
+        height: 58px !important;
+        min-height: 58px !important;
+      }
+
+      /* The actual draggable WebKit thumb is now 34px, but only its centered 15px
+         core is visible. This gives iPhone users a much larger grab target without
+         making the white knob look cartoonishly large. */
+      #woodViewerShell #moodBackgroundSlider::-webkit-slider-thumb {
+        width: 34px !important;
+        height: 34px !important;
+        margin-top: -15px !important;
+        border: 0 !important;
+        background: radial-gradient(circle, #fff 0 7.5px, rgba(255,255,255,0) 8px) !important;
+        box-shadow: none !important;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,.28));
+      }
+      #woodViewerShell #moodBackgroundSlider::-moz-range-thumb {
+        width: 34px !important;
+        height: 34px !important;
+        border: 0 !important;
+        background: radial-gradient(circle, #fff 0 7.5px, rgba(255,255,255,0) 8px) !important;
+        box-shadow: none !important;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,.28));
+      }
+
+      /* Tighten the audio icon/slider relationship substantially. The slider now
+         tucks directly beneath the icon instead of dropping into the thumbnail. */
+      #volumeControl {
+        width: min(146px, 44vw) !important;
+      }
+      #volumeButton,
+      #volumeControl.is-docked #volumeButton {
+        width: 54px !important;
+        height: 54px !important;
+        min-width: 54px !important;
+        min-height: 54px !important;
+      }
+      #volumeSliderRow {
+        height: 52px !important;
+        min-height: 52px !important;
+        margin-top: -19px !important;
+        transform: translate3d(0, -4px, 0) scale(1) !important;
+      }
+      #volumeControl.is-active #volumeSliderRow {
+        max-height: 48px !important;
+        transform: translate3d(0, -4px, 0) scale(1) !important;
+      }
+      #volumeSlider {
+        height: 52px !important;
+        min-height: 52px !important;
+      }
+      #volumeSlider::-webkit-slider-thumb {
+        width: 34px !important;
+        height: 34px !important;
+        margin-top: -15px !important;
+        border: 0 !important;
+        background: radial-gradient(circle, #fff 0 7.5px, rgba(255,255,255,0) 8px) !important;
+        box-shadow: none !important;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,.28));
+      }
+      #volumeSlider::-moz-range-thumb {
+        width: 34px !important;
+        height: 34px !important;
+        border: 0 !important;
+        background: radial-gradient(circle, #fff 0 7.5px, rgba(255,255,255,0) 8px) !important;
+        box-shadow: none !important;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,.28));
+      }
+
+      /* The final Scroll cue gets a slight inner-artwork boost as well as the larger
+         JS container. This compensates for whitespace authored inside Scroll.json. */
+      #moodExitScrollIndicator svg,
+      #moodExitScrollIndicator canvas {
+        transform: scale(1.10) !important;
+        transform-origin: 50% 50% !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      /* Slightly smaller viewer creates more usable lane for the larger Scroll cue. */
+      #woodViewerShell {
+        width: 82vw !important;
+        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .465), 650px) !important;
+      }
+      #woodPrevButton { left: 10.5vw !important; }
+      #woodNextButton { right: 10.5vw !important; }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #woodViewerShell {
+        width: 82vw !important;
+        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .37) !important;
+      }
+      #woodPrevButton { left: 10.5vw !important; }
+      #woodNextButton { right: 10.5vw !important; }
+    }
+
   </style>
 
 
@@ -4431,7 +4547,7 @@
       /* The story animation begins at STORY_SEQUENCE_START (frame 60). Forward scrolling
          deliberately stretches this authored range; reverse wheel movement is compensated
          later so the whole experience returns at the original logical speed. */
-      const STORY_SEQUENCE_SCROLL_SLOWDOWN = MOBILE_RUNTIME ? 1.05 : 2.2;
+      const STORY_SEQUENCE_SCROLL_SLOWDOWN = MOBILE_RUNTIME ? 0.86 : 2.2;
       const STORY_SEQUENCE_AUTOPLAY_FPS = MOBILE_RUNTIME ? 52 : 38;
       const STORY_FIRST_AUTOPLAY_END_FRAME = 72; // text000 -> text072
       const STORY_MID_AUTOPLAY_START_FRAME = 80;
@@ -5589,9 +5705,9 @@
 
         /* Mobile no longer scales the inner SVG 2.1x. Keep enough presence to read as
            the next-scroll cue, but leave breathing room above/below it. */
-        const maxCueSize = MOBILE_RUNTIME ? 142 : 176;
-        const minCueSize = MOBILE_RUNTIME ? 112 : 74.8;
-        const cueScale = MOBILE_RUNTIME ? .90 : .99;
+        const maxCueSize = MOBILE_RUNTIME ? 190 : 176;
+        const minCueSize = MOBILE_RUNTIME ? 148 : 74.8;
+        const cueScale = MOBILE_RUNTIME ? 1.16 : .99;
         const cueSize = clamp(gap * cueScale, minCueSize, maxCueSize);
         moodExitScrollIndicator.style.width = `${cueSize}px`;
         moodExitScrollIndicator.style.height = `${cueSize}px`;
