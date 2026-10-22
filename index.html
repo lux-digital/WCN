@@ -3946,6 +3946,61 @@
 
 
     /* =========================================================
+       WCN v21 — TIGHT MOBILE SCROLL LANE
+       The apparent empty space around Scroll.json was not ordinary padding: the
+       thumbnail/profile controls reserve an absolute vertical lane, and the Lottie
+       composition itself contains transparent breathing room. Tighten both sources.
+       ========================================================= */
+    @media (hover: none) and (pointer: coarse) {
+      /* Pull the collapsed profile action upward so it actually participates in the
+         compact Scroll-cue lane instead of leaving a large reserved region below it. */
+      #mobileProfilesToggle {
+        bottom: calc(var(--wcn-mobile-visual-bleed) + 36px) !important;
+      }
+
+      /* When profiles are open, lift the tray slightly as well. The Scroll cue remains
+         visible, but the whole composition is now vertically related rather than being
+         three independently bottom/top anchored regions. */
+      #productThumbButtons {
+        bottom: calc(var(--wcn-mobile-visual-bleed) + 22px) !important;
+      }
+
+      /* Clip the transparent outer breathing room authored inside Scroll.json. The box
+         itself is smaller; this modest inner scale simply makes the visible artwork use
+         that smaller box instead of looking surrounded by invisible padding. */
+      #moodExitScrollIndicator {
+        overflow: hidden !important;
+      }
+      #moodExitScrollIndicator svg,
+      #moodExitScrollIndicator canvas {
+        transform: scale(1.15) !important;
+        transform-origin: 50% 50% !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+      /* Closed state gets the vertical space reclaimed from the Scroll lane. */
+      #moodContent:not(.mobile-profiles-open) #woodViewerShell {
+        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .605), 770px) !important;
+      }
+
+      /* Still clearly smaller than the closed viewer, but less aggressively collapsed
+         than before so the open layout does not create another oversized cue lane. */
+      #moodContent.mobile-profiles-open #woodViewerShell {
+        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .445), 625px) !important;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+      #moodContent:not(.mobile-profiles-open) #woodViewerShell {
+        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .505) !important;
+      }
+      #moodContent.mobile-profiles-open #woodViewerShell {
+        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .375) !important;
+      }
+    }
+
+    /* =========================================================
        WCN v19 — MOBILE COLLAPSIBLE PROFILE TRAY
        The default mobile composition gives the woodgrain viewer more room. The
        eight profile thumbnails live behind a single AVAILABLE PROFILES control
@@ -5924,7 +5979,9 @@
             gapBottom = toggleRect.top;
           } else {
             const buttonsRect = productThumbButtons.getBoundingClientRect();
-            gapBottom = buttonsRect.top;
+            /* The close X extends above the tray. Treat it as part of the tray so the
+               Scroll cue does not reserve/occupy invisible space behind that control. */
+            gapBottom = buttonsRect.top - 34;
           }
         } else {
           const titleRect = moodSeriesName.getBoundingClientRect();
@@ -5937,19 +5994,23 @@
            hidden reason repeated spacing changes looked ineffective: every frame JS put
            half of all spare space back ABOVE the Lottie. Anchor it close to the viewer
            instead, with only a small visual breathing gap. */
-        const maxCueSize = MOBILE_RUNTIME ? 190 : 176;
-        const minCueSize = MOBILE_RUNTIME ? 132 : 74.8;
-        const cueScale = MOBILE_RUNTIME ? 1.08 : .99;
-        const availableCueSize = MOBILE_RUNTIME ? Math.max(88, gap - 10) : maxCueSize;
+        const maxCueSize = MOBILE_RUNTIME ? (mobileProfilesOpen ? 102 : 118) : 176;
+        const minCueSize = MOBILE_RUNTIME ? (mobileProfilesOpen ? 82 : 96) : 74.8;
+        const cueScale = MOBILE_RUNTIME ? .94 : .99;
+        const availableCueSize = MOBILE_RUNTIME ? Math.max(72, gap - 4) : maxCueSize;
         const cueSize = MOBILE_RUNTIME
           ? Math.min(maxCueSize, Math.max(Math.min(minCueSize, availableCueSize), Math.min(availableCueSize, gap * cueScale)))
           : clamp(gap * cueScale, minCueSize, maxCueSize);
 
         let centerY;
         if (MOBILE_RUNTIME) {
-          const topPadding = 4;
+          /* This is now a genuinely tight lane: 2px above the cue and, because the
+             neighboring controls have been moved inward in CSS, only a few pixels can
+             remain below it. Do not re-center spare space around the Lottie. */
+          const topPadding = 2;
+          const bottomPadding = 2;
           centerY = gapTop + topPadding + cueSize * .5;
-          const maxCenter = gapBottom - 4 - cueSize * .5;
+          const maxCenter = gapBottom - bottomPadding - cueSize * .5;
           if (Number.isFinite(maxCenter)) centerY = Math.min(centerY, maxCenter);
         } else {
           centerY = gap > 4 ? gapTop + gap * .50 : gapTop + 28;
