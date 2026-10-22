@@ -4135,19 +4135,16 @@
         transition-delay: .28s !important;
       }
 
-      /* Scroll cue belongs to the default browse state. Hide it during profile selection
-         so the tray gets all of the available vertical room. */
-      #moodContent.mobile-profiles-open #moodExitScrollIndicator {
-        opacity: 0 !important;
-        visibility: hidden !important;
+      /* Keep the final Scroll cue visible in both mobile profile states. Its exact
+         vertical position is calculated from the live thumbnail/profile geometry in JS. */
+      #moodExitScrollIndicator {
         pointer-events: none !important;
-        transition: opacity .24s ease, visibility 0s linear .25s !important;
       }
     }
 
     @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
       #moodContent:not(.mobile-profiles-open) #woodViewerShell {
-        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .545), 720px) !important;
+        height: min(calc((100vh - var(--wcn-mobile-visual-bleed)) * .565), 738px) !important;
       }
       #moodContent.mobile-profiles-open #woodViewerShell {
         width: 82vw !important;
@@ -4160,7 +4157,7 @@
     @media (hover: none) and (pointer: coarse) and (orientation: landscape) {
       #moodContent:not(.mobile-profiles-open) #woodViewerShell {
         width: 90vw !important;
-        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .455) !important;
+        height: calc((100vh - var(--wcn-mobile-visual-bleed)) * .472) !important;
       }
       #moodContent.mobile-profiles-open #woodViewerShell {
         width: 82vw !important;
@@ -5902,7 +5899,6 @@
         if (!moodExitScrollIndicator) return;
 
         const visible = moodExitIsReady() && !parentOverlayActive &&
-          (!MOBILE_RUNTIME || !mobileProfilesOpen) &&
           getMoodVisualProgress() >= MOOD_VIEWER_END - .0005;
 
         if (!visible || !woodViewerShell || !moodSeriesName || !stage) {
@@ -5920,9 +5916,9 @@
         let gapBottom;
 
         if (MOBILE_RUNTIME && productThumbButtons) {
-          /* In the default mobile state the eight profiles are collapsed behind the
-             AVAILABLE PROFILES pill. Use that button as the bottom of Scroll.json's
-             lane. When the tray is open the Scroll cue is intentionally hidden. */
+          /* Closed: Scroll.json occupies the lane between the thumbnail and the
+             AVAILABLE PROFILES pill. Open: it remains visible and uses the lane between
+             the now-smaller thumbnail and the top of the eight-profile tray. */
           if (!mobileProfilesOpen && mobileProfilesToggle) {
             const toggleRect = mobileProfilesToggle.getBoundingClientRect();
             gapBottom = toggleRect.top;
@@ -5936,16 +5932,30 @@
         }
 
         const gap = Math.max(0, gapBottom - gapTop);
-        let centerY = gap > 4 ? gapTop + gap * .50 : gapTop + 28;
-        centerY = clamp(centerY, stageRect.top + 24, stageRect.bottom - 24);
-        moodExitScrollIndicator.style.top = `${centerY - stageRect.top}px`;
 
-        /* Mobile no longer scales the inner SVG 2.1x. Keep enough presence to read as
-           the next-scroll cue, but leave breathing room above/below it. */
+        /* IMPORTANT: do not center the cue in the entire gap on mobile. That was the
+           hidden reason repeated spacing changes looked ineffective: every frame JS put
+           half of all spare space back ABOVE the Lottie. Anchor it close to the viewer
+           instead, with only a small visual breathing gap. */
         const maxCueSize = MOBILE_RUNTIME ? 190 : 176;
-        const minCueSize = MOBILE_RUNTIME ? 148 : 74.8;
-        const cueScale = MOBILE_RUNTIME ? 1.16 : .99;
-        const cueSize = clamp(gap * cueScale, minCueSize, maxCueSize);
+        const minCueSize = MOBILE_RUNTIME ? 132 : 74.8;
+        const cueScale = MOBILE_RUNTIME ? 1.08 : .99;
+        const availableCueSize = MOBILE_RUNTIME ? Math.max(88, gap - 10) : maxCueSize;
+        const cueSize = MOBILE_RUNTIME
+          ? Math.min(maxCueSize, Math.max(Math.min(minCueSize, availableCueSize), Math.min(availableCueSize, gap * cueScale)))
+          : clamp(gap * cueScale, minCueSize, maxCueSize);
+
+        let centerY;
+        if (MOBILE_RUNTIME) {
+          const topPadding = 4;
+          centerY = gapTop + topPadding + cueSize * .5;
+          const maxCenter = gapBottom - 4 - cueSize * .5;
+          if (Number.isFinite(maxCenter)) centerY = Math.min(centerY, maxCenter);
+        } else {
+          centerY = gap > 4 ? gapTop + gap * .50 : gapTop + 28;
+        }
+        centerY = clamp(centerY, stageRect.top + cueSize * .5, stageRect.bottom - cueSize * .5);
+        moodExitScrollIndicator.style.top = `${centerY - stageRect.top}px`;
         moodExitScrollIndicator.style.width = `${cueSize}px`;
         moodExitScrollIndicator.style.height = `${cueSize}px`;
         moodExitScrollIndicator.classList.add('is-visible');
@@ -7140,8 +7150,8 @@
         if (mobileProfilesToggle) mobileProfilesToggle.setAttribute('aria-expanded', next ? 'true' : 'false');
         if (productThumbButtons) productThumbButtons.setAttribute('aria-hidden', next ? 'false' : 'true');
 
-        /* Recalculate the final Scroll cue after the viewer finishes resizing so its
-           lane uses the new thumbnail/profile geometry rather than stale bounds. */
+        /* Recalculate the final Scroll cue after the viewer finishes resizing so it stays
+           visible and hugs the thumbnail in both collapsed and expanded profile states. */
         updateMoodExitScrollIndicator();
         if (!options.immediate) {
           window.setTimeout(updateMoodExitScrollIndicator, 90);
