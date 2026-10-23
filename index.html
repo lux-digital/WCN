@@ -4222,110 +4222,7 @@
       #moodContent.mobile-profiles-open #woodNextButton { right: 10.5vw !important; }
     }
 
-  
-
-    /* =========================================================
-       WCN v22 — FAST NAVIGATION + OPENING SHORTCUTS
-       Fast travel uses the dedicated 25-frame Scroll_01_fast sequence and bypasses
-       the authored opening/story Lotties. The normal slow-scroll experience is intact.
-       ========================================================= */
-    #quickJumpNav {
-      position: absolute;
-      left: 50%;
-      top: 72%;
-      z-index: 82;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      transform: translate3d(-50%,0,0);
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
-      transition: opacity .34s ease, transform .48s cubic-bezier(.22,1,.36,1), visibility 0s linear;
-      white-space: nowrap;
-    }
-    #quickJumpNav.is-hidden {
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-      transform: translate3d(-50%,8px,0) scale(.97);
-      transition: opacity .24s ease, transform .34s cubic-bezier(.22,1,.36,1), visibility 0s linear .26s;
-    }
-    .quickJumpButton {
-      -webkit-appearance: none;
-      appearance: none;
-      min-height: 42px;
-      padding: 0 22px;
-      border: 0;
-      border-radius: 999px;
-      background: #fff;
-      color: #444;
-      font: 600 11px/1 Arial, Helvetica, sans-serif;
-      letter-spacing: .105em;
-      cursor: pointer;
-      box-shadow: 0 7px 22px rgba(0,0,0,.15);
-      transition: transform .28s cubic-bezier(.22,1,.36,1), box-shadow .28s ease;
-      touch-action: manipulation;
-    }
-    .quickJumpButton:hover,
-    .quickJumpButton:focus-visible {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 26px rgba(0,0,0,.20);
-      outline: none;
-    }
-    .quickJumpButton:active { transform: translateY(0) scale(.97); }
-
-    /* v21 cropped the final Scroll artwork intentionally to hide authored whitespace.
-       That also clipped the left/right strokes. Keep the tighter lane, but let the SVG
-       breathe outside its box and reduce the internal scale just enough to show all edges. */
-    #moodExitScrollIndicator { overflow: visible !important; }
-    #moodExitScrollIndicator svg,
-    #moodExitScrollIndicator canvas {
-      transform: scale(1.03) !important;
-      transform-origin: 50% 50% !important;
-    }
-
-    /* While the dedicated fast sequence owns the screen, the opening text, square.json,
-       semi-panorama and mood section cannot compete with it. The volume control remains
-       available. */
-    #stage.fast-travel-active #heroText,
-    #stage.fast-travel-active #storyLayer,
-    #stage.fast-travel-active #holdEnvCanvas,
-    #stage.fast-travel-active #holdEnvHotspots,
-    #stage.fast-travel-active #moodSection,
-    #stage.fast-travel-active #scrollIndicator,
-    #stage.fast-travel-active #moodExitScrollIndicator,
-    #stage.fast-travel-active #quickJumpNav {
-      opacity: 0 !important;
-      visibility: hidden !important;
-      pointer-events: none !important;
-    }
-    #stage.fast-travel-active #sceneCanvas {
-      opacity: 1 !important;
-      visibility: visible !important;
-    }
-    #stage.fast-mood-transition #storyLayer,
-    #stage.fast-mood-transition #holdEnvCanvas,
-    #stage.fast-mood-transition #holdEnvHotspots {
-      opacity: 0 !important;
-      visibility: hidden !important;
-      pointer-events: none !important;
-    }
-
-    @media (hover: none) and (pointer: coarse) {
-      #quickJumpNav { gap: 7px; }
-      .quickJumpButton {
-        min-height: 40px;
-        padding: 0 16px;
-        font-size: 9.5px;
-        letter-spacing: .085em;
-      }
-      /* Do not reintroduce the old 1.15x crop from v21 on mobile. */
-      #moodExitScrollIndicator svg,
-      #moodExitScrollIndicator canvas { transform: scale(1.03) !important; }
-    }
-</style>
+  </style>
 
 
 
@@ -4656,10 +4553,6 @@
 
 
 
-          <div id="quickJumpNav" aria-label="Quick navigation">
-            <button id="quickColoursButton" class="quickJumpButton" type="button">THE COLOURS</button>
-            <button id="quickGalleryButton" class="quickJumpButton" type="button">PROJECT GALLERY</button>
-          </div>
           <div id="scrollIndicator"></div>
           <div id="moodExitScrollIndicator" aria-hidden="true"></div>
           <div id="elementorExitWhiteFade" aria-hidden="true"></div>
@@ -4791,9 +4684,7 @@
 
 
       const PANORAMA_IMAGE = '360.jpg', PANORAMA_IMAGE_MOBILE = '360-mobile.jpg',
-        SCROLL_FOLDER = 'Scroll_01', SCROLL_FOLDER_MOBILE = 'Scroll_01-mobile',
-        FAST_SCROLL_FOLDER = 'Scroll_01_fast', FAST_SCROLL_FRAME_COUNT = 25,
-        MASK_FOLDER = 'Mask_01', SCROLL_FRAME_COUNT = 109,
+        SCROLL_FOLDER = 'Scroll_01', SCROLL_FOLDER_MOBILE = 'Scroll_01-mobile', MASK_FOLDER = 'Mask_01', SCROLL_FRAME_COUNT = 109,
         OPENING_TEXT_LOTTIE = 'opening text.json',
         VOLUME_LOTTIE = 'volume.json',
         AUDIO_TRACK_PATH = 'Sound/ambient.mp3', // continuous soundscape bed; loops across all scenes
@@ -4873,16 +4764,6 @@
       const FAST_SCROLL_MAX_PLAYBACK_RATE = 5.0;
       const FAST_SCROLL_ACCUMULATE_MS = 440;
       const FAST_SCROLL_RELEASE_MS = 560;
-      /* A truly fast gesture leaves the authored timeline entirely and uses the dedicated
-         compressed 25-frame sequence. The frame sequence itself encodes the faster camera
-         move, so it plays continuously with no authored pause/autoplay sections. */
-      const FAST_SEQUENCE_FPS = 24;
-      const FAST_WHEEL_IMMEDIATE_PX = 160;
-      const FAST_WHEEL_ENERGY_TRIGGER = 320;
-      const FAST_TOUCH_VELOCITY_PX_S = 820;
-      const FAST_TOUCH_TRAVEL_PX = 30;
-      const FAST_MOOD_CLIP_DURATION = 1.18;
-      const FAST_GALLERY_MOOD_CLIP_DURATION = 0.72;
       const BACKGROUND_AUTOPLAY_END_FRAME = SCROLL_FRAME_COUNT - 1;
       const HOLD_ENV_AUTOPLAY_FADE_START_FRAME = 101;
 
@@ -5258,7 +5139,6 @@
 
 
       const scrollIndicator = $('scrollIndicator'), moodExitScrollIndicator = $('moodExitScrollIndicator'), elementorExitWhiteFade = $('elementorExitWhiteFade'), loader = $('loader'), loaderProgress = $('loaderProgress');
-      const quickJumpNav = $('quickJumpNav'), quickColoursButton = $('quickColoursButton'), quickGalleryButton = $('quickGalleryButton');
       const openingTextLottie = $('openingTextLottie');
       const volumeControl = $('volumeControl'), volumeButton = $('volumeButton'), volumeLottie = $('volumeLottie');
       const volumeSlider = $('volumeSlider'), volumeSliderRow = $('volumeSliderRow'), experienceAudio = $('experienceAudio');
@@ -5280,12 +5160,7 @@
       ]);
       const moodVideoPlayers = [...moodVideoByIndex.values()];
       const moodBackgroundMedia = [...moodVideoPlayers, moodImage];
-      function getMoodFallbackPath(index) {
-        const media = MOOD_ITEMS[index]?.media || MOOD_VIDEO_PATH;
-        return String(media).replace(/\.mp4(?:\?.*)?$/i, '.jpg');
-      }
       function getMoodMediaElement(index) {
-        if (fastMoodFallbackActive) return moodImage;
         if (MOOD_ITEMS[index]?.mediaType !== 'video') return moodImage;
         return moodVideoByIndex.get(index) || moodImage;
       }
@@ -5297,12 +5172,6 @@
         if (result && typeof result.catch === 'function') result.catch(() => {});
       }
       function syncMoodMediaVisibility(visibleOpacity = 1) {
-        if (fastMoodFallbackActive && moodImage) {
-          const wanted = encodeURI(getMoodFallbackPath(activeMoodIndex));
-          if (!moodImage.getAttribute('src') || !moodImage.getAttribute('src').includes(wanted.split('/').pop())) {
-            moodImage.src = wanted;
-          }
-        }
         const active = getMoodMediaElement(activeMoodIndex);
         moodBackgroundMedia.forEach(element => {
           if (!element) return;
@@ -5433,8 +5302,6 @@
 
 
       const scrollFrames = [], maskFrames = [];
-      const fastScrollFrames = new Array(FAST_SCROLL_FRAME_COUNT).fill(null);
-      let fastScrollLoadPromise = null, fastScrollReady = false;
       const mobileSequenceLoads = new Map();
       const mobileSequenceUse = new Map();
       const MOBILE_SEQUENCE_INITIAL_COUNT = 16;
@@ -5451,12 +5318,6 @@
       let masterAudioContext = null, masterAudioInput = null, masterAudioLimiter = null;
       const connectedAudioElements = new WeakSet();
       let scrollInputEnergy = 0, scrollInputLastAt = 0, timelinePlaybackRate = 1;
-      let fastTravelActive = false, fastTravelReadyToAnimate = false, fastTravelDirection = 0;
-      let fastTravelDestination = 'colours', fastTravelStartFrame = 0, fastTravelEndFrame = FAST_SCROLL_FRAME_COUNT - 1;
-      let fastTravelCurrentFrame = 0, fastTravelStartedAt = 0, fastTravelDurationMs = 0, fastTravelLockY = 0;
-      let fastTravelToken = 0, fastTravelLastRenderedFrame = -1;
-      let fastMoodTransitionActive = false, fastMoodFallbackActive = false, fastProjectGalleryPending = false;
-      let quickNavLastLayoutAt = 0;
       let mobileTimelineTouchLastY = 0;
       let mobileTimelineTouchLastAt = 0;
       let mobileHandoffGestureActive = false;
@@ -5589,7 +5450,6 @@
       }
 
       function updateTimelinePlaybackRate(time, dt) {
-        if (fastTravelActive) { timelinePlaybackRate = 1; return; }
         const idle = scrollInputLastAt ? Math.max(0, time - scrollInputLastAt) : 5000;
         const currentEnergy = scrollInputEnergy * Math.exp(-idle / FAST_SCROLL_RELEASE_MS);
         const effort = smootherstep01(clamp(
@@ -5621,7 +5481,6 @@
 
 
       const scrollImagePath = f => `${MOBILE_RUNTIME ? SCROLL_FOLDER_MOBILE : SCROLL_FOLDER}/Scroll${padFrame(f)}.jpg`;
-      const fastScrollImagePath = f => `${FAST_SCROLL_FOLDER}/Scroll-fast${String(f).padStart(2, '0')}.jpg`;
 
 
 
@@ -5942,7 +5801,7 @@
       }
 
       function updateStorySequenceAutoplay(time, dt) {
-        if (fastTravelActive || !storySequenceAutoplayActive) return;
+        if (!storySequenceAutoplayActive) return;
         storyAutoScrollElapsedMs += Math.max(0, dt) * 1000 * timelinePlaybackRate;
         const t = clamp(storyAutoScrollElapsedMs / Math.max(1, storyAutoScrollDuration), 0, 1);
         const frame = lerp(storySequenceAutoplayFrom, storySequenceAutoplayTo, t);
@@ -6249,10 +6108,7 @@
 
       function updateMoodClip(dt) {
         if (!moodClipActive) return;
-        const activeMoodClipDuration = fastMoodTransitionActive
-          ? (fastProjectGalleryPending ? FAST_GALLERY_MOOD_CLIP_DURATION : FAST_MOOD_CLIP_DURATION)
-          : MOOD_CLIP_DURATION;
-        moodClipProgress = clamp(moodClipProgress + moodClipDirection * (dt / activeMoodClipDuration), 0, 1);
+        moodClipProgress = clamp(moodClipProgress + moodClipDirection * (dt / MOOD_CLIP_DURATION), 0, 1);
         updateMoodSectionMotion();
 
         if (moodClipDirection > 0 && moodClipProgress >= 1 - .0001) {
@@ -6260,22 +6116,13 @@
           moodClipActive = false;
           moodClipComplete = true;
           updateMoodSectionMotion();
-          if (fastProjectGalleryPending) {
-            launchFastProjectGalleryHandoff();
-          } else {
-            fastMoodTransitionActive = false;
-            stage.classList.remove('fast-mood-transition');
-            beginMoodExitSettle();
-          }
+          beginMoodExitSettle();
         } else if (moodClipDirection < 0 && moodClipProgress <= .0001) {
           moodClipProgress = 0;
           moodClipActive = false;
           moodClipComplete = false;
           clearMoodExitSettle();
           moodClipReverseSuppressed = true;
-          /* A fallback JPG is a fast-route optimization only. Once the user deliberately
-             reverses out of Colours, restore normal MP4 behavior for a later slow visit. */
-          if (!fastMoodTransitionActive) fastMoodFallbackActive = false;
           /* Stay exactly where the reverse clip was triggered. There is no stored anchor
              to jump back to; the next real upward gesture continues from this same state. */
           syncScrollTrackingAfterProgrammaticMove();
@@ -7008,24 +6855,19 @@
 
         const fromItem = MOOD_ITEMS[activeMoodIndex];
         const toItem = MOOD_ITEMS[targetIndex];
-        const useFallbackBackground = fastMoodFallbackActive;
-        const fromMediaType = useFallbackBackground ? 'image' : fromItem.mediaType;
-        const toMediaType = useFallbackBackground ? 'image' : toItem.mediaType;
-        const fromMediaPath = useFallbackBackground ? getMoodFallbackPath(activeMoodIndex) : fromItem.media;
-        const toMediaPath = useFallbackBackground ? getMoodFallbackPath(targetIndex) : toItem.media;
         const toWoodgrainPath = resolveWoodgrainPath(activeProductLabel, toItem.name);
         const activeOverlayPath = resolveWoodgrainOverlayPath(activeProductLabel);
 
         /* Begin the incoming muted video as early as possible; each video has its
            own media element, so even a video-to-video swap keeps the old one alive. */
-        if (toMediaType === 'video') {
+        if (toItem.mediaType === 'video') {
           const upcoming = getMoodMediaElement(targetIndex);
           try { upcoming.currentTime = 0; } catch (e) {}
           playMoodVideo(upcoming);
         }
         /* Preload the incoming background and woodgrain before anything moves. */
         try {
-          if (toMediaType === 'image') await preloadMoodImage(toMediaPath);
+          if (toItem.mediaType === 'image') await preloadMoodImage(toItem.media);
           const woodImage = await preloadWoodgrainPath(toWoodgrainPath);
           moodWoodWidths[targetIndex] = Math.max(1, woodImage.naturalWidth || woodImage.width || 1600);
           if (activeOverlayPath) await preloadMoodImage(activeOverlayPath).catch(() => {});
@@ -7071,7 +6913,7 @@
            image would instantly become the incoming one. */
         let backgroundPromise;
 
-        if (fromMediaType === 'image' && toMediaType === 'image') {
+        if (fromItem.mediaType === 'image' && toItem.mediaType === 'image') {
           backgroundPromise = (async () => {
             const out = moodImage.animate(
               [{ opacity: 1 }, { opacity: 0 }],
@@ -7082,7 +6924,7 @@
             try { out.cancel(); } catch (e) { }
 
             moodImage.style.opacity = '0';
-            moodImage.src = encodeURI(toMediaPath);
+            moodImage.src = encodeURI(toItem.media);
 
             /* Incoming image was already preloaded, so this should paint immediately. */
             await wait(80);
@@ -7108,10 +6950,10 @@
             outgoingMedia.style.opacity = '1';
             incomingMedia.style.opacity = '0';
 
-            if (toMediaType === 'video') {
+            if (toItem.mediaType === 'video') {
               playMoodVideo(incomingMedia);
             } else {
-              moodImage.src = encodeURI(toMediaPath);
+              moodImage.src = encodeURI(toItem.media);
             }
 
             const out = outgoingMedia.animate(
@@ -9315,7 +9157,7 @@ void main(){
       }
 
       function updateOpeningTextLottie() {
-        if (fastTravelActive || !openingTextReady || !openingTextAnimation) return;
+        if (!openingTextReady || !openingTextAnimation) return;
         /* Scrub the full opening-text animation across the user's manual Scroll_01 run.
            By the time the authored background autoplay begins at frame 52, the opening
            Lottie has reached its final frame. Reverse scrolling naturally scrubs it back. */
@@ -9523,369 +9365,7 @@ void main(){
         experience.style.height = `${SCROLL_LENGTH_VH + extraBackgroundVH + extraStoryVH + extraMoodVH + 100}vh`;
       }
 
-      /* ---------------------------------------------------------
-         DEDICATED FAST TRAVEL
-         Scroll_01_fast contains Scroll-fast00.jpg .. Scroll-fast24.jpg. Its first/last
-         frames match Scroll_01, so the renderer can enter/leave this path without a cut.
-         --------------------------------------------------------- */
-      function loadFastScrollAssets() {
-        if (fastScrollReady) return Promise.resolve(fastScrollFrames);
-        if (fastScrollLoadPromise) return fastScrollLoadPromise;
-        fastScrollLoadPromise = Promise.all(
-          Array.from({ length: FAST_SCROLL_FRAME_COUNT }, (_, frame) =>
-            loadImage(fastScrollImagePath(frame)).then(image => {
-              fastScrollFrames[frame] = image;
-              return image;
-            })
-          )
-        ).then(() => {
-          fastScrollReady = true;
-          return fastScrollFrames;
-        }).catch(error => {
-          fastScrollLoadPromise = null;
-          console.warn('[West Coast Naturals] Fast Scroll_01_fast sequence could not be fully loaded.', error);
-          throw error;
-        });
-        return fastScrollLoadPromise;
-      }
 
-      function preloadFastMoodFallbacks() {
-        MOOD_ITEMS.forEach((item, index) => {
-          preloadMoodImage(getMoodFallbackPath(index)).catch(() => {});
-        });
-      }
-
-      function renderFastScrollFrame(frame) {
-        const index = clamp(Math.round(frame), 0, FAST_SCROLL_FRAME_COUNT - 1);
-        const image = fastScrollFrames[index];
-        if (!image) return;
-        if (index === fastTravelLastRenderedFrame) return;
-        fastTravelLastRenderedFrame = index;
-        drawCover(sceneCtx, image, sceneCanvas);
-        maskedTextCtx.setTransform(1, 0, 0, 1, 0, 0);
-        maskedTextCtx.clearRect(0, 0, maskedTextCanvas.width, maskedTextCanvas.height);
-        maskedTextCanvas.style.opacity = '0';
-      }
-
-      function getFastEquivalentFrame() {
-        if (fastTravelActive) return clamp(fastTravelCurrentFrame, 0, FAST_SCROLL_FRAME_COUNT - 1);
-        if (moodClipActive || moodClipComplete || smoothStoryProgress >= STORY_SEQUENCE_START - .002 ||
-            backgroundAutoplayComplete || holdEnvBlend > .03) {
-          return FAST_SCROLL_FRAME_COUNT - 1;
-        }
-        const normal = clamp(smoothScrollFrame / Math.max(1, SCROLL_FRAME_COUNT - 1), 0, 1);
-        return normal * (FAST_SCROLL_FRAME_COUNT - 1);
-      }
-
-      function cancelAuthoredMotionForFastTravel() {
-        storySequenceAutoplayActive = false;
-        storySequenceAutoplayKind = '';
-        firstStoryAutoplayPending = false;
-        backgroundAutoplayActive = false;
-        backgroundReverseActive = false;
-        panoramaReturnActive = false;
-        moodClipActive = false;
-        moodClipDirection = 0;
-        clearMoodExitSettle();
-        clearMoodReturnHold();
-        timelinePlaybackRate = 1;
-      }
-
-      function canStartFastTravel(direction) {
-        if (!scrollingReady || parentOverlayActive) return false;
-        const dir = direction >= 0 ? 1 : -1;
-        if (dir > 0) {
-          /* Once the completed thumbnail scene owns the Gallery handoff, a downward
-             gesture should scroll the Gallery normally—not replay the fast sequence. */
-          return !moodClipComplete && getMoodVisualProgress() < MOOD_VIEWER_END - .0005;
-        }
-        /* Never fire the fast reverse while already essentially at the opening panorama. */
-        return moodClipComplete || moodClipProgress > .02 || smoothStoryProgress > .015 || smoothScrollFrame > 3;
-      }
-
-      function shouldUseFastWheelRoute(deltaPixels) {
-        const amount = Math.abs(Number(deltaPixels) || 0);
-        return amount >= FAST_WHEEL_IMMEDIATE_PX || scrollInputEnergy >= FAST_WHEEL_ENERGY_TRIGGER;
-      }
-
-      function shouldUseFastTouchRoute(incrementalY, incrementalDt, totalY) {
-        const speed = Math.abs(incrementalY) / Math.max(8, incrementalDt) * 1000;
-        const elapsed = Math.max(1, performance.now() - moodExitTouchStartAt);
-        const decisiveFlick = speed >= FAST_TOUCH_VELOCITY_PX_S && Math.abs(totalY) >= FAST_TOUCH_TRAVEL_PX;
-        const shortFastThrow = Math.abs(totalY) >= 92 && elapsed <= 230;
-        return decisiveFlick || shortFastThrow;
-      }
-
-      function activateFastMoodFallback(index = activeMoodIndex) {
-        fastMoodFallbackActive = true;
-        const path = getMoodFallbackPath(index);
-        preloadMoodImage(path).catch(() => {});
-        moodImage.src = encodeURI(path);
-        moodImage.style.zIndex = '22';
-        moodImage.style.opacity = '0';
-        moodVideoPlayers.forEach(video => {
-          if (!video) return;
-          video.pause();
-          video.style.opacity = '0';
-        });
-      }
-
-      function syncFastRouteToMoodBoundary() {
-        const moodBoundaryY = rawProgressToPageY(MOOD_WHITE_START);
-        window.scrollTo(0, moodBoundaryY);
-
-        targetScrollFrame = heroTargetScrollFrame = smoothScrollFrame = SCROLL_FRAME_COUNT - 1;
-        backgroundAutoplayFrame = SCROLL_FRAME_COUNT - 1;
-        backgroundAutoplayActive = false;
-        backgroundAutoplayComplete = true;
-        backgroundReverseActive = false;
-        holdEnvAutoplayBlend = 0;
-        holdEnvBlend = 0;
-        holdEnvMouseBlend = 0;
-        holdEnvMode = 'inactive';
-        holdEnvReverseFrameLock = false;
-        holdEnvReverseSuppressed = true;
-
-        targetStoryProgress = smoothStoryProgress = MOOD_WHITE_START;
-        targetStorySequenceProgress = smoothStorySequenceProgress = 1;
-        lastManualStoryFrame = STORY_LAST_FRAME;
-        storySequenceAutoplayActive = false;
-        if (storySquareLottieReady) setStoryLottieLogicalFrame(STORY_LAST_FRAME);
-        syncScrollTrackingAfterProgrammaticMove();
-      }
-
-      function beginFastMoodReveal(destination) {
-        fastTravelActive = false;
-        fastTravelReadyToAnimate = false;
-        stage.classList.remove('fast-travel-active');
-        stage.classList.add('fast-mood-transition');
-        fastProjectGalleryPending = destination === 'gallery';
-        fastMoodTransitionActive = true;
-
-        syncFastRouteToMoodBoundary();
-        activateFastMoodFallback(activeMoodIndex);
-
-        moodClipProgress = 0;
-        moodClipComplete = false;
-        moodClipReverseSuppressed = false;
-        moodClipActive = false;
-        startMoodClip(1);
-      }
-
-      function launchFastProjectGalleryHandoff() {
-        fastProjectGalleryPending = false;
-        fastMoodTransitionActive = false;
-        stage.classList.remove('fast-mood-transition');
-
-        /* No two-second thumbnail hold for the explicit PROJECT GALLERY shortcut.
-           The parent v16 handoff already supplies the native-feeling deceleration. */
-        clearMoodExitSettle();
-        moodExitReadyAt = performance.now() - 1;
-        moodExitLastBlockedWheelAt = -Infinity;
-        if (moodExitScrollIndicator) moodExitScrollIndicator.classList.remove('is-visible');
-        moodExitScrollWasVisible = false;
-
-        let attempts = 0;
-        const launch = () => {
-          attempts++;
-          if (!parentScrollHandoffEnabled && attempts < 18) {
-            window.setTimeout(launch, 60);
-            return;
-          }
-          if (!parentScrollHandoffEnabled) {
-            /* Standalone/GitHub preview has no parent Gallery. Land cleanly on Colours
-               rather than leaving the fast transition in a dead state. */
-            beginMoodExitSettle();
-            return;
-          }
-
-          notifyParentMoodHandoffReady();
-          requestAnimationFrame(() => {
-            const firstPush = clamp(window.innerHeight * .16, 90, 190);
-            requestParentPageScroll(firstPush);
-            postElementorHandoffMessage('scroll-parent-end', {
-              velocityY: MOBILE_RUNTIME ? 2150 : 1850
-            });
-          });
-        };
-        launch();
-      }
-
-      function resetToOpeningAfterFastReverse() {
-        fastTravelActive = false;
-        fastTravelReadyToAnimate = false;
-        fastMoodTransitionActive = false;
-        fastProjectGalleryPending = false;
-        fastMoodFallbackActive = false;
-        stage.classList.remove('fast-travel-active', 'fast-mood-transition');
-        postElementorHandoffMessage('handoff-cancel');
-
-        moodClipActive = false;
-        moodClipComplete = false;
-        moodClipDirection = 0;
-        moodClipProgress = 0;
-        moodClipReverseSuppressed = false;
-        clearMoodExitSettle();
-        clearMoodReturnHold();
-        moodImage.style.opacity = '0';
-        moodVideoPlayers.forEach(video => { if (video) { video.pause(); video.style.opacity = '0'; } });
-
-        backgroundAutoplayActive = false;
-        backgroundAutoplayComplete = false;
-        backgroundReverseActive = false;
-        backgroundAutoplayFrame = 0;
-        holdEnvAutoplayBlend = 0;
-        holdEnvBlend = 0;
-        holdEnvMode = 'inactive';
-        holdEnvReverseFrameLock = false;
-        holdEnvReverseSuppressed = false;
-
-        targetScrollFrame = heroTargetScrollFrame = smoothScrollFrame = 0;
-        targetStoryProgress = smoothStoryProgress = 0;
-        targetStorySequenceProgress = smoothStorySequenceProgress = 0;
-        lastManualStoryFrame = 0;
-        firstStoryAutoplayPending = false;
-        storySequenceAutoplayActive = false;
-        storySequenceAutoplayKind = '';
-        storyFirstSegmentComplete = false;
-        storyMidSegmentHigh = false;
-        storyThirdSegmentHigh = false;
-        storyFourthSegmentHigh = false;
-        storyFifthSegmentHigh = false;
-
-        const experienceTopY = Math.max(0, window.scrollY + experience.getBoundingClientRect().top);
-        window.scrollTo(0, experienceTopY);
-        syncScrollTrackingAfterProgrammaticMove();
-
-        fastTravelLastRenderedFrame = -1;
-        currentScrollFrame = 0;
-        renderFrame(0);
-        if (storySquareLottieReady) setStoryLottieLogicalFrame(0);
-        if (openingTextReady && openingTextAnimation) {
-          openingTextCurrentFrame = 0;
-          openingTextAnimation.goToAndStop(0, true);
-        }
-
-        /* The fast JPG has already arrived at the panorama endpoint. Let the actual 360
-           camera target continue gliding upward and decelerate while the opening copy
-           repeats the exact scale/opacity entrance used on first load. */
-        panoramaIntroReveal = 1;
-        cameraScrollVisualProgress = Math.max(cameraScrollVisualProgress, 1);
-        panoramaReturnCameraGlideActive = true;
-        heroText.style.visibility = 'visible';
-        heroTextInner.style.opacity = '1';
-        try { heroText.getAnimations().forEach(animation => animation.cancel()); } catch (e) {}
-        try { volumeButton.getAnimations().forEach(animation => animation.cancel()); } catch (e) {}
-        animateHeroText();
-        updatePanoramaOpacity();
-        updateHeroScrollTypography(true);
-        updateOpeningTextLottie();
-        updateStoryTextMotion();
-        updateMoodSectionMotion();
-        updateQuickJumpNav(true);
-      }
-
-      async function beginFastTravel(direction, destination = null) {
-        const dir = direction >= 0 ? 1 : -1;
-        const requestedDestination = destination || (dir > 0 ? 'colours' : 'top');
-        if (!canStartFastTravel(dir) && !fastTravelActive) return false;
-
-        const token = ++fastTravelToken;
-        const currentFastFrame = getFastEquivalentFrame();
-        cancelAuthoredMotionForFastTravel();
-
-        fastTravelActive = true;
-        fastTravelReadyToAnimate = false;
-        fastTravelDirection = dir;
-        fastTravelDestination = requestedDestination;
-        fastTravelStartFrame = currentFastFrame;
-        fastTravelEndFrame = dir > 0 ? FAST_SCROLL_FRAME_COUNT - 1 : 0;
-        fastTravelCurrentFrame = currentFastFrame;
-        fastTravelLockY = window.scrollY;
-        fastTravelLastRenderedFrame = -1;
-        stage.classList.remove('fast-mood-transition');
-        stage.classList.add('fast-travel-active');
-        updateQuickJumpNav(true);
-
-        if (dir > 0) preloadMoodImage(getMoodFallbackPath(activeMoodIndex)).catch(() => {});
-
-        try {
-          await loadFastScrollAssets();
-        } catch (error) {
-          if (token === fastTravelToken) {
-            fastTravelActive = false;
-            stage.classList.remove('fast-travel-active');
-          }
-          return false;
-        }
-        if (token !== fastTravelToken || !fastTravelActive) return false;
-
-        const frameDistance = Math.abs(fastTravelEndFrame - fastTravelStartFrame);
-        fastTravelDurationMs = Math.max(260, frameDistance / FAST_SEQUENCE_FPS * 1000);
-        fastTravelStartedAt = performance.now();
-        fastTravelReadyToAnimate = true;
-        renderFastScrollFrame(fastTravelCurrentFrame);
-        return true;
-      }
-
-      function updateFastTravel(time) {
-        if (!fastTravelActive) return;
-
-        /* Own page position for the entire fast sequence. This eliminates old autoplay
-           anchors and mobile browser momentum from changing state underneath the fast JPGs. */
-        if (Math.abs(window.scrollY - fastTravelLockY) > .5) window.scrollTo(0, fastTravelLockY);
-        if (!fastTravelReadyToAnimate) return;
-
-        const t = clamp((time - fastTravelStartedAt) / Math.max(1, fastTravelDurationMs), 0, 1);
-        fastTravelCurrentFrame = lerp(fastTravelStartFrame, fastTravelEndFrame, t);
-        renderFastScrollFrame(fastTravelCurrentFrame);
-
-        if (t < 1 - .00001) return;
-
-        fastTravelCurrentFrame = fastTravelEndFrame;
-        renderFastScrollFrame(fastTravelCurrentFrame);
-        if (fastTravelDirection > 0) beginFastMoodReveal(fastTravelDestination);
-        else resetToOpeningAfterFastReverse();
-      }
-
-      function updateQuickJumpNav(forceLayout = false) {
-        if (!quickJumpNav || !scrollIndicator || !volumeControl || !stage) return;
-        const shouldShow = !fastTravelActive && !moodClipActive && !moodClipComplete &&
-          smoothScrollFrame <= 1.25 && smoothStoryProgress <= .004 && !parentOverlayActive;
-        quickJumpNav.classList.toggle('is-hidden', !shouldShow);
-        if (!shouldShow) return;
-
-        const now = performance.now();
-        if (!forceLayout && now - quickNavLastLayoutAt < 120) return;
-        quickNavLastLayoutAt = now;
-
-        const stageRect = stage.getBoundingClientRect();
-        const volumeRect = volumeControl.getBoundingClientRect();
-        const scrollRect = scrollIndicator.getBoundingClientRect();
-        const navHeight = Math.max(38, quickJumpNav.offsetHeight || 42);
-        const topBoundary = volumeRect.bottom + (MOBILE_RUNTIME ? 5 : 9);
-        const bottomBoundary = scrollRect.top - (MOBILE_RUNTIME ? 3 : 7);
-        const available = Math.max(0, bottomBoundary - topBoundary - navHeight);
-        let top = topBoundary + available * .5;
-        top = Math.min(top, scrollRect.top - navHeight - 3);
-        top = Math.max(stageRect.top + 4, top);
-        quickJumpNav.style.top = `${top - stageRect.top}px`;
-      }
-
-      if (quickColoursButton) {
-        quickColoursButton.addEventListener('click', event => {
-          event.preventDefault();
-          event.stopPropagation();
-          beginFastTravel(1, 'colours');
-        });
-      }
-      if (quickGalleryButton) {
-        quickGalleryButton.addEventListener('click', event => {
-          event.preventDefault();
-          event.stopPropagation();
-          beginFastTravel(1, 'gallery');
-        });
-      }
 
 
 
@@ -10549,7 +10029,7 @@ void main(){
       }
 
       function updateHoldEnvironment(dt, nowMs = performance.now()) {
-        if (fastTravelActive || !holdEnvLoaded || !holdEnvRenderer || !holdEnvCamera || !holdEnvMesh) return;
+        if (!holdEnvLoaded || !holdEnvRenderer || !holdEnvCamera || !holdEnvMesh) return;
 
         const reversing = targetStoryProgress < smoothStoryProgress - .00008;
         const movingForward = targetStoryProgress > smoothStoryProgress + .00008;
@@ -10796,7 +10276,7 @@ void main(){
 
 
       function updateScrollTarget() {
-        if (!scrollingReady || fastTravelActive) return;
+        if (!scrollingReady) return;
 
         const travelled = Math.max(0, -experience.getBoundingClientRect().top);
         const travelDeltaPx = travelled - lastUserTravelledPx;
@@ -11065,7 +10545,7 @@ void main(){
 
 
 
-        if (!scrollingReady || fastTravelActive) { scrollAnimationRunning = false; return; }
+        if (!scrollingReady) { scrollAnimationRunning = false; return; }
 
 
 
@@ -11160,36 +10640,16 @@ void main(){
          text sequence and page position remain synchronized. */
       window.addEventListener('wheel', event => {
         if (event.ctrlKey || !scrollingReady) return;
-        if (fastTravelActive) {
-          event.preventDefault();
-          let activeFastDelta = event.deltaY;
-          if (event.deltaMode === 1) activeFastDelta *= 16;
-          else if (event.deltaMode === 2) activeFastDelta *= window.innerHeight;
-          const activeFastDirection = activeFastDelta >= 0 ? 1 : -1;
-          registerFastScrollGesture(activeFastDelta);
-          if (activeFastDirection !== fastTravelDirection && shouldUseFastWheelRoute(activeFastDelta)) {
-            beginFastTravel(activeFastDirection, activeFastDirection > 0 ? 'colours' : 'top');
-          }
-          return;
-        }
         /* Measure deliberate wheel/trackpad effort BEFORE autoplay intercepts the event.
            Single slow ticks retain the established speed; rapid successive movement
            temporarily accelerates all authored forward/reverse autoplay sections. */
         const viewportBounds = experience.getBoundingClientRect();
         const overTimeline = viewportBounds.top < window.innerHeight && viewportBounds.bottom > 0;
         const controlTarget = event.target instanceof Element &&
-          event.target.closest('#volumeControl, #moodBackgroundControl, #woodViewerShell, #woodDotButtons, #productThumbButtons, #mobileProfilesToggle, #mobileProfilesClose, #quickJumpNav');
-        let wheelPixelsForFastRoute = 0;
+          event.target.closest('#volumeControl, #moodBackgroundControl, #woodViewerShell, #woodDotButtons, #productThumbButtons');
         if (overTimeline && !controlTarget) {
-          wheelPixelsForFastRoute = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1);
-          registerFastScrollGesture(wheelPixelsForFastRoute);
-
-          const fastDirection = wheelPixelsForFastRoute >= 0 ? 1 : -1;
-          if (shouldUseFastWheelRoute(wheelPixelsForFastRoute) && canStartFastTravel(fastDirection)) {
-            event.preventDefault();
-            beginFastTravel(fastDirection, fastDirection > 0 ? 'colours' : 'top');
-            return;
-          }
+          const wheelPixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1);
+          registerFastScrollGesture(wheelPixels);
         }
 
         /* The one-gesture mood escape is valid only while we are still close to the
@@ -11316,7 +10776,7 @@ void main(){
         /* Controls that are intrinsically horizontal must NEVER steer the master timeline.
            The woodgrain shell is special: horizontal motion belongs to its pan interaction,
            but a clearly vertical swipe must still be allowed to leave the mood section. */
-        if (target && target.closest('#moodBackgroundControl, #woodPrevButton, #woodNextButton, #woodDotButtons, #productThumbButtons, #mobileProfilesToggle, #mobileProfilesClose, #quickJumpNav')) {
+        if (target && target.closest('#moodBackgroundControl, #woodPrevButton, #woodNextButton, #woodDotButtons, #productThumbButtons')) {
           mobileTimelineTouchSource = 'control';
         } else if (target && target.closest('#woodViewerShell')) {
           mobileTimelineTouchSource = 'wood';
@@ -11342,17 +10802,6 @@ void main(){
         const totalY = touch.clientY - mobileTimelineTouchStartY;
         const absX = Math.abs(totalX), absY = Math.abs(totalY);
 
-        if (fastTravelActive) {
-          event.preventDefault();
-          const activeFastDirection = totalY < 0 ? 1 : totalY > 0 ? -1 : fastTravelDirection;
-          const reverseIntent = absY >= 18 && absY >= absX * 1.02 &&
-            shouldUseFastTouchRoute(incrementalTouchY, incrementalTouchDt, totalY);
-          if (activeFastDirection !== fastTravelDirection && reverseIntent) {
-            beginFastTravel(activeFastDirection, activeFastDirection > 0 ? 'colours' : 'top');
-          }
-          return;
-        }
-
         /* Sliders/arrows/dots/product buttons are self-contained controls. Never let a
            slightly diagonal finger movement pull the page/story away from the mood section. */
         if (mobileTimelineTouchSource === 'control') return;
@@ -11370,16 +10819,11 @@ void main(){
            a vertical-dominant gesture here removes the old left/right -> timeline leak. */
         if (absX > absY * 1.08) return;
         if (absY < verticalWakePx || absY < absX * 1.02) return;
-        const desiredDirection = totalY < 0 ? 1 : -1;
-
-        registerFastScrollGesture(incrementalTouchY * 2.15, nowTouchMove);
-        const fastTouchIntent = shouldUseFastTouchRoute(incrementalTouchY, incrementalTouchDt, totalY);
-        if (fastTouchIntent && canStartFastTravel(desiredDirection)) {
-          event.preventDefault();
-          mobileTimelineTouchDirection = desiredDirection;
-          beginFastTravel(desiredDirection, desiredDirection > 0 ? 'colours' : 'top');
-          return;
+        if (isTimelineAutoplayLocked() || panoramaReturnActive) {
+          registerFastScrollGesture(incrementalTouchY * 2.5);
         }
+
+        const desiredDirection = totalY < 0 ? 1 : -1;
 
         /* MOBILE REVERSE JPG SCRUB: iOS native rubber-band scroll could move
            the entire sticky experience, then snap it back while the JPGs were
@@ -11447,15 +10891,6 @@ void main(){
       }, { passive: false });
 
       window.addEventListener('touchend', () => {
-        if (fastTravelActive) {
-          mobileTimelineTouchId = null;
-          mobileTimelineTouchDirection = 0;
-          mobileTimelineTouchSource = 'page';
-          mobileHandoffGestureActive = false;
-          mobileHandoffVelocityY = 0;
-          mobileTimelineTouchLastAt = 0;
-          return;
-        }
         if (MOBILE_RUNTIME && mobileHandoffGestureActive && parentScrollHandoffEnabled) {
           postElementorHandoffMessage('scroll-parent-end', {
             velocityY: clamp(mobileHandoffVelocityY, -5200, 5200)
@@ -11675,7 +11110,7 @@ void main(){
 
 
       function updateBackgroundSequenceAutoplay(dt) {
-        if (!scrollingReady || fastTravelActive) return;
+        if (!scrollingReady) return;
 
         if (backgroundAutoplayActive) {
           if (MOBILE_RUNTIME) {
@@ -11830,10 +11265,7 @@ void main(){
 
 
 
-        updateFastTravel(time);
-        updateQuickJumpNav();
-
-        const lockedY = fastTravelActive ? fastTravelLockY : getTimelineAutoplayLockY();
+        const lockedY = getTimelineAutoplayLockY();
         if (lockedY !== null && Math.abs(window.scrollY - lockedY) > .5) window.scrollTo(0, lockedY);
 
         updateTimelinePlaybackRate(time, dt);
@@ -11902,11 +11334,6 @@ void main(){
             new Promise((_, reject) => setTimeout(() => reject(new Error('Opening panorama 360.jpg did not load in 25 seconds. Check its path and the browser network tab.')), 25000))
           ]);
 
-          /* Only 25 compressed 720p frames: warm the fast route as soon as the opening
-             panorama is safe, without making it part of the blocking loader. */
-          loadFastScrollAssets().catch(() => {});
-          preloadFastMoodFallbacks();
-
           if (MOBILE_RUNTIME) {
             await Promise.all([scrollPromise, openingTextPromise, volumePromise]);
             loader.classList.add('hidden'); animateHeroText(); initializeLottie();
@@ -11937,10 +11364,6 @@ void main(){
           storyAutoScrollStartY = storyAutoScrollEndY = storyAutoScrollStartTime = storyAutoScrollDuration = 0;
           storyAutoScrollElapsedMs = 0;
           scrollInputEnergy = scrollInputLastAt = 0; timelinePlaybackRate = 1;
-          fastTravelActive = fastTravelReadyToAnimate = false;
-          fastTravelDirection = 0; fastTravelDestination = 'colours'; fastTravelToken = 0; fastTravelLastRenderedFrame = -1;
-          fastMoodTransitionActive = fastMoodFallbackActive = fastProjectGalleryPending = false;
-          stage.classList.remove('fast-travel-active', 'fast-mood-transition');
           lastManualStoryFrame = 0;
           storyFirstSegmentComplete = false; storyMidSegmentHigh = false; storyThirdSegmentHigh = false; storyFourthSegmentHigh = false; storyFifthSegmentHigh = false;
           storyStartAnchorY = storyMidAnchorY = storyThirdAnchorY = storyFourthAnchorY = storyFifthAnchorY = null;
