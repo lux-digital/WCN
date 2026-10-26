@@ -4227,7 +4227,7 @@
     /* APPROVED BUILD ADD-ON: independent fast travel, no master-timeline replacement. */
     #wcnFastLinks {
       position:absolute;left:50%;top:calc(100% - 245px);transform:translate(-50%,-50%);
-      z-index:91;display:flex;align-items:center;justify-content:center;gap:12px;
+      z-index:120;display:flex;align-items:center;justify-content:center;gap:12px;
       width:max-content;max-width:96vw;opacity:0;visibility:hidden;pointer-events:none;
       transition:opacity .42s ease, visibility .42s ease;
     }
@@ -4241,6 +4241,19 @@
       touch-action:manipulation;
     }
     #wcnFastLinks button:active{transform:scale(.95)}
+    #wcnFastLinks.is-loading button{cursor:progress}
+    #wcnFastLinks.is-loading button[data-fast-busy="true"]{opacity:.75;transform:scale(.97)}
+    #wcnFastStatus{
+      position:absolute;left:50%;top:calc(100% - 175px);z-index:125;
+      max-width:min(460px,90vw);padding:9px 14px;border-radius:12px;
+      transform:translate(-50%,-50%);background:rgba(0,0,0,.55);
+      color:#fff;text-align:center;font:500 12px/1.35 Arial,Helvetica,sans-serif;
+      letter-spacing:.025em;box-shadow:0 4px 24px rgba(0,0,0,.15);
+      pointer-events:none;opacity:0;visibility:hidden;
+      transition:opacity .25s ease,visibility .25s ease;
+    }
+    #wcnFastStatus.is-visible{opacity:1;visibility:visible}
+    #wcnFastStatus.is-error{background:rgba(55,37,32,.86)}
     @media (hover:hover) and (pointer:fine){#wcnFastLinks button:hover{transform:translateY(-2px);background:#fff}}
     #wcnFastLinks button:focus-visible{outline:2px solid white;outline-offset:4px}
     @media(max-width:600px){
@@ -4605,6 +4618,7 @@
             <button id="wcnGoColours" type="button">THE COLOURS</button>
             <button id="wcnGoGallery" type="button">PROJECT GALLERY</button>
           </div>
+          <div id="wcnFastStatus" role="status" aria-live="polite" aria-atomic="true"></div>
           <div id="wcnFastTravel" aria-hidden="true"><img id="wcnFastTravelFrame" alt=""><div id="wcnFastTravelWhite"></div></div>
           <div id="moodExitScrollIndicator" aria-hidden="true"></div>
           <div id="elementorExitWhiteFade" aria-hidden="true"></div>
@@ -10697,6 +10711,25 @@ void main(){
       const wcnFastFrame = $('wcnFastTravelFrame');
       const wcnFastWhite = $('wcnFastTravelWhite');
       const wcnFastMoodFallback = $('wcnFastMoodFallback');
+      const wcnFastStatus = $('wcnFastStatus');
+      const wcnFastColoursButton = $('wcnGoColours');
+      const wcnFastGalleryButton = $('wcnGoGallery');
+      let wcnFastStatusClearTimer = 0;
+      function wcnFastSetStatus(message, isError=false, durationMs=0){
+        if(wcnFastStatusClearTimer){clearTimeout(wcnFastStatusClearTimer);wcnFastStatusClearTimer=0;}
+        if(!wcnFastStatus)return;
+        wcnFastStatus.textContent=message || '';
+        wcnFastStatus.classList.toggle('is-visible',!!message);
+        wcnFastStatus.classList.toggle('is-error',!!message && !!isError);
+        if(message && durationMs>0){
+          wcnFastStatusClearTimer=setTimeout(()=>wcnFastSetStatus(''),durationMs);
+        }
+      }
+      function wcnFastSetButtonBusy(destination,busy){
+        const button=destination==='gallery'?wcnFastGalleryButton:wcnFastColoursButton;
+        if(button)button.dataset.fastBusy=busy?'true':'false';
+        if(wcnFastLinks)wcnFastLinks.classList.toggle('is-loading',busy);
+      }
       const wcnFastImages = Array(WCN_FAST_TOTAL).fill(null);
       const wcnFastImageJobs = new Map();
       let wcnFast = { active:false, starting:false, direction:1, destination:'colours', startedAt:0,
@@ -10714,12 +10747,18 @@ void main(){
         if (wcnFastImageJobs.has(index)) return wcnFastImageJobs.get(index);
         const job = new Promise((resolve,reject) => {
           const img = new Image(); img.decoding='async';
-          img.onload=()=>{wcnFastImages[index]=img;resolve(img)};
-          img.onerror=()=>reject(new Error('Fast JPG unavailable: '+wcnFastAssetPath(index)));
-          img.src=wcnFastAssetPath(index);
+          img.onload=()=>{
+            wcnFastImages[index]=img;
+            resolve(img);
+          };
+          img.onerror=()=>reject(new Error('Could not load '+wcnFastAssetPath(index)));
+          // Use the same page-relative path convention as all approved WCN assets.
+          // A missing/mis-capitalized GitHub Pages file must raise visible feedback
+          // rather than silently making BOTH buttons appear broken.
+          img.src=new URL(wcnFastAssetPath(index),document.baseURI).href;
         });
         wcnFastImageJobs.set(index,job);
-        job.catch(()=>{});
+        job.catch(()=>{wcnFastImageJobs.delete(index);});
         return job;
       }
       function wcnFastWarmAssets() {
@@ -10791,12 +10830,33 @@ void main(){
         clearMoodExitSettle();clearMoodReturnHold();
       }
       async function wcnFastBegin(destination, direction=1) {
-        if(wcnFast.active || wcnFast.starting || !scrollingReady || parentOverlayActive)return false;
-        // A missing new asset may NEVER damage normal scrolling.
+        if(wcnFast.active || wcnFast.starting || parentOverlayActive)return false;
+        if(!scrollingReady){
+          wcnFastSetStatus('Experience is still loading',false,2300);
+          return false;
+        }
+        // Feedback starts IMMEDIATELY at click, rather than waiting silently for
+        // a new JPG. The approved master timeline keeps running while we load it.
         wcnFast.starting=true;
+        wcnFastSetButtonBusy(destination,true);
+        wcnFastSetStatus('Loading quick navigation…');
         const isForward=direction>=0;
-        try { await wcnFastLoad(isForward?0:47); }
-        catch(err){ console.warn('[WCN optional fast route]',err.message);wcnFast.starting=false;return false; }
+        try {
+          await Promise.race([
+            wcnFastLoad(isForward?0:47),
+            new Promise((_,reject)=>setTimeout(()=>reject(new Error('Fast JPG request timed out')),6500))
+          ]);
+        }catch(err){
+          console.warn('[WCN optional fast route]',err);
+          wcnFast.starting=false;
+          wcnFastSetButtonBusy(destination,false);
+          wcnFastSetStatus('Fast image sequence could not load. Check Scroll_01_fast/Scroll-fast00.jpg to Scroll-fast47.jpg on GitHub (including capitalization).',true,9000);
+          return false;
+        }
+        // If the starting frame succeeded, DO NOT wait for all 48 frames before
+        // launching. The remaining 1280x720 JPGs are warmed opportunistically.
+        wcnFastSetStatus('');
+        wcnFastSetButtonBusy(destination,false);
         wcnFastStopOrdinaryAutoplay();
         wcnFast.direction=isForward?1:-1;
         wcnFast.destination=destination;
@@ -10806,6 +10866,7 @@ void main(){
         wcnFast.starting=false;
         wcnFast.transitionStarted=false;
         stage.classList.add('wcn-fast-routing');
+        wcnFastSetFrame(isForward?0:47);
         wcnFastFrame.style.opacity=isForward?'0':'1';
         wcnFastWhite.style.opacity='0';
         wcnFastTravel.classList.add('is-active');
@@ -10932,11 +10993,15 @@ void main(){
         wcnFastWhite.style.opacity=String(Math.min(1,Math.max(0,(progress-.83)/.17)));
         if(progress>=1){wcnFast.transitionStarted=true;wcnFastFinish();}
       }
-      $('wcnGoColours').addEventListener('click',event=>{
-        event.preventDefault();event.stopPropagation();wcnFastBegin('colours',1);
+      // Direct button handlers, independent of the fast-gesture threshold. The
+      // user always sees immediate loading feedback even on a slow connection.
+      wcnFastColoursButton.addEventListener('click',event=>{
+        event.preventDefault();event.stopPropagation();
+        void wcnFastBegin('colours',1);
       });
-      $('wcnGoGallery').addEventListener('click',event=>{
-        event.preventDefault();event.stopPropagation();wcnFastBegin('gallery',1);
+      wcnFastGalleryButton.addEventListener('click',event=>{
+        event.preventDefault();event.stopPropagation();
+        void wcnFastBegin('gallery',1);
       });
       /* Explicit fast-gesture detection, in capture phase. Slow scrolling is handed through
          to the original listeners WITHOUT ANY CHANGE. Fast-wheel intention is cumulative,
