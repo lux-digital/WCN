@@ -3969,11 +3969,12 @@
          itself is smaller; this modest inner scale simply makes the visible artwork use
          that smaller box instead of looking surrounded by invisible padding. */
       #moodExitScrollIndicator {
-        overflow: hidden !important;
+        /* No horizontal crop: Scroll.json artwork runs outside its nominal viewBox. */
+        overflow: visible !important;
       }
       #moodExitScrollIndicator svg,
       #moodExitScrollIndicator canvas {
-        transform: scale(1.15) !important;
+        transform: scale(1.07) !important;
         transform-origin: 50% 50% !important;
       }
     }
@@ -4222,6 +4223,51 @@
       #moodContent.mobile-profiles-open #woodNextButton { right: 10.5vw !important; }
     }
 
+
+    /* APPROVED BUILD ADD-ON: independent fast travel, no master-timeline replacement. */
+    #wcnFastLinks {
+      position:absolute;left:50%;top:calc(100% - 245px);transform:translate(-50%,-50%);
+      z-index:91;display:flex;align-items:center;justify-content:center;gap:12px;
+      width:max-content;max-width:96vw;opacity:0;visibility:hidden;pointer-events:none;
+      transition:opacity .42s ease, visibility .42s ease;
+    }
+    #wcnFastLinks.is-visible{opacity:1;visibility:visible;pointer-events:auto}
+    #wcnFastLinks button{
+      -webkit-appearance:none;appearance:none;border:0;border-radius:999px;
+      background:rgba(255,255,255,.97);color:#454545;white-space:nowrap;
+      min-height:44px;padding:0 24px;font:600 12px/1 Arial,Helvetica,sans-serif;
+      letter-spacing:.085em;cursor:pointer;box-shadow:0 7px 24px rgba(0,0,0,.19);
+      transition:transform .4s cubic-bezier(.22,1,.36,1),background .2s ease;
+      touch-action:manipulation;
+    }
+    #wcnFastLinks button:active{transform:scale(.95)}
+    @media (hover:hover) and (pointer:fine){#wcnFastLinks button:hover{transform:translateY(-2px);background:#fff}}
+    #wcnFastLinks button:focus-visible{outline:2px solid white;outline-offset:4px}
+    @media(max-width:600px){
+      /* Phone portraits often have NO actual vertical gap between the volume and the
+         existing Scroll cue. Place the two shortcuts on either SIDE of that cue rather
+         than piling another row over the approved opening artwork. */
+      #wcnFastLinks{width:100vw;max-width:none;gap:0;padding:0 3px;justify-content:space-between}
+      #wcnFastLinks button{width:31vw;max-width:130px;font-size:9px;letter-spacing:0;padding:0 3px;min-height:42px}
+    }
+    #wcnFastTravel {
+      position:absolute;inset:0;z-index:93;overflow:hidden;background:transparent;
+      opacity:0;visibility:hidden;pointer-events:none;
+    }
+    #wcnFastTravel.is-active{opacity:1;visibility:visible}
+    #wcnFastTravelFrame{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;}
+    #wcnFastTravelWhite{position:absolute;inset:0;background:white;opacity:0;}
+    #wcnFastMoodFallback{
+      position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+      z-index:23;opacity:0;pointer-events:none;
+      transform:translate3d(0,0,0) scale(1.075);transform-origin:50% 50%;
+    }
+    /* The authored Lotties and all current controls are untouched in normal mode. */
+    #stage.wcn-fast-routing #heroText,
+    #stage.wcn-fast-routing #storyLayer,
+    #stage.wcn-fast-routing #scrollIndicator,
+    #stage.wcn-fast-routing #moodExitScrollIndicator,
+    #stage.wcn-fast-routing #wcnFastLinks{opacity:0!important;pointer-events:none!important}
   </style>
 
 
@@ -4439,6 +4485,7 @@
 
         <!-- Retained only for compatibility with the original legacy image-transition code. -->
         <img id="moodImage" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="" aria-hidden="true">
+        <img id="wcnFastMoodFallback" alt="" aria-hidden="true">
 
 
 
@@ -4554,6 +4601,11 @@
 
 
           <div id="scrollIndicator"></div>
+          <div id="wcnFastLinks" aria-label="Quick navigation">
+            <button id="wcnGoColours" type="button">THE COLOURS</button>
+            <button id="wcnGoGallery" type="button">PROJECT GALLERY</button>
+          </div>
+          <div id="wcnFastTravel" aria-hidden="true"><img id="wcnFastTravelFrame" alt=""><div id="wcnFastTravelWhite"></div></div>
           <div id="moodExitScrollIndicator" aria-hidden="true"></div>
           <div id="elementorExitWhiteFade" aria-hidden="true"></div>
 
@@ -6842,6 +6894,8 @@
       }
 
       async function transitionMoodItem(targetIndex, direction = 1) {
+        const oldFastFallback = document.getElementById('wcnFastMoodFallback');
+        if (oldFastFallback) oldFastFallback.style.opacity = '0';
         if (moodTransitioning || targetIndex === activeMoodIndex) return;
         if (targetIndex < 0 || targetIndex >= MOOD_ITEMS.length) return;
         if (getMoodVisualProgress() < MOOD_VIEWER_START - .006) return;
@@ -10276,7 +10330,7 @@ void main(){
 
 
       function updateScrollTarget() {
-        if (!scrollingReady) return;
+        if (!scrollingReady || wcnFast.active) return;
 
         const travelled = Math.max(0, -experience.getBoundingClientRect().top);
         const travelDeltaPx = travelled - lastUserTravelledPx;
@@ -10631,6 +10685,310 @@ void main(){
 
 
 
+
+      /* =============================================================
+         APPROVED TIMELINE: OPTIONAL FAST NAVIGATION ONLY.
+         No ordinary scroll handlers, autoplay range or master timing is altered.
+         Scroll-fast00..47 already has its own authored faster pacing: 24 fps.
+         ============================================================= */
+      const WCN_FAST_TOTAL = 48;
+      const wcnFastLinks = $('wcnFastLinks');
+      const wcnFastTravel = $('wcnFastTravel');
+      const wcnFastFrame = $('wcnFastTravelFrame');
+      const wcnFastWhite = $('wcnFastTravelWhite');
+      const wcnFastMoodFallback = $('wcnFastMoodFallback');
+      const wcnFastImages = Array(WCN_FAST_TOTAL).fill(null);
+      const wcnFastImageJobs = new Map();
+      let wcnFast = { active:false, starting:false, direction:1, destination:'colours', startedAt:0,
+                      previousFrame:-1, transitionStarted:false, finishTimer:0 };
+      let wcnFastAssetWarmupStarted = false;
+      let wcnFastFallbackTimer = 0;
+      let wcnFastWheelAt = 0, wcnFastWheelFirstAt = 0, wcnFastWheelEnergy = 0, wcnFastWheelDir = 0;
+      let wcnFastTouch = null;
+      function wcnFastAssetPath(index) {
+        return 'Scroll_01_fast/Scroll-fast' + String(index).padStart(2, '0') + '.jpg';
+      }
+      function wcnFastLoad(index) {
+        index = Math.max(0,Math.min(WCN_FAST_TOTAL - 1,Math.round(index)));
+        if (wcnFastImages[index]) return Promise.resolve(wcnFastImages[index]);
+        if (wcnFastImageJobs.has(index)) return wcnFastImageJobs.get(index);
+        const job = new Promise((resolve,reject) => {
+          const img = new Image(); img.decoding='async';
+          img.onload=()=>{wcnFastImages[index]=img;resolve(img)};
+          img.onerror=()=>reject(new Error('Fast JPG unavailable: '+wcnFastAssetPath(index)));
+          img.src=wcnFastAssetPath(index);
+        });
+        wcnFastImageJobs.set(index,job);
+        job.catch(()=>{});
+        return job;
+      }
+      function wcnFastWarmAssets() {
+        if(wcnFastAssetWarmupStarted) return;
+        wcnFastAssetWarmupStarted=true;
+        // Warm endpoints first, then batches; optional assets NEVER block the approved loader.
+        Promise.allSettled([wcnFastLoad(0), wcnFastLoad(47)]).then(()=>{
+          let cursor=1;
+          const batch=()=>{
+            if(cursor>=47)return;
+            const end=Math.min(47,cursor+4);
+            const tasks=[];
+            for(;cursor<end;cursor++)tasks.push(wcnFastLoad(cursor));
+            Promise.allSettled(tasks).then(()=>setTimeout(batch,75));
+          };
+          batch();
+        });
+      }
+      function wcnFastFallbackSource() {
+        const video=getMoodMediaElement(activeMoodIndex);
+        const source=video && video.querySelector && video.querySelector('source');
+        const relative=source && source.getAttribute('src');
+        return relative && /\.mp4(?:[?#].*)?$/i.test(relative)
+          ? relative.replace(/\.mp4(?=([?#]|$))/i,'.jpg') : '';
+      }
+      function wcnFastShowFallback(keepForGallery) {
+        if(wcnFastFallbackTimer)clearTimeout(wcnFastFallbackTimer);
+        if(!wcnFastMoodFallback)return;
+        const src=wcnFastFallbackSource();
+        if(!src){wcnFastMoodFallback.style.opacity='0';return;}
+        wcnFastMoodFallback.onerror=()=>{wcnFastMoodFallback.style.opacity='0'};
+        wcnFastMoodFallback.src=src;
+        wcnFastMoodFallback.style.opacity='1';
+        if(!keepForGallery){
+          wcnFastFallbackTimer=setTimeout(()=>{
+            wcnFastMoodFallback.style.transition='opacity .85s ease-in-out';
+            wcnFastMoodFallback.style.opacity='0';
+          },650);
+        }
+      }
+      function wcnFastUpdateLinks() {
+        if(!wcnFastLinks || !scrollingReady)return;
+        const atOpening = !wcnFast.active && !wcnFast.starting && !parentOverlayActive &&
+          !moodClipActive && !moodClipComplete && calculateRawScrollProgress() < .024;
+        wcnFastLinks.classList.toggle('is-visible',atOpening);
+        if(!atOpening)return;
+        const stageRect=stage.getBoundingClientRect();
+        const cueRect=scrollIndicator.getBoundingClientRect();
+        // Actual free space between the intro/volume artwork and the existing Scroll cue.
+        const volumeRect=volumeControl.getBoundingClientRect();
+        const heroRect=heroTextInner.getBoundingClientRect();
+        const upper=Math.max(stageRect.top+stageRect.height*.43,volumeRect.bottom+12,heroRect.bottom+12);
+        const lower=Math.min(stageRect.bottom-24,cueRect.top-10);
+        const cramped=lower<=upper+46;
+        const target=!cramped?(upper+lower)*.5:(MOBILE_RUNTIME
+          ? cueRect.top + cueRect.height*.5
+          : Math.min(stageRect.bottom-170,Math.max(stageRect.top+stageRect.height*.68,upper+20)));
+        wcnFastLinks.style.top=(target-stageRect.top)+'px';
+      }
+      function wcnFastStopOrdinaryAutoplay() {
+        // This runs ONLY after a fast shortcut was deliberately invoked.
+        storySequenceAutoplayActive=false;
+        storySequenceAutoplayKind='';
+        backgroundAutoplayActive=false;
+        firstStoryAutoplayPending=false;
+        moodClipActive=false;
+        panoramaReturnActive=false;
+        scrollInputEnergy=0;timelinePlaybackRate=1;
+        clearMoodExitSettle();clearMoodReturnHold();
+      }
+      async function wcnFastBegin(destination, direction=1) {
+        if(wcnFast.active || wcnFast.starting || !scrollingReady || parentOverlayActive)return false;
+        // A missing new asset may NEVER damage normal scrolling.
+        wcnFast.starting=true;
+        const isForward=direction>=0;
+        try { await wcnFastLoad(isForward?0:47); }
+        catch(err){ console.warn('[WCN optional fast route]',err.message);wcnFast.starting=false;return false; }
+        wcnFastStopOrdinaryAutoplay();
+        wcnFast.direction=isForward?1:-1;
+        wcnFast.destination=destination;
+        wcnFast.startedAt=performance.now();
+        wcnFast.previousFrame=-1;
+        wcnFast.active=true;
+        wcnFast.starting=false;
+        wcnFast.transitionStarted=false;
+        stage.classList.add('wcn-fast-routing');
+        wcnFastFrame.style.opacity=isForward?'0':'1';
+        wcnFastWhite.style.opacity='0';
+        wcnFastTravel.classList.add('is-active');
+        wcnFastWarmAssets();
+        // Keep the iframe's real scroll position stationary throughout the visual shortcut.
+        // Unlike the failed versions, NO routine advances the authored page timeline here.
+        return true;
+      }
+      function wcnFastSetFrame(frame) {
+        frame=Math.max(0,Math.min(47,frame));
+        if(frame===wcnFast.previousFrame)return;
+        const img=wcnFastImages[frame];
+        if(img)wcnFastFrame.src=img.src;
+        else {
+          // The next JPG is loaded opportunistically; retain the previous picture meanwhile.
+          wcnFastLoad(frame).catch(()=>{});
+          const nearby=wcnFastImages.find((v,index)=>v && Math.abs(index-frame)<2);
+          if(nearby)wcnFastFrame.src=nearby.src;
+        }
+        wcnFast.previousFrame=frame;
+      }
+      function wcnFastArriveInColours() {
+        // Establish the SAME final scene state that the approved visual-only mood clip produces.
+        const endY=rawProgressToPageY(MOOD_WHITE_START);
+        window.scrollTo(0,endY);
+        const baseline=MOOD_WHITE_START;
+        targetStoryProgress=smoothStoryProgress=baseline;
+        targetStorySequenceProgress=smoothStorySequenceProgress=1;
+        lastManualStoryFrame=STORY_LAST_FRAME;
+        storySequenceAutoplayActive=false;storySequenceAutoplayKind='';
+        backgroundAutoplayActive=false;backgroundAutoplayComplete=true;backgroundReverseActive=false;
+        backgroundAutoplayFrame=smoothScrollFrame=SCROLL_FRAME_COUNT-1;
+        targetScrollFrame=SCROLL_FRAME_COUNT-1;
+        currentScrollFrame=SCROLL_FRAME_COUNT-1;
+        renderFrame(currentScrollFrame);
+        holdEnvAutoplayBlend=1;
+        firstStoryAutoplayPending=false;
+        moodClipActive=false;moodClipComplete=true;moodClipProgress=1;moodClipDirection=0;
+        moodClipReverseSuppressed=false;
+        moodClipLockY=window.scrollY;
+        moodClipAnchorY=moodClipLockY;
+        syncScrollTrackingAfterProgrammaticMove();
+        updateOpeningTextLottie();updateStoryTextMotion();
+        updateMoodSectionMotion();
+        beginMoodExitSettle();
+        wcnFastShowFallback(wcnFast.destination==='gallery');
+      }
+      function wcnFastArriveAtTop() {
+        window.scrollTo(0,0);
+        backgroundAutoplayActive=backgroundAutoplayComplete=backgroundReverseActive=false;
+        backgroundAutoplayFrame=holdEnvAutoplayBlend=0;
+        firstStoryAutoplayPending=false;
+        storySequenceAutoplayActive=false;storySequenceAutoplayKind='';
+        storyFirstSegmentComplete=storyMidSegmentHigh=storyThirdSegmentHigh=storyFourthSegmentHigh=storyFifthSegmentHigh=false;
+        lastManualStoryFrame=0;
+        targetStoryProgress=smoothStoryProgress=0;
+        targetStorySequenceProgress=smoothStorySequenceProgress=0;
+        currentStorySequenceFrame=-1;
+        targetScrollFrame=heroTargetScrollFrame=smoothScrollFrame=0;
+        currentScrollFrame=-1;
+        moodClipActive=moodClipComplete=false;moodClipProgress=0;moodClipDirection=0;
+        moodClipAnchorY=null;moodClipReverseSuppressed=false;
+        holdEnvMode='inactive';holdEnvBlend=0;
+        holdEnvReverseSuppressed=false;
+        holdEnvReverseFrameLock=false;
+        panoramaReturnCameraGlideActive=true;
+        // Return the camera with its original easing, not a hard yaw/pitch reset.
+        cameraScrollVisualProgress=Math.max(cameraScrollVisualProgress,.8);
+        heroTypographyProgress=0;
+        syncScrollTrackingAfterProgrammaticMove();
+        updateOpeningTextLottie();updateStoryTextMotion();updateMoodSectionMotion();
+        renderFrame(0);updatePanoramaOpacity();
+        // The approved story hides the HTML title on later scenes; explicitly restore
+        // visibility before replaying its authored scale+opacity entrance at the top.
+        heroText.style.visibility='visible';
+        heroTextInner.style.opacity='1';
+        maskedTextCanvas.style.opacity='0';
+        if(wcnFastMoodFallback)wcnFastMoodFallback.style.opacity='0';
+      }
+      function wcnFastTriggerGallery() {
+        if(!parentScrollHandoffEnabled)return;
+        // The deliberate shortcut skips the 2-second hold, unlike normal scrolling.
+        clearMoodExitSettle();moodExitReadyAt=performance.now()-1;
+        notifyParentMoodHandoffReady();
+        requestParentPageScroll(Math.min(320,window.innerHeight*.42));
+        window.setTimeout(()=>{
+          postElementorHandoffMessage('scroll-parent-end',{velocityY:1650});
+        },80);
+      }
+      function wcnFastFinish() {
+        const destination=wcnFast.destination;
+        if(wcnFast.direction>0)wcnFastArriveInColours();
+        else wcnFastArriveAtTop();
+        // Transition from white to the fully-established thumbnail scene without flashes.
+        const overlayFadeMs=destination==='gallery'?420:620;
+        wcnFastTravel.style.transition='opacity '+overlayFadeMs+'ms cubic-bezier(.45,0,.55,1)';
+        wcnFastTravel.style.opacity='0';
+        wcnFast.finishTimer=setTimeout(()=>{
+          wcnFastTravel.classList.remove('is-active');
+          wcnFastTravel.style.transition='';wcnFastTravel.style.opacity='';
+          wcnFastWhite.style.opacity='0';wcnFastFrame.style.opacity='0';
+          wcnFast.active=false;
+          stage.classList.remove('wcn-fast-routing');
+          if(destination==='top'){
+            // Use the exact original 3.6s scale+opacity keyframes after reaching the sphere.
+            if(openingTextReady&&openingTextAnimation)openingTextAnimation.goToAndStop(0,true);
+            animateHeroText();
+          }else if(destination==='gallery'){
+            wcnFastTriggerGallery();
+          }
+          wcnFastUpdateLinks();
+        },overlayFadeMs+32);
+      }
+      function wcnFastTick(now) {
+        if(!wcnFast.active || wcnFast.transitionStarted)return;
+        const elapsed=Math.max(0,(now-wcnFast.startedAt)/1000);
+        const progress=Math.min(1,elapsed/(47/24));
+        const logicalFrame=wcnFast.direction>0?Math.round(progress*47):47-Math.round(progress*47);
+        wcnFastSetFrame(logicalFrame);
+        // Show the fast JPGs early, before the 360 fade has consumed their playback time.
+        const reveal=Math.min(1,progress/.16);
+        wcnFastFrame.style.opacity=String(wcnFast.direction>0?reveal:Math.min(1,(1-progress)/.16));
+        // White begins near the destination, not over the majority of the 48 JPGs.
+        wcnFastWhite.style.opacity=String(Math.min(1,Math.max(0,(progress-.83)/.17)));
+        if(progress>=1){wcnFast.transitionStarted=true;wcnFastFinish();}
+      }
+      $('wcnGoColours').addEventListener('click',event=>{
+        event.preventDefault();event.stopPropagation();wcnFastBegin('colours',1);
+      });
+      $('wcnGoGallery').addEventListener('click',event=>{
+        event.preventDefault();event.stopPropagation();wcnFastBegin('gallery',1);
+      });
+      /* Explicit fast-gesture detection, in capture phase. Slow scrolling is handed through
+         to the original listeners WITHOUT ANY CHANGE. Fast-wheel intention is cumulative,
+         and quick mobile swipes require distance+velocity+dominant vertical movement. */
+      window.addEventListener('wheel',event=>{
+        if(wcnFast.active){event.preventDefault();event.stopImmediatePropagation();return;}
+        if(!scrollingReady||event.ctrlKey||wcnFast.starting||parentOverlayActive)return;
+        const target=event.target instanceof Element?event.target:null;
+        if(target&&target.closest('button,input,#woodViewerShell,#volumeControl,#woodDotButtons,#productThumbButtons,#wcnFastLinks'))return;
+        const r=experience.getBoundingClientRect();
+        if(r.bottom<=0||r.top>=window.innerHeight)return;
+        const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?window.innerHeight:1);
+        const direction=Math.sign(delta),now=performance.now();
+        if(!direction)return;
+        if(now-wcnFastWheelAt>155||direction!==wcnFastWheelDir || now-wcnFastWheelFirstAt>165){
+          wcnFastWheelEnergy=0;wcnFastWheelFirstAt=now;
+        }
+        wcnFastWheelAt=now;wcnFastWheelDir=direction;
+        wcnFastWheelEnergy+=Math.abs(delta);
+        // A series of normal mouse-wheel clicks must NOT silently switch experiences.
+        const forceful=Math.abs(delta)>320||(wcnFastWheelEnergy>480&&now-wcnFastWheelFirstAt<155);
+        if(!forceful)return;
+        const towardMood=direction>0;
+        if(towardMood && moodClipComplete)return; // Gallery keeps the approved native inertia.
+        if(!towardMood && calculateRawScrollProgress()<.07)return;
+        event.preventDefault();event.stopImmediatePropagation();
+        wcnFastWheelEnergy=0;
+        wcnFastBegin(towardMood?'colours':'top',direction);
+      },{capture:true,passive:false});
+      window.addEventListener('touchstart',event=>{
+        if(!MOBILE_RUNTIME||!event.touches||event.touches.length!==1)return;
+        const e=event.touches[0],target=event.target instanceof Element?event.target:null;
+        wcnFastTouch=target&&target.closest('button,input,#woodViewerShell,#woodDotButtons,#volumeControl,#productThumbButtons')
+          ?null:{x:e.clientX,y:e.clientY,at:performance.now(),lastY:e.clientY};
+      },{capture:true,passive:true});
+      window.addEventListener('touchmove',event=>{
+        if(wcnFast.active){event.preventDefault();event.stopImmediatePropagation();return;}
+        if(!wcnFastTouch||!scrollingReady||parentOverlayActive)return;
+        const e=event.touches&&event.touches[0];if(!e)return;
+        const dy=e.clientY-wcnFastTouch.y,dx=e.clientX-wcnFastTouch.x;
+        const duration=Math.max(10,performance.now()-wcnFastTouch.at);
+        if(Math.abs(dy)<145||Math.abs(dy)<Math.abs(dx)*1.5||duration>195)return;
+        if(Math.abs(dy)/duration<2.5)return;
+        const direction=dy<0?1:-1;
+        if(direction>0&&moodClipComplete)return;
+        if(direction<0&&calculateRawScrollProgress()<.07)return;
+        event.preventDefault();event.stopImmediatePropagation();
+        wcnFastTouch=null;
+        wcnFastBegin(direction>0?'colours':'top',direction);
+      },{capture:true,passive:false});
+      window.addEventListener('touchend',()=>{wcnFastTouch=null;},{capture:true,passive:true});
+      window.addEventListener('touchcancel',()=>{wcnFastTouch=null;},{capture:true,passive:true});
 
       /* FORWARD-ONLY SLOWDOWN / NORMAL-SPEED REVERSE
          The authored story and mood sections are physically stretched so scrolling down
@@ -11268,11 +11626,15 @@ void main(){
         const lockedY = getTimelineAutoplayLockY();
         if (lockedY !== null && Math.abs(window.scrollY - lockedY) > .5) window.scrollTo(0, lockedY);
 
-        updateTimelinePlaybackRate(time, dt);
+        if (!wcnFast.active) {
+          updateTimelinePlaybackRate(time, dt);
+          updateBackgroundSequenceAutoplay(dt);
+          updateStorySequenceAutoplay(time, dt);
+          updateMoodClip(dt * timelinePlaybackRate);
+        }
         updateWoodStripLoop(dt);
-        updateBackgroundSequenceAutoplay(dt);
-        updateStorySequenceAutoplay(time, dt);
-        updateMoodClip(dt * timelinePlaybackRate);
+        wcnFastTick(time);
+        wcnFastUpdateLinks();
         updateHoldEnvironment(dt, time);
         updateHoldHotspots(dt);
         updateMoodBackgroundParallax(dt);
@@ -11393,6 +11755,8 @@ void main(){
 
           updateScrollTarget();
           window.dispatchEvent(new Event('wcn-intro-ready'));
+          // Optional 48-frame files warm AFTER the approved opening is ready.
+          setTimeout(wcnFastWarmAssets, 1400);
 
         } catch (error) {
 
