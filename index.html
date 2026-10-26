@@ -8791,6 +8791,9 @@ void main(){
         volumeControl.classList.add('is-ready');
         syncVolumeOpeningGap();
         volumeIntroAnimation = volumeButton.animate(openingKeyframes, timing);
+        // The two opening shortcuts share the SAME entrance, including when
+        // quick reverse travel replays the title/volume animation at the top.
+        wcnFastAnimateButtonsEntrance(openingKeyframes, timing);
       }
 
       /* Keep a small, consistent gap beneath the ACTUAL opening animation content.
@@ -8909,6 +8912,9 @@ void main(){
         if (volumeMoveRaf) cancelAnimationFrame(volumeMoveRaf);
         volumeMoveRaf = 0;
         volumeControl.classList.add('is-moving');
+        // On ordinary upward scrolling an unused audio button returns below
+        // the opening title. Replay the SAME return entrance on the shortcuts.
+        if (!dock && !volumeEverActivated) wcnFastAnimateButtonsReturn();
         /* Location swaps only while invisible: shrink/fade out, then fade in. */
         volumeMoveTimer = setTimeout(showVolumeAtDestination, 290);
       }
@@ -10736,6 +10742,48 @@ void main(){
          ============================================================= */
       const WCN_FAST_TOTAL = 48;
       const wcnFastLinks = $('wcnFastLinks');
+      let wcnFastButtonsEntrance = null;
+      function wcnFastAnimateButtonsEntrance(sourceFrames, sourceTiming) {
+        if (!wcnFastLinks || typeof wcnFastLinks.animate !== 'function') return;
+        if (wcnFastButtonsEntrance) {
+          try { wcnFastButtonsEntrance.cancel(); } catch (_) {}
+        }
+        // These are the very same values used by the hero title/volume icon.
+        const frames = sourceFrames || [
+          { opacity: 0,   transform: 'translateX(-50%) scale(.20)', offset: 0 },
+          { opacity: .10, transform: 'translateX(-50%) scale(.43)', offset: .035 },
+          { opacity: .20, transform: 'translateX(-50%) scale(.57)', offset: .075 },
+          { opacity: .33, transform: 'translateX(-50%) scale(.70)', offset: .13 },
+          { opacity: .48, transform: 'translateX(-50%) scale(.81)', offset: .21 },
+          { opacity: .64, transform: 'translateX(-50%) scale(.89)', offset: .31 },
+          { opacity: .79, transform: 'translateX(-50%) scale(.945)', offset: .44 },
+          { opacity: .90, transform: 'translateX(-50%) scale(.977)', offset: .59 },
+          { opacity: .97, transform: 'translateX(-50%) scale(.993)', offset: .76 },
+          { opacity: 1,   transform: 'translateX(-50%) scale(.999)', offset: .91 },
+          { opacity: 1,   transform: 'translateX(-50%) scale(1)', offset: 1 }
+        ];
+        // The HTML container's translate(-50%, -50%) must remain part of
+        // ALL animation keyframes, or the buttons shift out of alignment.
+        const adjusted = sourceFrames
+          ? frames.map(f => ({ ...f, transform: f.transform.replace('scale(', 'translate(-50%, -50%) scale(') }))
+          : frames.map(f => ({ ...f, transform: f.transform.replace('translateX(-50%)', 'translate(-50%, -50%)') }));
+        wcnFastButtonsEntrance = wcnFastLinks.animate(adjusted,
+          sourceTiming || { duration: 3600, easing: 'linear', fill: 'forwards' });
+      }
+      // Normal reverse scrolling uses the audio icon's SHORT dock/undock move,
+      // not the 3.6-second first-load hero entrance. Match that timing too.
+      function wcnFastAnimateButtonsReturn() {
+        if (!wcnFastLinks || typeof wcnFastLinks.animate !== 'function') return;
+        if (wcnFastButtonsEntrance) {
+          try { wcnFastButtonsEntrance.cancel(); } catch (_) {}
+        }
+        wcnFastButtonsEntrance = wcnFastLinks.animate([
+          { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', offset: 0 },
+          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: .42 },
+          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: .44 },
+          { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', offset: 1 }
+        ], { duration: 700, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+      }
       // Let quick-navigation controls receive their normal clicks/taps without
       // starting panorama dragging or handing pointer capture to #stage.
       if (wcnFastLinks) {
@@ -10875,9 +10923,16 @@ void main(){
         const stageRect=stage.getBoundingClientRect();
         const cueRect=scrollIndicator.getBoundingClientRect();
         // Actual free space between the intro/volume artwork and the existing Scroll cue.
-        const volumeRect=volumeControl.getBoundingClientRect();
-        const heroRect=heroTextInner.getBoundingClientRect();
-        const upper=Math.max(stageRect.top+stageRect.height*.43,volumeRect.bottom+12,heroRect.bottom+12);
+        // The hero and volume scale during their shared entrance animation.
+        // Their live bounding rectangles change on EVERY frame. Use the hero's
+        // untransformed CSS layout dimensions so the shortcut row never slides
+        // down as the entrance plays (or as audio travels to its opening slot).
+        const staticHeroPadding=parseFloat(getComputedStyle(heroText).paddingTop)||0;
+        const staticHeroBottom=stageRect.top+staticHeroPadding+(heroTextInner.offsetHeight||0);
+        const gap=clamp(stageRect.height*.015,11,17);
+        const projectedVolumeTop=Math.max(stageRect.top,staticHeroBottom+gap);
+        const projectedVolumeBottom=projectedVolumeTop+(volumeButton.offsetHeight||58);
+        const upper=Math.max(stageRect.top+stageRect.height*.43,projectedVolumeBottom+12,staticHeroBottom+12);
         const lower=Math.min(stageRect.bottom-24,cueRect.top-10);
         const cramped=lower<=upper+46;
         const target=!cramped?(upper+lower)*.5:(MOBILE_RUNTIME
@@ -11046,10 +11101,9 @@ void main(){
         // The deliberate shortcut skips the 2-second hold, unlike normal scrolling.
         clearMoodExitSettle();moodExitReadyAt=performance.now()-1;
         notifyParentMoodHandoffReady();
-        requestParentPageScroll(Math.min(320,window.innerHeight*.42));
-        window.setTimeout(()=>{
-          postElementorHandoffMessage('scroll-parent-end',{velocityY:1650});
-        },80);
+        // A SINGLE parent-side, continuously eased gallery movement. The old
+        // 320px nudge + 80ms delay was causing the visible speed discontinuity.
+        postElementorHandoffMessage('scroll-parent-end',{velocityY:1650});
       }
       function wcnFastFinish() {
         const destination=wcnFast.destination;
