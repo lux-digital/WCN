@@ -4235,7 +4235,8 @@
     #wcnFastLinks button{
       -webkit-appearance:none;appearance:none;border:0;border-radius:999px;
       background:rgba(255,255,255,.97);color:#454545;white-space:nowrap;
-      min-height:44px;padding:0 24px;font:600 12px/1 Arial,Helvetica,sans-serif;
+      min-height:44px;width:190px;flex:0 0 190px;text-align:center;
+      padding:0 24px;font:600 12px/1 Arial,Helvetica,sans-serif;
       letter-spacing:.085em;cursor:pointer;box-shadow:0 7px 24px rgba(0,0,0,.19);
       transition:transform .4s cubic-bezier(.22,1,.36,1),background .2s ease;
       touch-action:manipulation;
@@ -4261,7 +4262,7 @@
          existing Scroll cue. Place the two shortcuts on either SIDE of that cue rather
          than piling another row over the approved opening artwork. */
       #wcnFastLinks{width:100vw;max-width:none;gap:0;padding:0 3px;justify-content:space-between}
-      #wcnFastLinks button{width:31vw;max-width:130px;font-size:9px;letter-spacing:0;padding:0 3px;min-height:42px}
+      #wcnFastLinks button{width:31vw;flex:0 0 31vw;max-width:130px;font-size:9px;letter-spacing:0;padding:0 3px;min-height:42px}
     }
     #wcnFastTravel {
       position:absolute;inset:0;z-index:93;overflow:hidden;background:transparent;
@@ -5964,7 +5965,10 @@
         /* Re-arm only on an actual transition from Gallery covering WCN to the Gallery
            fully returned. Do not restart the hold for unrelated configure messages. */
         moodReturnHolding = true;
-        moodReturnReadyAt = performance.now() + MOOD_EXIT_SETTLE_MS;
+        // Quick-gallery arrival already completed its own deliberate transition.
+        // Do not add the full normal 2-second gallery-return hold on top of it.
+        moodReturnReadyAt = performance.now() + (wcnFastGalleryReturnPending ? 420 : MOOD_EXIT_SETTLE_MS);
+        wcnFastGalleryReturnPending = false;
         moodReturnLastBlockedWheelAt = -Infinity;
       }
 
@@ -6174,7 +6178,9 @@
 
       function updateMoodClip(dt) {
         if (!moodClipActive) return;
-        moodClipProgress = clamp(moodClipProgress + moodClipDirection * (dt / MOOD_CLIP_DURATION), 0, 1);
+        const clipDuration = moodClipDirection < 0 && wcnFastArrivalReversePending
+          ? 3.15 : MOOD_CLIP_DURATION;
+        moodClipProgress = clamp(moodClipProgress + moodClipDirection * (dt / clipDuration), 0, 1);
         updateMoodSectionMotion();
 
         if (moodClipDirection > 0 && moodClipProgress >= 1 - .0001) {
@@ -6189,6 +6195,7 @@
           moodClipComplete = false;
           clearMoodExitSettle();
           moodClipReverseSuppressed = true;
+          wcnFastArrivalReversePending = false;
           /* Stay exactly where the reverse clip was triggered. There is no stored anchor
              to jump back to; the next real upward gesture continues from this same state. */
           syncScrollTrackingAfterProgrammaticMove();
@@ -6576,6 +6583,13 @@
         /* 2) Fade Coastal Sand in over the white background. */
 
         const videoOpacity = smootherstep01(rangeProgress(p, MOOD_VIDEO_START, MOOD_VIDEO_END));
+        const quickFallback = document.getElementById('wcnFastMoodFallback');
+        if (quickFallback && quickFallback.dataset.wcnFastVisible === 'true') {
+          // The fallback is optional, but MUST leave with the video on reverse.
+          quickFallback.style.transition = 'none';
+          quickFallback.style.opacity = String(videoOpacity);
+          if (videoOpacity < .001) quickFallback.dataset.wcnFastVisible = 'false';
+        }
         const selectedMoodMedia = getMoodMediaElement(activeMoodIndex);
         if (videoOpacity > .015 && selectedMoodMedia?.tagName === 'VIDEO' && selectedMoodMedia.paused) {
           playMoodVideo(selectedMoodMedia);
@@ -6909,7 +6923,10 @@
 
       async function transitionMoodItem(targetIndex, direction = 1) {
         const oldFastFallback = document.getElementById('wcnFastMoodFallback');
-        if (oldFastFallback) oldFastFallback.style.opacity = '0';
+        if (oldFastFallback) {
+          oldFastFallback.style.opacity = '0';
+          oldFastFallback.dataset.wcnFastVisible = 'false';
+        }
         if (moodTransitioning || targetIndex === activeMoodIndex) return;
         if (targetIndex < 0 || targetIndex >= MOOD_ITEMS.length) return;
         if (getMoodVisualProgress() < MOOD_VIEWER_START - .006) return;
@@ -10748,6 +10765,19 @@ void main(){
       let wcnFastFallbackTimer = 0;
       let wcnFastWheelAt = 0, wcnFastWheelFirstAt = 0, wcnFastWheelEnergy = 0, wcnFastWheelDir = 0;
       let wcnFastTouch = null;
+      let wcnFastArrivalReversePending = false;
+      let wcnFastGalleryReturnPending = false;
+      function wcnFastPrimeReverseAssets() {
+        // Mobile loads the 109-frame master JPGs on demand, unlike desktop. A quick
+        // jump must prepare the ending master frames before exposing them on return.
+        if (!MOBILE_RUNTIME) return;
+        const last = SCROLL_FRAME_COUNT - 1;
+        for (let frame = last; frame >= last - 10; frame--) {
+          loadMobileSequencePair(frame).catch(error => {
+            console.warn('[WCN] Could not prefetch reverse frame', frame, error);
+          });
+        }
+      }
       function wcnFastAssetPath(index) {
         return 'Scroll_01_fast/Scroll-fast' + String(index).padStart(2, '0') + '.jpg';
       }
@@ -10798,12 +10828,18 @@ void main(){
         if(wcnFastFallbackTimer)clearTimeout(wcnFastFallbackTimer);
         if(!wcnFastMoodFallback)return;
         const src=wcnFastFallbackSource();
-        if(!src){wcnFastMoodFallback.style.opacity='0';return;}
-        wcnFastMoodFallback.onerror=()=>{wcnFastMoodFallback.style.opacity='0'};
+        if(!src){wcnFastMoodFallback.style.opacity='0';wcnFastMoodFallback.dataset.wcnFastVisible='false';return;}
+        wcnFastMoodFallback.onerror=()=>{
+          wcnFastMoodFallback.style.opacity='0';
+          wcnFastMoodFallback.dataset.wcnFastVisible='false';
+        };
         wcnFastMoodFallback.src=src;
+        wcnFastMoodFallback.dataset.wcnFastVisible='true';
+        wcnFastMoodFallback.style.transition='none';
         wcnFastMoodFallback.style.opacity='1';
         if(!keepForGallery){
           wcnFastFallbackTimer=setTimeout(()=>{
+            wcnFastMoodFallback.dataset.wcnFastVisible='false';
             wcnFastMoodFallback.style.transition='opacity .85s ease-in-out';
             wcnFastMoodFallback.style.opacity='0';
           },650);
@@ -10881,6 +10917,7 @@ void main(){
         wcnFastWhite.style.opacity='0';
         wcnFastTravel.classList.add('is-active');
         wcnFastWarmAssets();
+        if (isForward) wcnFastPrimeReverseAssets();
         // Keep the iframe's real scroll position stationary throughout the visual shortcut.
         // Unlike the failed versions, NO routine advances the authored page timeline here.
         return true;
@@ -10913,6 +10950,21 @@ void main(){
         currentScrollFrame=SCROLL_FRAME_COUNT-1;
         renderFrame(currentScrollFrame);
         holdEnvAutoplayBlend=1;
+        holdEnvReverseSuppressed=false;
+        holdEnvReverseFrameLock=false;
+        // Initialize the real semi-panorama as already established by the quick route.
+        // On an ordinary visit the frame-101..108 fade establishes this state naturally.
+        if (holdEnvLoaded) {
+          holdEnvMode='active';
+          holdEnvBlend=1;
+          holdEnvYaw=holdEnvPitch=0;
+          holdEnvSmoothMouseX=holdEnvSmoothMouseY=0;
+          holdEnvMouseBlend=0;
+          holdEnvEnteredAt=performance.now();
+          updateHoldEnvironment(1 / 60);
+        }
+        if (MOBILE_RUNTIME) prefetchMobileSequenceWindow(SCROLL_FRAME_COUNT - 1, -1);
+        wcnFastArrivalReversePending=true;
         firstStoryAutoplayPending=false;
         moodClipActive=false;moodClipComplete=true;moodClipProgress=1;moodClipDirection=0;
         moodClipReverseSuppressed=false;
@@ -10954,10 +11006,15 @@ void main(){
         heroText.style.visibility='visible';
         heroTextInner.style.opacity='1';
         maskedTextCanvas.style.opacity='0';
-        if(wcnFastMoodFallback)wcnFastMoodFallback.style.opacity='0';
+        if(wcnFastMoodFallback){
+          wcnFastMoodFallback.style.opacity='0';
+          wcnFastMoodFallback.dataset.wcnFastVisible='false';
+        }
+        wcnFastArrivalReversePending=false;
       }
       function wcnFastTriggerGallery() {
         if(!parentScrollHandoffEnabled)return;
+        wcnFastGalleryReturnPending=true;
         // The deliberate shortcut skips the 2-second hold, unlike normal scrolling.
         clearMoodExitSettle();moodExitReadyAt=performance.now()-1;
         notifyParentMoodHandoffReady();
@@ -11629,8 +11686,18 @@ void main(){
             /* At ordinary speed preserve one-image-per-frame return; rapid scrolling
                deliberately permits skipping frames to make the reverse truly faster. */
             const maxStep = Math.min(5, BACKGROUND_RETURN_FPS * dt * timelinePlaybackRate);
-            smoothScrollFrame += Math.max(delta, -maxStep);
-            backgroundAutoplayFrame = smoothScrollFrame;
+            const nextFrameFloat = smoothScrollFrame + Math.max(delta, -maxStep);
+            const nextFrame = clamp(Math.round(nextFrameFloat), 0, SCROLL_FRAME_COUNT - 1);
+            if (MOBILE_RUNTIME && !scrollFrames[nextFrame]) {
+              // Keep the currently drawn frame/hold environment rather than running
+              // past a missing image and briefly exposing the old 360 canvas.
+              loadMobileSequencePair(nextFrame).catch(error =>
+                console.warn('[WCN] Reverse sequence image unavailable', nextFrame, error));
+              prefetchMobileSequenceWindow(nextFrame, -1);
+            } else {
+              smoothScrollFrame = nextFrameFloat;
+              backgroundAutoplayFrame = smoothScrollFrame;
+            }
 
             const frame = clamp(Math.round(smoothScrollFrame), 0, SCROLL_FRAME_COUNT - 1);if (frame !== currentScrollFrame) {
               currentScrollFrame = frame;
