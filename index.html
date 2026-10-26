@@ -4224,6 +4224,11 @@
     }
 
 
+    /* Mobile holds keep the original outpainted frame, but have no hotspots.
+       This also covers unusual browser UA configurations and first paint. */
+    @media (hover: none) and (pointer: coarse) {
+      #holdEnvHotspots { display: none !important; }
+    }
     /* APPROVED BUILD ADD-ON: independent fast travel, no master-timeline replacement. */
     #wcnFastLinks {
       position:absolute;left:50%;top:calc(100% - 245px);transform:translate(-50%,-50%);
@@ -5200,6 +5205,16 @@
 
       const holdEnvCanvas = $('holdEnvCanvas');
       const holdEnvHotspots = $('holdEnvHotspots');
+      // The three hold-scene info hotspots are desktop-only. The lower-resolution
+      // base hold panorama remains active and pannable on mobile.
+      if (MOBILE_RUNTIME && holdEnvHotspots) {
+        holdEnvHotspots.style.setProperty('display', 'none', 'important');
+        holdEnvHotspots.setAttribute('aria-hidden', 'true');
+        holdEnvHotspots.querySelectorAll('button').forEach(button => {
+          button.tabIndex = -1;
+          button.disabled = true;
+        });
+      }
       const holdHotspotButtons = Array.from(document.querySelectorAll('.holdHotspot'));
 
 
@@ -5645,6 +5660,7 @@
       }
 
       function updateHoldHotspotHoverState() {
+        if (MOBILE_RUNTIME) return;
         if (!holdPointerIsMouse || holdEnvHotspotReveal <= .08 || holdEnvMode === 'realigning' || holdEnvMode === 'fading-out') {
           if (activeHoldHotspotIndex !== -1) setActiveHoldHotspot(-1);
           return;
@@ -5711,7 +5727,7 @@
       }
 
       function updateHoldHotspots(dt) {
-        if (!holdEnvHotspots || holdHotspotButtons.length !== HOLD_ENV_HOTSPOTS.length) return;
+        if (MOBILE_RUNTIME || !holdEnvHotspots || holdHotspotButtons.length !== HOLD_ENV_HOTSPOTS.length) return;
         /* The hotspots belong to the live semi-panorama, not to a particular scroll
            subsection. Keep the SAME hotspot layer alive whenever that panorama is alive.
            The mood/thumbnail section can cover it visually on the way down, but we never
@@ -9942,6 +9958,8 @@ void main(){
       }
 
       function loadHoldHiResInsert(textureLoader) {
+        // Mobile never requests or allocates the optional 2500px texture.
+        if (MOBILE_RUNTIME) return;
         /* Start this download as soon as the base hold environment is initialized, but do
            not block the page loader on it. In normal use Scroll_01 gives it plenty of time
            to arrive before the semi-panorama is shown. */
@@ -10934,11 +10952,39 @@ void main(){
         const projectedVolumeBottom=projectedVolumeTop+(volumeButton.offsetHeight||58);
         const upper=Math.max(stageRect.top+stageRect.height*.43,projectedVolumeBottom+12,staticHeroBottom+12);
         const lower=Math.min(stageRect.bottom-24,cueRect.top-10);
-        const cramped=lower<=upper+46;
-        const target=!cramped?(upper+lower)*.5:(MOBILE_RUNTIME
-          ? cueRect.top + cueRect.height*.5
-          : Math.min(stageRect.bottom-170,Math.max(stageRect.top+stageRect.height*.68,upper+20)));
-        wcnFastLinks.style.top=(target-stageRect.top)+'px';
+        // Mobile: the Scroll Lottie must ALWAYS be physically BELOW both shortcuts.
+        // The old cramped-state fallback deliberately centered it between the buttons.
+        // Instead, allocate separate lanes and resize/reposition only the opening cue.
+        if (MOBILE_RUNTIME) {
+          const buttonHeight = Math.max(42, ...Array.from(wcnFastLinks.querySelectorAll('button')).map(b => b.offsetHeight || 42));
+          const bleed = parseFloat(getComputedStyle(document.documentElement)
+            .getPropertyValue('--wcn-mobile-visual-bleed')) || 0;
+          const safeBottom = stageRect.bottom - bleed - 8;
+          const cueGap = 34; // scaled Scroll.json artwork must stay below the button hitboxes
+          const idealCueSize = Math.min(130, Math.max(80, stageRect.height * .135));
+          const volumeBottom = !volumeDocked && volumeControl.classList.contains('is-ready')
+            ? (stageRect.top + (parseFloat(volumeControl.style.top) || 0) + (volumeButton.offsetHeight || 54))
+            : stageRect.top;
+          const buttonTopWanted = Math.max(stageRect.top + stageRect.height * .43,
+            staticHeroBottom + 8, volumeBottom + 7);
+          const spaceForCue = safeBottom - buttonTopWanted - buttonHeight - cueGap;
+          const cueSize = Math.max(68, Math.min(idealCueSize, spaceForCue));
+          const maxButtonTop = safeBottom - cueSize - cueGap - buttonHeight;
+          const buttonTop = Math.max(stageRect.top + 8,
+            Math.min(buttonTopWanted, maxButtonTop));
+          const buttonCenter = buttonTop + buttonHeight * .5;
+          const cueTop = buttonTop + buttonHeight + cueGap;
+          wcnFastLinks.style.top = (buttonCenter - stageRect.top) + 'px';
+          scrollIndicator.style.setProperty('width', cueSize + 'px', 'important');
+          scrollIndicator.style.setProperty('height', cueSize + 'px', 'important');
+          scrollIndicator.style.setProperty('bottom', 'auto', 'important');
+          scrollIndicator.style.setProperty('top', (cueTop - stageRect.top) + 'px', 'important');
+          return;
+        }
+        const cramped = lower <= upper + 46;
+        const target = !cramped ? (upper + lower) * .5 :
+          Math.min(stageRect.bottom - 170, Math.max(stageRect.top + stageRect.height * .68, upper + 20));
+        wcnFastLinks.style.top = (target - stageRect.top) + 'px';
       }
       function wcnFastStopOrdinaryAutoplay() {
         // This runs ONLY after a fast shortcut was deliberately invoked.
