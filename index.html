@@ -4274,7 +4274,10 @@
     #wcnFastMoodFallback{
       position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
       z-index:23;opacity:0;pointer-events:none;
-      transform:translate3d(0,0,0) scale(1.075);transform-origin:50% 50%;
+      /* The JPG is the still-image version of the same mood camera. Use the
+         identical base zoom as the videos, even before JS starts its parallax. */
+      transform:translate3d(0,0,0) scale(1.22);transform-origin:50% 50%;
+      will-change:opacity,transform,filter;backface-visibility:hidden;
     }
     /* The authored Lotties and all current controls are untouched in normal mode. */
     #stage.wcn-fast-routing #heroText,
@@ -6455,6 +6458,11 @@
 
         const transform = `translate3d(${moodBgParallaxX.toFixed(2)}px,${moodBgParallaxY.toFixed(2)}px,0) scale(${MOOD_BG_PARALLAX_SCALE})`;
         moodBackgroundMedia.forEach(media => { if (media) media.style.transform = transform; });
+        // Fast-travel JPG is intentionally NOT a member of moodBackgroundMedia:
+        // that list also controls video/image OPACITY and would otherwise hide
+        // this temporary surface mid-crossfade. Match only its camera transform.
+        const fastStill = document.getElementById('wcnFastMoodFallback');
+        if (fastStill) fastStill.style.transform = transform;
       }
 
 
@@ -6469,6 +6477,10 @@
         const brightness = 1 - effect * 0.62;
         const filter = `blur(${blurPx.toFixed(2)}px) brightness(${brightness.toFixed(3)})`;
         moodBackgroundMedia.forEach(media => { if (media) media.style.filter = filter; });
+        // The quick-nav JPG must inherit precisely the same blur and brightness
+        // as its MP4, or a clarity-slider adjustment creates a visible jump.
+        const fastStill = document.getElementById('wcnFastMoodFallback');
+        if (fastStill) fastStill.style.filter = filter;
         /* Keep the thumb visually continuous during the automatic 2 second glide. */
         if (syncSlider && moodBackgroundSlider) moodBackgroundSlider.value = numeric.toFixed(2);
       }
@@ -10834,6 +10846,15 @@ void main(){
           wcnFastMoodFallback.dataset.wcnFastVisible='false';
         };
         wcnFastMoodFallback.src=src;
+        // Match the CURRENT movie position immediately, before the next animation
+        // frame. Both will continue receiving identical per-frame parallax updates.
+        const liveMoodVideo = getMoodMediaElement(activeMoodIndex);
+        if (liveMoodVideo) {
+          wcnFastMoodFallback.style.transform = liveMoodVideo.style.transform ||
+            `translate3d(0,0,0) scale(${MOOD_BG_PARALLAX_SCALE})`;
+          wcnFastMoodFallback.style.filter = liveMoodVideo.style.filter ||
+            'blur(0px) brightness(1)';
+        }
         wcnFastMoodFallback.dataset.wcnFastVisible='true';
         wcnFastMoodFallback.style.transition='none';
         wcnFastMoodFallback.style.opacity='1';
@@ -10949,6 +10970,13 @@ void main(){
         targetScrollFrame=SCROLL_FRAME_COUNT-1;
         currentScrollFrame=SCROLL_FRAME_COUNT-1;
         renderFrame(currentScrollFrame);
+        // CRITICAL FAST-RETURN HANDOFF: the opening 360 is z-index 3 and sits
+        // ABOVE both the master JPG canvas and the extended hold scene. A fast
+        // jump sets the frame to 108 without passing through normal scroll's
+        // updatePanoramaOpacity(). That left the sphere at opacity 1 beneath
+        // the white/mood layers, exposing it as those layers reversed. Hide it
+        // at the SAME instant as the frame jump, before the fast overlay fades.
+        updatePanoramaOpacity();
         holdEnvAutoplayBlend=1;
         holdEnvReverseSuppressed=false;
         holdEnvReverseFrameLock=false;
