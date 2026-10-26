@@ -8442,7 +8442,7 @@ void main(){
 
       stage.addEventListener('pointerdown', event => {
 
-        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"]')) return;
+        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"], #wcnFastLinks')) return;
         if (MOBILE_RUNTIME && event.pointerType === 'touch') return;
         if (smoothScrollFrame >= PANORAMA_FADE_END_FRAME) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -8577,7 +8577,7 @@ void main(){
          The whole stage receives the gesture, so panning also works when the finger
          starts directly on top of the story text. */
       stage.addEventListener('pointerdown', event => {
-        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"]')) return;
+        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"], #wcnFastLinks')) return;
         if (MOBILE_RUNTIME) return;
         if (event.pointerType !== 'touch') return;
         if (smoothScrollFrame < PANORAMA_FADE_END_FRAME) return;
@@ -8666,7 +8666,7 @@ void main(){
 
       stage.addEventListener('touchstart', event => {
         if (!MOBILE_RUNTIME || !event.touches || event.touches.length !== 1) return;
-        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"]')) return;
+        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"], #wcnFastLinks')) return;
         if (getMobilePanTarget() === 'none') return;
         const touch = event.touches[0];
         mobilePanGestureId = touch.identifier;
@@ -10707,6 +10707,16 @@ void main(){
          ============================================================= */
       const WCN_FAST_TOTAL = 48;
       const wcnFastLinks = $('wcnFastLinks');
+      // Let quick-navigation controls receive their normal clicks/taps without
+      // starting panorama dragging or handing pointer capture to #stage.
+      if (wcnFastLinks) {
+        wcnFastLinks.addEventListener('pointerdown', event => {
+          event.stopPropagation();
+        });
+        wcnFastLinks.addEventListener('touchstart', event => {
+          event.stopPropagation();
+        }, { passive: true });
+      }
       const wcnFastTravel = $('wcnFastTravel');
       const wcnFastFrame = $('wcnFastTravelFrame');
       const wcnFastWhite = $('wcnFastTravelWhite');
