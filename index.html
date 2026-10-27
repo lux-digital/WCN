@@ -10627,12 +10627,14 @@ void main(){
         }
       }
 
-      // Mask000.jpg has a black foreground silhouette but the first Scroll_01
-      // colour frames are white. Its inverted occlusion should not be composited on
-      // top of the still-visible 360 view, or it creates white mountain triangles.
-      // Bring the foreground layer in only as the 360 fades completely away.
+      // Mask000.jpg has a black foreground silhouette while the first Scroll_01
+      // colour frames are white. Fade this foreground compositing layer in only after
+      // the opening 360 has faded away. CRITICAL: once the semi-panorama starts, this
+      // canvas must stay at opacity 0 because it contains a frozen copy of the current
+      // Scroll_01 frame and otherwise sits above the live semi-panorama.
       function getForegroundOcclusionAlpha() {
         if (MOBILE_RUNTIME) return 0;
+        if (holdEnvMode !== 'inactive' || holdEnvBlend > .0005 || getHoldForwardBlend() > .0005) return 0;
         return smootherstep01(rangeProgress(
           smoothScrollFrame, PANORAMA_FADE_END_FRAME - 1, PANORAMA_FADE_END_FRAME + 3));
       }
@@ -10650,15 +10652,14 @@ void main(){
 
         if (smoothScrollFrame > .04) {
 
-          // Keep the mask compositing tied to the actual 360 fade on EVERY frame.
-          // Otherwise an earlier full-opacity canvas may linger as a white silhouette.
-          maskedTextCanvas.style.opacity = String(getForegroundOcclusionAlpha());
           if (!usingCanvasText) {
             usingCanvasText = true;
             heroText.style.visibility = 'visible';
-            maskedTextCanvas.style.opacity = String(getForegroundOcclusionAlpha());
             renderFrame(Math.max(0, currentScrollFrame));
           }
+          // Update the mask fade while the 360 disappears, but force it off permanently
+          // during the semi-panorama handoff so no frozen Scroll_01 frame can cover it.
+          maskedTextCanvas.style.opacity = String(getForegroundOcclusionAlpha());
 
         } else if (usingCanvasText) {
 
