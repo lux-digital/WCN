@@ -10057,13 +10057,13 @@ void main(){
       }
 
       function setHoldTextOcclusionVisibility(showSequenceOcclusion) {
-        if (showSequenceOcclusion) {
+        if (showSequenceOcclusion && !holdEnvironmentOwnsForeground()) {
           heroText.style.visibility = 'visible';
           maskedTextCanvas.style.opacity = usingCanvasText ? String(getForegroundOcclusionAlpha()) : '0';
         } else {
-          /* By the time the sequence has reached frame 108 the opening copy is already
-             completely gone. Do not leave the old foreground-mask canvas above the new
-             environment; that was the square/ghost image visible in the screenshots. */
+          /* Hide the real opening text FIRST, then remove the foreground-mask canvas.
+             Both ordinary-scroll and hold-environment RAFs share this exact ownership
+             rule, eliminating the single-frame flash at the handoff. */
           heroText.style.visibility = 'hidden';
           maskedTextCanvas.style.opacity = '0';
         }
@@ -10627,14 +10627,24 @@ void main(){
         }
       }
 
+      // Both the normal sequence RAF and the semi-panorama RAF can update the foreground
+      // during the handoff. They must use ONE ownership test or a single paint can briefly
+      // expose the opening-text Lottie between mask/hold updates. On forward travel the
+      // hold takes ownership as soon as its authored blend begins. On reverse travel it
+      // keeps ownership until the live hold has fully faded and set reverseSuppressed.
+      function holdEnvironmentOwnsForeground() {
+        if (holdEnvMode !== 'inactive' || holdEnvBlend > .0005) return true;
+        return !holdEnvReverseSuppressed && getHoldForwardBlend() > .0005;
+      }
+
       // Mask000.jpg has a black foreground silhouette while the first Scroll_01
       // colour frames are white. Fade this foreground compositing layer in only after
-      // the opening 360 has faded away. CRITICAL: once the semi-panorama starts, this
-      // canvas must stay at opacity 0 because it contains a frozen copy of the current
-      // Scroll_01 frame and otherwise sits above the live semi-panorama.
+      // the opening 360 has faded away. Once the semi-panorama owns the foreground,
+      // BOTH the mask canvas and the real opening text stay hidden until reverse handoff
+      // is genuinely complete; this prevents both the frozen-frame regression and the
+      // one/two-frame opening-text flash.
       function getForegroundOcclusionAlpha() {
-        if (MOBILE_RUNTIME) return 0;
-        if (holdEnvMode !== 'inactive' || holdEnvBlend > .0005 || getHoldForwardBlend() > .0005) return 0;
+        if (MOBILE_RUNTIME || holdEnvironmentOwnsForeground()) return 0;
         return smootherstep01(rangeProgress(
           smoothScrollFrame, PANORAMA_FADE_END_FRAME - 1, PANORAMA_FADE_END_FRAME + 3));
       }
@@ -10650,6 +10660,15 @@ void main(){
           return;
         }
 
+        // IMPORTANT: hide the REAL opening-text Lottie before removing its foreground
+        // occlusion. This check also runs from the ordinary sequence RAF, so it cannot
+        // briefly re-show the text between two semi-panorama updates.
+        if (holdEnvironmentOwnsForeground()) {
+          heroText.style.visibility = 'hidden';
+          maskedTextCanvas.style.opacity = '0';
+          return;
+        }
+
         if (smoothScrollFrame > .04) {
 
           if (!usingCanvasText) {
@@ -10657,8 +10676,7 @@ void main(){
             heroText.style.visibility = 'visible';
             renderFrame(Math.max(0, currentScrollFrame));
           }
-          // Update the mask fade while the 360 disappears, but force it off permanently
-          // during the semi-panorama handoff so no frozen Scroll_01 frame can cover it.
+          heroText.style.visibility = 'visible';
           maskedTextCanvas.style.opacity = String(getForegroundOcclusionAlpha());
 
         } else if (usingCanvasText) {
