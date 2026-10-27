@@ -4901,8 +4901,8 @@
       /* The story animation begins at STORY_SEQUENCE_START (frame 60). Forward scrolling
          deliberately stretches this authored range; reverse wheel movement is compensated
          later so the whole experience returns at the original logical speed. */
-      const STORY_SEQUENCE_SCROLL_SLOWDOWN = MOBILE_RUNTIME ? 0.86 : 2.2;
-      const STORY_SEQUENCE_AUTOPLAY_FPS = MOBILE_RUNTIME ? 52 : 38;
+      const STORY_SEQUENCE_SCROLL_SLOWDOWN = MOBILE_RUNTIME ? 0.60 : 2.2;
+      const STORY_SEQUENCE_AUTOPLAY_FPS = MOBILE_RUNTIME ? 72 : 38;
       const STORY_FIRST_AUTOPLAY_END_FRAME = 72; // text000 -> text072
       const STORY_MID_AUTOPLAY_START_FRAME = 80;
       const STORY_MID_AUTOPLAY_END_FRAME = 144;
@@ -8927,9 +8927,9 @@ void main(){
         if (volumeMoveRaf) cancelAnimationFrame(volumeMoveRaf);
         volumeMoveRaf = 0;
         volumeControl.classList.add('is-moving');
-        // On ordinary upward scrolling an unused audio button returns below
-        // the opening title. Replay the SAME return entrance on the shortcuts.
-        if (!dock && !volumeEverActivated) wcnFastAnimateButtonsReturn();
+        // The quick-navigation visibility controller owns its return animation.
+        // Animating it here as well replayed the entrance a SECOND time and caused
+        // a visible flash on the way back to the top.
         /* Location swaps only while invisible: shrink/fade out, then fade in. */
         volumeMoveTimer = setTimeout(showVolumeAtDestination, 290);
       }
@@ -10059,7 +10059,7 @@ void main(){
       function setHoldTextOcclusionVisibility(showSequenceOcclusion) {
         if (showSequenceOcclusion) {
           heroText.style.visibility = 'visible';
-          maskedTextCanvas.style.opacity = usingCanvasText ? '1' : '0';
+          maskedTextCanvas.style.opacity = usingCanvasText ? String(getForegroundOcclusionAlpha()) : '0';
         } else {
           /* By the time the sequence has reached frame 108 the opening copy is already
              completely gone. Do not leave the old foreground-mask canvas above the new
@@ -10627,6 +10627,16 @@ void main(){
         }
       }
 
+      // Mask000.jpg has a black foreground silhouette but the first Scroll_01
+      // colour frames are white. Its inverted occlusion should not be composited on
+      // top of the still-visible 360 view, or it creates white mountain triangles.
+      // Bring the foreground layer in only as the 360 fades completely away.
+      function getForegroundOcclusionAlpha() {
+        if (MOBILE_RUNTIME) return 0;
+        return smootherstep01(rangeProgress(
+          smoothScrollFrame, PANORAMA_FADE_END_FRAME - 1, PANORAMA_FADE_END_FRAME + 3));
+      }
+
       function updateTextMode() {
 
         if (MOBILE_RUNTIME) {
@@ -10640,10 +10650,13 @@ void main(){
 
         if (smoothScrollFrame > .04) {
 
+          // Keep the mask compositing tied to the actual 360 fade on EVERY frame.
+          // Otherwise an earlier full-opacity canvas may linger as a white silhouette.
+          maskedTextCanvas.style.opacity = String(getForegroundOcclusionAlpha());
           if (!usingCanvasText) {
             usingCanvasText = true;
             heroText.style.visibility = 'visible';
-            maskedTextCanvas.style.opacity = '1';
+            maskedTextCanvas.style.opacity = String(getForegroundOcclusionAlpha());
             renderFrame(Math.max(0, currentScrollFrame));
           }
 
@@ -12032,10 +12045,20 @@ void main(){
             new Promise((_, reject) => setTimeout(() => reject(new Error('Opening panorama 360.jpg did not load in 25 seconds. Check its path and the browser network tab.')), 25000))
           ]);
 
+          // Reveal the 360 as soon as its own texture and renderer are ready.
+          // Loading Scroll_01 / Mask_01, optional Lotties, the extended environment,
+          // or a mobile prefetch window must never keep the user on a black screen.
+          panoramaIntroReveal = 1;
+          renderPanorama();
+          updatePanoramaOpacity();
+          loader.classList.add('hidden');
+
           if (MOBILE_RUNTIME) {
-            await Promise.all([scrollPromise, openingTextPromise, volumePromise]);
-            loader.classList.add('hidden'); animateHeroText(); initializeLottie();
+            // The panorama remains visible while the first 720p frames finish loading.
+            // The authored text/buttons start only after their assets are ready.
             initHoldEnvironment().catch(error => console.warn('[West Coast Naturals] Mobile hold environment preload failed.', error));
+            await Promise.all([scrollPromise, openingTextPromise, volumePromise]);
+            animateHeroText(); initializeLottie();
           } else {
             const holdReady = initHoldEnvironment().catch(error =>
               console.warn('[West Coast Naturals] Hold environment can continue loading after intro.', error));
@@ -12043,7 +12066,7 @@ void main(){
               Promise.race([holdReady, new Promise(resolve => setTimeout(resolve, 12000))]),
               openingTextPromise, volumePromise
             ]);
-            loader.classList.add('hidden'); animateHeroText(); initializeLottie();
+            animateHeroText(); initializeLottie();
             await scrollPromise;
           }
 
