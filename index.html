@@ -4263,11 +4263,10 @@
     @media (hover:hover) and (pointer:fine){#wcnFastLinks button:hover{transform:translateY(-2px);background:#fff}}
     #wcnFastLinks button:focus-visible{outline:2px solid white;outline-offset:4px}
     @media(max-width:600px){
-      /* Phone portraits often have NO actual vertical gap between the volume and the
-         existing Scroll cue. Place the two shortcuts on either SIDE of that cue rather
-         than piling another row over the approved opening artwork. */
-      #wcnFastLinks{width:100vw;max-width:none;gap:0;padding:0 3px;justify-content:space-between}
-      #wcnFastLinks button{width:31vw;flex:0 0 31vw;max-width:130px;font-size:9px;letter-spacing:0;padding:0 3px;min-height:42px}
+      /* On phones the Scroll cue now sits BELOW the shortcuts, so keep the buttons as
+         a centered pair instead of preserving the old three-column gap. */
+      #wcnFastLinks{width:max-content;max-width:94vw;gap:10px;padding:0;justify-content:center}
+      #wcnFastLinks button{width:min(42vw,150px);flex:0 0 auto;max-width:none;font-size:9px;letter-spacing:.01em;padding:0 8px;min-height:42px}
     }
     #wcnFastTravel {
       position:absolute;inset:0;z-index:93;overflow:hidden;background:transparent;
@@ -10761,11 +10760,32 @@ void main(){
       const WCN_FAST_TOTAL = 48;
       const wcnFastLinks = $('wcnFastLinks');
       let wcnFastButtonsEntrance = null;
-      function wcnFastAnimateButtonsEntrance(sourceFrames, sourceTiming) {
-        if (!wcnFastLinks || typeof wcnFastLinks.animate !== 'function') return;
+      let wcnFastButtonsShown = false;
+      let wcnFastButtonsIntroPlayed = false;
+      function wcnFastCancelButtonsAnimation() {
         if (wcnFastButtonsEntrance) {
           try { wcnFastButtonsEntrance.cancel(); } catch (_) {}
+          wcnFastButtonsEntrance = null;
         }
+      }
+      function wcnFastPrepareButtonsForShow() {
+        if (!wcnFastLinks) return;
+        wcnFastLinks.classList.add('is-visible');
+        wcnFastLinks.style.visibility = 'visible';
+        wcnFastLinks.style.pointerEvents = 'auto';
+      }
+      function wcnFastClearButtonInlineVisibility() {
+        if (!wcnFastLinks) return;
+        wcnFastLinks.style.removeProperty('opacity');
+        wcnFastLinks.style.removeProperty('visibility');
+        wcnFastLinks.style.removeProperty('pointer-events');
+      }
+      function wcnFastAnimateButtonsEntrance(sourceFrames, sourceTiming) {
+        if (!wcnFastLinks || typeof wcnFastLinks.animate !== 'function') return;
+        wcnFastButtonsShown = true;
+        wcnFastButtonsIntroPlayed = true;
+        wcnFastPrepareButtonsForShow();
+        wcnFastCancelButtonsAnimation();
         // These are the very same values used by the hero title/volume icon.
         const frames = sourceFrames || [
           { opacity: 0,   transform: 'translateX(-50%) scale(.20)', offset: 0 },
@@ -10780,27 +10800,63 @@ void main(){
           { opacity: 1,   transform: 'translateX(-50%) scale(.999)', offset: .91 },
           { opacity: 1,   transform: 'translateX(-50%) scale(1)', offset: 1 }
         ];
-        // The HTML container's translate(-50%, -50%) must remain part of
-        // ALL animation keyframes, or the buttons shift out of alignment.
         const adjusted = sourceFrames
           ? frames.map(f => ({ ...f, transform: f.transform.replace('scale(', 'translate(-50%, -50%) scale(') }))
           : frames.map(f => ({ ...f, transform: f.transform.replace('translateX(-50%)', 'translate(-50%, -50%)') }));
+        wcnFastLinks.style.opacity = '0';
         wcnFastButtonsEntrance = wcnFastLinks.animate(adjusted,
           sourceTiming || { duration: 3600, easing: 'linear', fill: 'forwards' });
+        wcnFastButtonsEntrance.onfinish = () => {
+          wcnFastButtonsEntrance = null;
+          if (!wcnFastButtonsShown) return;
+          wcnFastClearButtonInlineVisibility();
+          wcnFastLinks.classList.add('is-visible');
+        };
       }
-      // Normal reverse scrolling uses the audio icon's SHORT dock/undock move,
-      // not the 3.6-second first-load hero entrance. Match that timing too.
+      // On ordinary upward scrolling the shortcuts should reveal ONCE, using the same
+      // short move as the undocked volume icon, without flashing fully visible first.
       function wcnFastAnimateButtonsReturn() {
         if (!wcnFastLinks || typeof wcnFastLinks.animate !== 'function') return;
-        if (wcnFastButtonsEntrance) {
-          try { wcnFastButtonsEntrance.cancel(); } catch (_) {}
-        }
+        wcnFastButtonsShown = true;
+        wcnFastButtonsIntroPlayed = true;
+        wcnFastPrepareButtonsForShow();
+        wcnFastCancelButtonsAnimation();
+        wcnFastLinks.style.opacity = '0';
         wcnFastButtonsEntrance = wcnFastLinks.animate([
-          { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', offset: 0 },
-          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: .42 },
-          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: .44 },
+          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: 0 },
+          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: .02 },
           { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', offset: 1 }
         ], { duration: 700, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+        wcnFastButtonsEntrance.onfinish = () => {
+          wcnFastButtonsEntrance = null;
+          if (!wcnFastButtonsShown) return;
+          wcnFastClearButtonInlineVisibility();
+          wcnFastLinks.classList.add('is-visible');
+        };
+      }
+      // When the user leaves the opening, reverse the same movement instead of
+      // letting the shortcuts abruptly vanish.
+      function wcnFastAnimateButtonsHide() {
+        if (!wcnFastLinks || typeof wcnFastLinks.animate !== 'function') {
+          if (wcnFastLinks) wcnFastLinks.classList.remove('is-visible');
+          wcnFastButtonsShown = false;
+          return;
+        }
+        wcnFastButtonsShown = false;
+        wcnFastCancelButtonsAnimation();
+        wcnFastPrepareButtonsForShow();
+        wcnFastLinks.style.pointerEvents = 'none';
+        wcnFastButtonsEntrance = wcnFastLinks.animate([
+          { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', offset: 0 },
+          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: .58 },
+          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: 1 }
+        ], { duration: 700, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+        wcnFastButtonsEntrance.onfinish = () => {
+          wcnFastButtonsEntrance = null;
+          if (wcnFastButtonsShown) return;
+          wcnFastLinks.classList.remove('is-visible');
+          wcnFastClearButtonInlineVisibility();
+        };
       }
       // Let quick-navigation controls receive their normal clicks/taps without
       // starting panorama dragging or handing pointer capture to #stage.
@@ -10936,7 +10992,13 @@ void main(){
         if(!wcnFastLinks || !scrollingReady)return;
         const atOpening = !wcnFast.active && !wcnFast.starting && !parentOverlayActive &&
           !moodClipActive && !moodClipComplete && calculateRawScrollProgress() < .024;
-        wcnFastLinks.classList.toggle('is-visible',atOpening);
+        if (atOpening !== wcnFastButtonsShown) {
+          if (atOpening) {
+            if (wcnFastButtonsIntroPlayed) wcnFastAnimateButtonsReturn();
+          } else {
+            wcnFastAnimateButtonsHide();
+          }
+        }
         if(!atOpening)return;
         const stageRect=stage.getBoundingClientRect();
         const cueRect=scrollIndicator.getBoundingClientRect();
@@ -11198,6 +11260,12 @@ void main(){
         event.preventDefault();event.stopPropagation();
         void wcnFastBegin('gallery',1);
       });
+      function wcnFastGestureAllowed(direction) {
+        const raw = calculateRawScrollProgress();
+        const nearOpening = raw < .085 && !moodClipActive && !moodClipComplete;
+        const nearMood = moodClipActive || moodClipComplete || raw > Math.max(.88, MOOD_WHITE_START - .055);
+        return direction > 0 ? nearOpening : nearMood;
+      }
       /* Explicit fast-gesture detection, in capture phase. Slow scrolling is handed through
          to the original listeners WITHOUT ANY CHANGE. Fast-wheel intention is cumulative,
          and quick mobile swipes require distance+velocity+dominant vertical movement. */
@@ -11220,8 +11288,7 @@ void main(){
         const forceful=Math.abs(delta)>320||(wcnFastWheelEnergy>480&&now-wcnFastWheelFirstAt<155);
         if(!forceful)return;
         const towardMood=direction>0;
-        if(towardMood && moodClipComplete)return; // Gallery keeps the approved native inertia.
-        if(!towardMood && calculateRawScrollProgress()<.07)return;
+        if(!wcnFastGestureAllowed(direction))return;
         event.preventDefault();event.stopImmediatePropagation();
         wcnFastWheelEnergy=0;
         wcnFastBegin(towardMood?'colours':'top',direction);
@@ -11241,8 +11308,7 @@ void main(){
         if(Math.abs(dy)<145||Math.abs(dy)<Math.abs(dx)*1.5||duration>195)return;
         if(Math.abs(dy)/duration<2.5)return;
         const direction=dy<0?1:-1;
-        if(direction>0&&moodClipComplete)return;
-        if(direction<0&&calculateRawScrollProgress()<.07)return;
+        if(!wcnFastGestureAllowed(direction))return;
         event.preventDefault();event.stopImmediatePropagation();
         wcnFastTouch=null;
         wcnFastBegin(direction>0?'colours':'top',direction);
