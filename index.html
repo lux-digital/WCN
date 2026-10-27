@@ -3085,8 +3085,8 @@
       visibility: hidden;
       pointer-events: none;
       transition:
-        opacity .36s cubic-bezier(.22, 1, .36, 1),
-        transform .42s cubic-bezier(.22, 1, .36, 1);
+        opacity .88s cubic-bezier(.22, 1, .36, 1),
+        transform 1.08s cubic-bezier(.22, 1, .36, 1);
       will-change: opacity, transform;
     }
     #volumeControl.is-ready {
@@ -4239,11 +4239,11 @@
     #wcnFastLinks.is-visible{opacity:1;visibility:visible;pointer-events:auto}
     #wcnFastLinks button{
       -webkit-appearance:none;appearance:none;border:0;border-radius:999px;
-      background:rgba(255,255,255,.97);color:#454545;white-space:nowrap;
-      min-height:44px;width:190px;flex:0 0 190px;text-align:center;
-      padding:0 24px;font:600 12px/1 Arial,Helvetica,sans-serif;
-      letter-spacing:.085em;cursor:pointer;box-shadow:0 7px 24px rgba(0,0,0,.19);
-      transition:transform .4s cubic-bezier(.22,1,.36,1),background .2s ease;
+      background:rgba(255,255,255,.70);color:#454545;white-space:nowrap;
+      min-height:40px;width:170px;flex:0 0 170px;text-align:center;
+      padding:0 20px;font:600 11px/1 Arial,Helvetica,sans-serif;
+      letter-spacing:.08em;cursor:pointer;box-shadow:0 7px 24px rgba(0,0,0,.16);
+      transition:transform .4s cubic-bezier(.22,1,.36,1),background .28s ease;
       touch-action:manipulation;
     }
     #wcnFastLinks button:active{transform:scale(.95)}
@@ -4260,13 +4260,13 @@
     }
     #wcnFastStatus.is-visible{opacity:1;visibility:visible}
     #wcnFastStatus.is-error{background:rgba(55,37,32,.86)}
-    @media (hover:hover) and (pointer:fine){#wcnFastLinks button:hover{transform:translateY(-2px);background:#fff}}
+    @media (hover:hover) and (pointer:fine){#wcnFastLinks button:hover{transform:translateY(-2px);background:rgba(255,255,255,.82)}}
     #wcnFastLinks button:focus-visible{outline:2px solid white;outline-offset:4px}
     @media(max-width:600px){
       /* On phones the Scroll cue now sits BELOW the shortcuts, so keep the buttons as
          a centered pair instead of preserving the old three-column gap. */
       #wcnFastLinks{width:max-content;max-width:94vw;gap:10px;padding:0;justify-content:center}
-      #wcnFastLinks button{width:min(42vw,150px);flex:0 0 auto;max-width:none;font-size:9px;letter-spacing:.01em;padding:0 8px;min-height:42px}
+      #wcnFastLinks button{width:min(40vw,138px);flex:0 0 auto;max-width:none;font-size:8.5px;letter-spacing:.01em;padding:0 7px;min-height:38px}
     }
     #wcnFastTravel {
       position:absolute;inset:0;z-index:93;overflow:hidden;background:transparent;
@@ -5255,17 +5255,44 @@
         const result = video.play();
         if (result && typeof result.catch === 'function') result.catch(() => {});
       }
+      function cancelMoodMediaAnimations() {
+        moodBackgroundMedia.forEach(element => {
+          if (!element || typeof element.getAnimations !== 'function') return;
+          element.getAnimations().forEach(animation => {
+            try { animation.cancel(); } catch (_) {}
+          });
+        });
+      }
+
       function syncMoodMediaVisibility(visibleOpacity = 1) {
+        cancelMoodMediaAnimations();
         const active = getMoodMediaElement(activeMoodIndex);
         moodBackgroundMedia.forEach(element => {
           if (!element) return;
           element.style.opacity = element === active ? String(visibleOpacity) : '0';
-          element.style.zIndex = '22';
+          element.style.zIndex = element === active ? '22' : '21';
         });
         moodVideoPlayers.forEach(video => {
           if (!video) return;
           if (video === active) playMoodVideo(video);
           else video.pause();
+        });
+      }
+
+      function waitForMoodVideoFrame(video, timeoutMs = 900) {
+        if (!video || video.tagName !== 'VIDEO' || video.readyState >= 2) return Promise.resolve();
+        return new Promise(resolve => {
+          let done = false;
+          const finish = () => {
+            if (done) return;
+            done = true;
+            video.removeEventListener('loadeddata', finish);
+            video.removeEventListener('canplay', finish);
+            resolve();
+          };
+          video.addEventListener('loadeddata', finish, { once: true });
+          video.addEventListener('canplay', finish, { once: true });
+          setTimeout(finish, timeoutMs);
         });
       }
 
@@ -5455,6 +5482,10 @@
          while the parent WordPress page scrolls the next Elementor container over it. */
       const ELEMENTOR_HANDOFF_CHANNEL = 'WCN_ELEMENTOR_HANDOFF_V1';
       let parentScrollHandoffEnabled = false, parentOverlayActive = false, parentOverlayProgress = 0;
+      /* One shared rate supplied by the Elementor wrapper. It controls the final WCN
+         reveal and the parent Gallery travel, so the handoff has one motion language
+         on mouse, trackpad and touch instead of separate per-device patches. */
+      let parentHandoffRate = 1;
       let moodBackgroundUserInteracted = false;
       let moodBackgroundUserValue = 100;
       let moodBackgroundAutoFadeRaf = 0;
@@ -6144,6 +6175,9 @@
           const wasOverlayActive = parentOverlayActive;
           parentScrollHandoffEnabled = !!data.enabled;
           parentOverlayActive = !!data.overlayActive;
+          if (Number.isFinite(Number(data.handoffRate))) {
+            parentHandoffRate = clamp(Number(data.handoffRate), .75, 2.5);
+          }
           if (wasOverlayActive && !parentOverlayActive && moodClipComplete) beginMoodReturnHold();
           else if (parentOverlayActive) clearMoodReturnHold();
           applyParentOverlayProgress(data.overlayProgress ?? (parentOverlayActive ? parentOverlayProgress : 0));
@@ -6196,8 +6230,9 @@
 
       function updateMoodClip(dt) {
         if (!moodClipActive) return;
-        const clipDuration = moodClipDirection < 0 && wcnFastArrivalReversePending
+        const baseClipDuration = moodClipDirection < 0 && wcnFastArrivalReversePending
           ? 3.15 : MOOD_CLIP_DURATION;
+        const clipDuration = baseClipDuration / Math.max(.75, parentHandoffRate);
         moodClipProgress = clamp(moodClipProgress + moodClipDirection * (dt / clipDuration), 0, 1);
         updateMoodSectionMotion();
 
@@ -6967,15 +7002,22 @@
 
         const fromItem = MOOD_ITEMS[activeMoodIndex];
         const toItem = MOOD_ITEMS[targetIndex];
+
+        /* Every transition starts from one deterministic media state. Finished WAAPI
+           animations with fill:'forwards' used to remain attached to old MP4s and could
+           briefly win the opacity cascade during later Next/Previous clicks. */
+        syncMoodMediaVisibility(1);
         const toWoodgrainPath = resolveWoodgrainPath(activeProductLabel, toItem.name);
         const activeOverlayPath = resolveWoodgrainOverlayPath(activeProductLabel);
 
         /* Begin the incoming muted video as early as possible; each video has its
            own media element, so even a video-to-video swap keeps the old one alive. */
+        let incomingVideoReady = Promise.resolve();
         if (toItem.mediaType === 'video') {
           const upcoming = getMoodMediaElement(targetIndex);
           try { upcoming.currentTime = 0; } catch (e) {}
           playMoodVideo(upcoming);
+          incomingVideoReady = waitForMoodVideoFrame(upcoming);
         }
         /* Preload the incoming background and woodgrain before anything moves. */
         try {
@@ -6986,6 +7028,7 @@
         } catch (error) {
           console.warn('Could not preload mood item:', toItem, error);
         }
+        await incomingVideoReady;
 
         /* Prepare the incoming woodgrain at the same live pan position. */
         syncNeoLumberTransparency(activeProductLabel, activeProductLabel);
@@ -7054,36 +7097,38 @@
           backgroundPromise = (async () => {
             const outgoingMedia = getMoodMediaElement(activeMoodIndex);
             const incomingMedia = getMoodMediaElement(targetIndex);
-            /* Crossfade on two real surfaces; neither video source changes while
-               playing. Incoming remains above outgoing, with white behind both. */
-            moodBackgroundMedia.forEach(media => { if (media) media.style.zIndex = '21'; });
-            outgoingMedia.style.zIndex = '22';
-            incomingMedia.style.zIndex = '23';
-            outgoingMedia.style.opacity = '1';
-            incomingMedia.style.opacity = '0';
 
-            if (toItem.mediaType === 'video') {
-              playMoodVideo(incomingMedia);
-            } else {
-              moodImage.src = encodeURI(toItem.media);
-            }
+            /* Exactly two surfaces participate. Everything else is normalized to zero
+               BEFORE the crossfade so an older MP4 can never flash through. */
+            cancelMoodMediaAnimations();
+            moodBackgroundMedia.forEach(media => {
+              if (!media) return;
+              const isOutgoing = media === outgoingMedia;
+              const isIncoming = media === incomingMedia;
+              media.style.opacity = isOutgoing ? '1' : '0';
+              media.style.zIndex = isIncoming ? '23' : (isOutgoing ? '22' : '21');
+            });
 
+            if (toItem.mediaType === 'video') playMoodVideo(incomingMedia);
+            else moodImage.src = encodeURI(toItem.media);
+
+            const duration = 900;
             const out = outgoingMedia.animate(
               [{ opacity: 1 }, { opacity: 0 }],
-              { duration: 760, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
+              { duration, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
             );
-
-            /* Let a little of the white base show between the two moods. */
-            await wait(250);
-
             const incoming = incomingMedia.animate(
               [{ opacity: 0 }, { opacity: 1 }],
-              { duration: 980, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
+              { duration, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
             );
 
             await Promise.allSettled([out.finished, incoming.finished]);
-            try { out.cancel(); } catch (e) { }
-            try { incoming.cancel(); } catch (e) { }
+            try { out.cancel(); } catch (_) {}
+            try { incoming.cancel(); } catch (_) {}
+            outgoingMedia.style.opacity = '0';
+            outgoingMedia.style.zIndex = '21';
+            incomingMedia.style.opacity = '1';
+            incomingMedia.style.zIndex = '22';
           })();
         }
 
@@ -8811,15 +8856,11 @@ void main(){
         wcnFastAnimateButtonsEntrance(openingKeyframes, timing);
       }
 
-      /* Keep a small, consistent gap beneath the ACTUAL opening animation content.
-         A fixed vh position overlapped on some screen sizes; the Lottie SVG contains
-         transparent padding, so its outer container is not a useful visual boundary.
-         getBoundingClientRect() on its top-level <g> uses the drawn artwork bounds. */
-      function syncVolumeOpeningGap() {
-        if (volumeDocked || !volumeControl || !heroTextInner ||
-            !volumeControl.classList.contains('is-ready')) return;
-
-        const stageRect = stage.getBoundingClientRect();
+      /* Opening controls are one vertical composition:
+         opening-text Lottie -> quick links -> undocked volume -> flexible gap -> Scroll Lottie.
+         The flexible gap absorbs aspect-ratio differences instead of leaving a fake hole
+         when the speaker docks at the top. */
+      function getOpeningArtworkBottom(stageRect) {
         let artworkBottom = NaN;
         if (openingTextReady && openingTextLottie) {
           const svg = openingTextLottie.querySelector('svg');
@@ -8833,16 +8874,42 @@ void main(){
             }
           }
         }
-        if (!Number.isFinite(artworkBottom)) {
-          artworkBottom = heroTextInner.getBoundingClientRect().bottom;
-        }
+        if (!Number.isFinite(artworkBottom)) artworkBottom = heroTextInner.getBoundingClientRect().bottom;
+        return clamp(artworkBottom, stageRect.top, stageRect.bottom);
+      }
 
-        const gap = clamp(stageRect.height * .015, 11, 17);
-        const desired = Math.ceil(artworkBottom - stageRect.top + gap);
-        if (!Number.isFinite(desired)) return;
-        /* Follow the text itself, not an arbitrary 52%/70% guess. A little room at
-           the bottom keeps the button usable on short screens. */
-        const top = Math.max(0, desired);
+      function getOpeningStackLayout() {
+        const stageRect = stage.getBoundingClientRect();
+        const links = document.getElementById('wcnFastLinks');
+        const linkButtons = links ? Array.from(links.querySelectorAll('button')) : [];
+        const buttonHeight = Math.max(MOBILE_RUNTIME ? 38 : 40, ...linkButtons.map(button => button.offsetHeight || 0));
+        const volumeHeight = volumeButton ? (volumeButton.offsetHeight || (MOBILE_RUNTIME ? 54 : 58)) : (MOBILE_RUNTIME ? 54 : 58);
+        const artworkBottom = getOpeningArtworkBottom(stageRect);
+        const buttonGap = clamp(stageRect.height * .010, 7, 12);
+        const speakerGap = clamp(stageRect.height * .008, 6, 10);
+        const minCueGap = 7;
+        const minCueSize = MOBILE_RUNTIME ? 72 : 92;
+        const baseCueSize = MOBILE_RUNTIME ? 130 : 169;
+        const bleed = MOBILE_RUNTIME ? (parseFloat(getComputedStyle(document.documentElement)
+          .getPropertyValue('--wcn-mobile-visual-bleed')) || 0) : 0;
+        const safeBottom = stageRect.bottom - bleed - (MOBILE_RUNTIME ? 8 : 18);
+        const postButtonHeight = volumeDocked ? 0 : speakerGap + volumeHeight;
+        const maxButtonTop = safeBottom - buttonHeight - postButtonHeight - minCueGap - minCueSize;
+        const desiredButtonTop = artworkBottom + buttonGap;
+        const buttonTop = Math.max(stageRect.top + 4, Math.min(desiredButtonTop, maxButtonTop));
+        const buttonBottom = buttonTop + buttonHeight;
+        const volumeTop = buttonBottom + speakerGap;
+        const stackBottom = volumeDocked ? buttonBottom : volumeTop + volumeHeight;
+        const cueSize = Math.max(minCueSize, Math.min(baseCueSize, safeBottom - stackBottom - minCueGap));
+        const cueTop = Math.max(stackBottom + minCueGap, safeBottom - cueSize);
+        return { stageRect, buttonHeight, buttonTop, buttonBottom, volumeTop, stackBottom, cueSize, cueTop, safeBottom };
+      }
+
+      function syncVolumeOpeningGap() {
+        if (volumeDocked || !volumeControl || !heroTextInner ||
+            !volumeControl.classList.contains('is-ready')) return;
+        const layout = getOpeningStackLayout();
+        const top = Math.max(0, layout.volumeTop - layout.stageRect.top);
         const previous = Number.parseFloat(volumeControl.style.top);
         if (!Number.isFinite(previous) || Math.abs(previous - top) > .75) {
           volumeControl.style.top = `${top}px`;
@@ -8931,7 +8998,7 @@ void main(){
         // Animating it here as well replayed the entrance a SECOND time and caused
         // a visible flash on the way back to the top.
         /* Location swaps only while invisible: shrink/fade out, then fade in. */
-        volumeMoveTimer = setTimeout(showVolumeAtDestination, 290);
+        volumeMoveTimer = setTimeout(showVolumeAtDestination, 840);
       }
 
       function syncVolumePositionWithScroll() {
@@ -10880,9 +10947,10 @@ void main(){
         wcnFastLinks.style.pointerEvents = 'none';
         wcnFastButtonsEntrance = wcnFastLinks.animate([
           { opacity: 1, transform: 'translate(-50%, -50%) scale(1)', offset: 0 },
-          { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: .58 },
+          { opacity: .72, transform: 'translate(-50%, -50%) scale(.91)', offset: .38 },
+          { opacity: .30, transform: 'translate(-50%, -50%) scale(.66)', offset: .72 },
           { opacity: 0, transform: 'translate(-50%, -50%) scale(.24)', offset: 1 }
-        ], { duration: 700, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+        ], { duration: 1450, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
         wcnFastButtonsEntrance.onfinish = () => {
           wcnFastButtonsEntrance = null;
           if (wcnFastButtonsShown) return;
@@ -11032,53 +11100,26 @@ void main(){
           }
         }
         if(!atOpening)return;
-        const stageRect=stage.getBoundingClientRect();
-        const cueRect=scrollIndicator.getBoundingClientRect();
-        // Actual free space between the intro/volume artwork and the existing Scroll cue.
-        // The hero and volume scale during their shared entrance animation.
-        // Their live bounding rectangles change on EVERY frame. Use the hero's
-        // untransformed CSS layout dimensions so the shortcut row never slides
-        // down as the entrance plays (or as audio travels to its opening slot).
-        const staticHeroPadding=parseFloat(getComputedStyle(heroText).paddingTop)||0;
-        const staticHeroBottom=stageRect.top+staticHeroPadding+(heroTextInner.offsetHeight||0);
-        const gap=clamp(stageRect.height*.015,11,17);
-        const projectedVolumeTop=Math.max(stageRect.top,staticHeroBottom+gap);
-        const projectedVolumeBottom=projectedVolumeTop+(volumeButton.offsetHeight||58);
-        const upper=Math.max(stageRect.top+stageRect.height*.43,projectedVolumeBottom+12,staticHeroBottom+12);
-        const lower=Math.min(stageRect.bottom-24,cueRect.top-10);
-        // Mobile: the Scroll Lottie must ALWAYS be physically BELOW both shortcuts.
-        // The old cramped-state fallback deliberately centered it between the buttons.
-        // Instead, allocate separate lanes and resize/reposition only the opening cue.
-        if (MOBILE_RUNTIME) {
-          const buttonHeight = Math.max(42, ...Array.from(wcnFastLinks.querySelectorAll('button')).map(b => b.offsetHeight || 42));
-          const bleed = parseFloat(getComputedStyle(document.documentElement)
-            .getPropertyValue('--wcn-mobile-visual-bleed')) || 0;
-          const safeBottom = stageRect.bottom - bleed - 8;
-          const cueGap = 34; // scaled Scroll.json artwork must stay below the button hitboxes
-          const idealCueSize = Math.min(130, Math.max(80, stageRect.height * .135));
-          const volumeBottom = !volumeDocked && volumeControl.classList.contains('is-ready')
-            ? (stageRect.top + (parseFloat(volumeControl.style.top) || 0) + (volumeButton.offsetHeight || 54))
-            : stageRect.top;
-          const buttonTopWanted = Math.max(stageRect.top + stageRect.height * .43,
-            staticHeroBottom + 8, volumeBottom + 7);
-          const spaceForCue = safeBottom - buttonTopWanted - buttonHeight - cueGap;
-          const cueSize = Math.max(68, Math.min(idealCueSize, spaceForCue));
-          const maxButtonTop = safeBottom - cueSize - cueGap - buttonHeight;
-          const buttonTop = Math.max(stageRect.top + 8,
-            Math.min(buttonTopWanted, maxButtonTop));
-          const buttonCenter = buttonTop + buttonHeight * .5;
-          const cueTop = buttonTop + buttonHeight + cueGap;
-          wcnFastLinks.style.top = (buttonCenter - stageRect.top) + 'px';
-          scrollIndicator.style.setProperty('width', cueSize + 'px', 'important');
-          scrollIndicator.style.setProperty('height', cueSize + 'px', 'important');
-          scrollIndicator.style.setProperty('bottom', 'auto', 'important');
-          scrollIndicator.style.setProperty('top', (cueTop - stageRect.top) + 'px', 'important');
-          return;
+
+        const layout = getOpeningStackLayout();
+        const buttonCenter = layout.buttonTop + layout.buttonHeight * .5;
+        wcnFastLinks.style.top = (buttonCenter - layout.stageRect.top) + 'px';
+
+        /* If the speaker is still in the opening composition, keep it immediately
+           below the quick links. Once it docks, the links stay put and the extra room
+           automatically becomes part of the flexible Scroll-Lottie gap. */
+        if (!volumeDocked && volumeControl.classList.contains('is-ready')) {
+          const volumeTop = layout.volumeTop - layout.stageRect.top;
+          const previous = Number.parseFloat(volumeControl.style.top);
+          if (!Number.isFinite(previous) || Math.abs(previous - volumeTop) > .75) {
+            volumeControl.style.top = volumeTop + 'px';
+          }
         }
-        const cramped = lower <= upper + 46;
-        const target = !cramped ? (upper + lower) * .5 :
-          Math.min(stageRect.bottom - 170, Math.max(stageRect.top + stageRect.height * .68, upper + 20));
-        wcnFastLinks.style.top = (target - stageRect.top) + 'px';
+
+        scrollIndicator.style.setProperty('width', layout.cueSize + 'px', 'important');
+        scrollIndicator.style.setProperty('height', layout.cueSize + 'px', 'important');
+        scrollIndicator.style.setProperty('bottom', 'auto', 'important');
+        scrollIndicator.style.setProperty('top', (layout.cueTop - layout.stageRect.top) + 'px', 'important');
       }
       function wcnFastStopOrdinaryAutoplay() {
         // This runs ONLY after a fast shortcut was deliberately invoked.
