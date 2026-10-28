@@ -374,6 +374,14 @@
         touch-action: pan-y !important;
         overscroll-behavior-x: none;
       }
+
+      /* Once the final animated-thumbnail scene owns mobile handoff, native iframe
+         scrolling must not move the sticky stage even by the first few pixels of a
+         swipe. Vertical travel is forwarded to Elementor manually from JS instead. */
+      #stage.wcn-mobile-handoff-pinned {
+        touch-action: none !important;
+        overscroll-behavior-y: none !important;
+      }
     }
 
 
@@ -5537,8 +5545,8 @@
          a large viewer. This intentionally rises to a much stronger peak, but does so
          with a long ease-in and an even longer ease-out so it reads as acceleration,
          never as a jump. */
-      const WOOD_PROFILE_BOOST_IN_DURATION = 0.60;
-      const WOOD_PROFILE_BOOST_OUT_DURATION = 1.00;
+      const WOOD_PROFILE_BOOST_IN_DURATION = 0.45;
+      const WOOD_PROFILE_BOOST_OUT_DURATION = 0.70;
       const WOOD_PROFILE_BOOST_PEAK = 7.0;
       let woodViewerInteractionEnabled = false;
       const WOOD_PAN_AUTO_SPEED = 34;
@@ -6651,6 +6659,15 @@
       function updateMoodSectionMotion() {
 
         const p = getMoodVisualProgress();
+
+        /* Final mobile scene is a fixed handoff surface. Do not let native iframe scroll
+           release the sticky stage while the parent Gallery is taking over. */
+        if (MOBILE_RUNTIME && stage) {
+          stage.classList.toggle(
+            'wcn-mobile-handoff-pinned',
+            moodClipComplete && !moodClipActive
+          );
+        }
 
 
 
@@ -10548,11 +10565,10 @@ void main(){
         targetStoryProgress = raw;
         targetScrollFrame = calculateTargetFrame(raw);
 
-        /* MOBILE 720p AUTOPLAY RUNWAY
-           Start decoding the authored frame-52 autoplay section well BEFORE the user reaches
-           it. The previous rolling cache only looked a short distance ahead from the current
-           manual frame, so autoplay repeatedly caught the network/decoder and visibly paused.
-           At 720p with no mask we can safely keep a larger bounded runway ready. */
+        /* MOBILE 720p SCROLL RUNWAY
+           Start decoding the later Scroll_01 frames well BEFORE the user reaches them.
+           Mobile now stays scroll-driven through frame 52 onward, so this runway is purely
+           a look-ahead cache rather than a blocking autoplay dependency. */
         if (MOBILE_RUNTIME && userScrollDirection > 0 &&
             targetScrollFrame >= MOBILE_AUTOPLAY_WARMUP_FRAME &&
             targetScrollFrame < BACKGROUND_AUTOPLAY_START_FRAME + 1) {
@@ -10602,7 +10618,12 @@ void main(){
         /* Scroll_01 leaves manual scrubbing at frame 52. While that one forward run owns
            the background, wheel/touch input is locked. It crosses frame 60 and starts the
            first story autoplay from the background renderer itself. */
-        if (targetScrollFrame >= BACKGROUND_AUTOPLAY_START_FRAME &&
+        /* Desktop keeps the authored frame-52 -> frame-108 timed autoplay. Mobile is
+           intentionally scroll-driven through the same frames: the old mobile autoplay
+           stopped dead whenever its next 720p JPG had not decoded yet, turning ordinary
+           network/decode latency into a visible freeze. */
+        if (!MOBILE_RUNTIME &&
+            targetScrollFrame >= BACKGROUND_AUTOPLAY_START_FRAME &&
             !backgroundAutoplayActive && !backgroundAutoplayComplete &&
             !holdEnvReverseFrameLock && userScrollDirection > 0) {
           backgroundReverseActive = false;
@@ -11606,7 +11627,16 @@ void main(){
         } else {
           mobileTimelineTouchSource = 'page';
         }
-      }, { passive: true });
+
+        /* At the completed thumbnail scene, claim the gesture immediately so Safari/
+           Chrome cannot move the iframe's own scroll position before our handoff logic
+           has measured direction. Controls remain fully tappable; touch-action:none on
+           the stage removes only native panning. */
+        if (moodClipComplete && !moodClipActive && parentScrollHandoffEnabled &&
+            mobileTimelineTouchSource !== 'control' && event.cancelable) {
+          event.preventDefault();
+        }
+      }, { passive: false });
 
       window.addEventListener('touchmove', event => {
         if (!MOBILE_RUNTIME) {
@@ -11624,6 +11654,13 @@ void main(){
         const totalX = touch.clientX - mobileTimelineTouchStartX;
         const totalY = touch.clientY - mobileTimelineTouchStartY;
         const absX = Math.abs(totalX), absY = Math.abs(totalY);
+
+        /* The final thumbnail scene is pinned from the very first movement. This happens
+           before gesture thresholds and before the control-source early return, so no
+           part of the iframe can physically slide upward under a finger. */
+        if (moodClipComplete && !moodClipActive && parentScrollHandoffEnabled && event.cancelable) {
+          event.preventDefault();
+        }
 
         /* Sliders/arrows/dots/product buttons are self-contained controls. Never let a
            slightly diagonal finger movement pull the page/story away from the mood section. */
