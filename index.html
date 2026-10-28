@@ -5527,6 +5527,13 @@
       let woodPanReleaseElapsed = 0;
       let woodPanReleaseDuration = 0;
       let woodPanReleaseStartVelocity = 34;
+      /* Profile changes never alter pan direction. They only add a temporary speed pulse
+         to the one continuous texture movement, then ease back to normal cruise. */
+      let woodProfileBoostActive = false;
+      let woodProfileBoostElapsed = 0;
+      const WOOD_PROFILE_BOOST_IN_DURATION = 0.42;
+      const WOOD_PROFILE_BOOST_OUT_DURATION = 1.28;
+      const WOOD_PROFILE_BOOST_PEAK = 1.58;
       let woodViewerInteractionEnabled = false;
       const WOOD_PAN_AUTO_SPEED = 34;
       const WOOD_PAN_DRAG_SAMPLE_EASE = 0.58;
@@ -6885,7 +6892,18 @@
         woodViewerStripIncoming.classList.toggle('is-neo-lumber', incomingNeo);
       }
 
-      async function transitionWoodgrainProfile(productLabel, direction = 1) {
+      function startWoodProfileSpeedPulse() {
+        /* Preserve whichever direction the texture is already travelling. A profile click
+           is a speed accent only — never a direction command. */
+        const direction = Math.sign(woodPanVelocity) || woodPanAutoDirection || 1;
+        woodPanAutoDirection = direction;
+        woodPanReleaseActive = false;
+        woodProfileBoostElapsed = 0;
+        woodProfileBoostActive = true;
+        /* Do not snap velocity here. updateWoodStripLoop eases into the boost. */
+      }
+
+      async function transitionWoodgrainProfile(productLabel) {
         const activeMood = MOOD_ITEMS[activeMoodIndex];
         const nextPath = resolveWoodgrainPath(productLabel, activeMood.name);
         const nextOverlay = resolveWoodgrainOverlayPath(productLabel);
@@ -6904,11 +6922,15 @@
           console.warn('Could not preload product woodgrain:', productLabel, nextPath, error);
         }
 
+        /* Both textures occupy the exact same moving coordinate system. There is no
+           independent translate animation to fight the continuous background pan. */
         syncNeoLumberTransparency(activeProductLabel, productLabel);
         woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(nextPath)}")`;
         woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
         woodViewerStripIncoming.style.opacity = '0';
-        woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
+        woodViewerStripIncoming.style.transform = 'translate3d(0,0,0)';
+
+        startWoodProfileSpeedPulse();
 
         const overlayOut = woodViewerOverlay ? woodViewerOverlay.animate(
           [{ opacity: getComputedStyle(woodViewerOverlay).opacity }, { opacity: 0 }],
@@ -6918,14 +6940,14 @@
         const woodOut = woodViewerStrip.animate(
           [
             { opacity: 1, transform: 'translate3d(0,0,0)' },
-            { opacity: 0, transform: `translate3d(${direction > 0 ? -4 : 4}%,0,0)` }
+            { opacity: 0, transform: 'translate3d(0,0,0)' }
           ],
           { duration: 820, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
         );
 
         const woodIn = woodViewerStripIncoming.animate(
           [
-            { opacity: .08, transform: `translate3d(${direction > 0 ? 4 : -4}%,0,0)` },
+            { opacity: .08, transform: 'translate3d(0,0,0)' },
             { opacity: 1, transform: 'translate3d(0,0,0)' }
           ],
           { duration: 1080, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
@@ -6947,7 +6969,7 @@
         woodViewerStrip.style.opacity = '1';
         woodViewerStrip.style.transform = 'translate3d(0,0,0)';
         woodViewerStripIncoming.style.opacity = '0';
-        woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
+        woodViewerStripIncoming.style.transform = 'translate3d(0,0,0)';
         setWoodViewerOverlay(nextOverlay);
         setActiveProductButton(productLabel);
         setActiveProductName(productLabel);
@@ -7544,11 +7566,7 @@
         productThumbButtons.querySelectorAll('.productThumbButton').forEach((button, buttonIndex) => {
           button.addEventListener('click', () => {
             const label = button.dataset.productLabel || PRODUCT_THUMBS[buttonIndex]?.label || 'LUX LAP';
-            /* The texture has one continuous physical pan direction. Profile index order
-               must never reverse that motion for the duration of a swap, otherwise the
-               incoming texture appears to move backward and then flips direction again. */
-            const direction = Math.sign(woodPanVelocity) || woodPanAutoDirection || 1;
-            transitionWoodgrainProfile(label, direction);
+            transitionWoodgrainProfile(label);
           });
         });
 
@@ -7590,20 +7608,37 @@
           return;
         }
 
-        const targetVelocity = WOOD_PAN_AUTO_SPEED * woodPanAutoDirection;
+        const baseVelocity = WOOD_PAN_AUTO_SPEED * woodPanAutoDirection;
         if (woodPanReleaseActive) {
           woodPanReleaseElapsed += dt;
           const t = clamp(woodPanReleaseElapsed / Math.max(.001, woodPanReleaseDuration), 0, 1);
           /* Smootherstep starts with almost no acceleration, so the texture genuinely keeps
              the release speed for a beat before gradually settling into normal cruise. */
           const eased = smootherstep01(t);
-          woodPanVelocity = lerp(woodPanReleaseStartVelocity, targetVelocity, eased);
+          woodPanVelocity = lerp(woodPanReleaseStartVelocity, baseVelocity, eased);
           if (t >= 1) {
-            woodPanVelocity = targetVelocity;
+            woodPanVelocity = baseVelocity;
             woodPanReleaseActive = false;
           }
+        } else if (woodProfileBoostActive) {
+          woodProfileBoostElapsed += dt;
+          const total = WOOD_PROFILE_BOOST_IN_DURATION + WOOD_PROFILE_BOOST_OUT_DURATION;
+          let multiplier = 1;
+          if (woodProfileBoostElapsed <= WOOD_PROFILE_BOOST_IN_DURATION) {
+            const t = clamp(woodProfileBoostElapsed / WOOD_PROFILE_BOOST_IN_DURATION, 0, 1);
+            multiplier = lerp(1, WOOD_PROFILE_BOOST_PEAK, smootherstep01(t));
+          } else {
+            const t = clamp((woodProfileBoostElapsed - WOOD_PROFILE_BOOST_IN_DURATION) / WOOD_PROFILE_BOOST_OUT_DURATION, 0, 1);
+            multiplier = lerp(WOOD_PROFILE_BOOST_PEAK, 1, smootherstep01(t));
+          }
+          woodPanVelocity = baseVelocity * multiplier;
+          if (woodProfileBoostElapsed >= total) {
+            woodProfileBoostActive = false;
+            woodProfileBoostElapsed = 0;
+            woodPanVelocity = baseVelocity;
+          }
         } else {
-          woodPanVelocity = targetVelocity;
+          woodPanVelocity = baseVelocity;
         }
 
         woodLoopOffset += dt * woodPanVelocity;
