@@ -5531,9 +5531,9 @@
          to the one continuous texture movement, then ease back to normal cruise. */
       let woodProfileBoostActive = false;
       let woodProfileBoostElapsed = 0;
-      const WOOD_PROFILE_BOOST_IN_DURATION = 0.42;
-      const WOOD_PROFILE_BOOST_OUT_DURATION = 1.28;
-      const WOOD_PROFILE_BOOST_PEAK = 1.58;
+      const WOOD_PROFILE_BOOST_IN_DURATION = 0.55;
+      const WOOD_PROFILE_BOOST_OUT_DURATION = 1.55;
+      const WOOD_PROFILE_BOOST_PEAK = 1.48;
       let woodViewerInteractionEnabled = false;
       const WOOD_PAN_AUTO_SPEED = 34;
       const WOOD_PAN_DRAG_SAMPLE_EASE = 0.58;
@@ -7057,12 +7057,16 @@
         }
         await incomingVideoReady;
 
-        /* Prepare the incoming woodgrain at the same live pan position. */
+        /* Prepare the incoming woodgrain at the exact same live pan position.
+           Next/Previous and the nine white dots must NEVER add their own horizontal
+           movement: the single continuous pan owns direction. A change only adds a
+           gentle speed pulse in that existing direction. */
         syncNeoLumberTransparency(activeProductLabel, activeProductLabel);
         woodViewerStripIncoming.style.backgroundImage = `url("${encodeURI(toWoodgrainPath)}")`;
         woodViewerStripIncoming.style.backgroundPosition = `${woodLoopOffset}px 0px`;
         woodViewerStripIncoming.style.opacity = '0';
-        woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
+        woodViewerStripIncoming.style.transform = 'translate3d(0,0,0)';
+        startWoodProfileSpeedPulse();
 
         /* Blend to the matching MP3 in lockstep with the thumbnail/image fade. */
         startMoodAudioCrossfade(activeMoodIndex, targetIndex);
@@ -7073,18 +7077,20 @@
 
         const titlePromise = animateMoodTitle(toItem.name, direction);
 
-        /* Woodgrain swap: keep the two layers overlapped throughout so there is never a gap. */
+        /* Woodgrain swap: opacity only. Both texture layers keep receiving the SAME
+           live background-position from applyWoodViewerPanPosition(), so the visual
+           motion can only continue in one direction while the speed pulse runs. */
         const woodOut = woodViewerStrip.animate(
           [
             { opacity: 1, transform: 'translate3d(0,0,0)' },
-            { opacity: 0, transform: `translate3d(${direction > 0 ? -4 : 4}%,0,0)` }
+            { opacity: 0, transform: 'translate3d(0,0,0)' }
           ],
           { duration: 820, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
         );
 
         const woodIn = woodViewerStripIncoming.animate(
           [
-            { opacity: .08, transform: `translate3d(${direction > 0 ? 4 : -4}%,0,0)` },
+            { opacity: .08, transform: 'translate3d(0,0,0)' },
             { opacity: 1, transform: 'translate3d(0,0,0)' }
           ],
           { duration: 1080, delay: 0, easing: MOOD_CHANGE_EASE, fill: 'forwards' }
@@ -7178,7 +7184,7 @@
         woodViewerStrip.style.opacity = '1';
         woodViewerStrip.style.transform = 'translate3d(0,0,0)';
         woodViewerStripIncoming.style.opacity = '0';
-        woodViewerStripIncoming.style.transform = `translate3d(${direction > 0 ? 4 : -4}%,0,0)`;
+        woodViewerStripIncoming.style.transform = 'translate3d(0,0,0)';
         setWoodViewerOverlay(activeOverlayPath);
 
         /* Commit the active background. All unused videos pause, but retain their
