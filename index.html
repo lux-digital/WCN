@@ -5531,9 +5531,10 @@
          to the one continuous texture movement, then ease back to normal cruise. */
       let woodProfileBoostActive = false;
       let woodProfileBoostElapsed = 0;
-      const WOOD_PROFILE_BOOST_IN_DURATION = 0.55;
-      const WOOD_PROFILE_BOOST_OUT_DURATION = 1.55;
-      const WOOD_PROFILE_BOOST_PEAK = 1.48;
+      const WOOD_PROFILE_BOOST_IN_DURATION = 0.48;
+      const WOOD_PROFILE_BOOST_HOLD_DURATION = 0.34;
+      const WOOD_PROFILE_BOOST_OUT_DURATION = 1.70;
+      const WOOD_PROFILE_BOOST_PEAK = 2.55;
       let woodViewerInteractionEnabled = false;
       const WOOD_PAN_AUTO_SPEED = 34;
       const WOOD_PAN_DRAG_SAMPLE_EASE = 0.58;
@@ -7628,13 +7629,18 @@
           }
         } else if (woodProfileBoostActive) {
           woodProfileBoostElapsed += dt;
-          const total = WOOD_PROFILE_BOOST_IN_DURATION + WOOD_PROFILE_BOOST_OUT_DURATION;
+          const total = WOOD_PROFILE_BOOST_IN_DURATION + WOOD_PROFILE_BOOST_HOLD_DURATION + WOOD_PROFILE_BOOST_OUT_DURATION;
           let multiplier = 1;
           if (woodProfileBoostElapsed <= WOOD_PROFILE_BOOST_IN_DURATION) {
+            // Clearly visible ease-in: accelerate only in the EXISTING direction.
             const t = clamp(woodProfileBoostElapsed / WOOD_PROFILE_BOOST_IN_DURATION, 0, 1);
             multiplier = lerp(1, WOOD_PROFILE_BOOST_PEAK, smootherstep01(t));
+          } else if (woodProfileBoostElapsed <= WOOD_PROFILE_BOOST_IN_DURATION + WOOD_PROFILE_BOOST_HOLD_DURATION) {
+            // Hold the faster speed briefly so the pulse reads visually during the swap.
+            multiplier = WOOD_PROFILE_BOOST_PEAK;
           } else {
-            const t = clamp((woodProfileBoostElapsed - WOOD_PROFILE_BOOST_IN_DURATION) / WOOD_PROFILE_BOOST_OUT_DURATION, 0, 1);
+            // Longer eased return to the exact original cruise speed/direction.
+            const t = clamp((woodProfileBoostElapsed - WOOD_PROFILE_BOOST_IN_DURATION - WOOD_PROFILE_BOOST_HOLD_DURATION) / WOOD_PROFILE_BOOST_OUT_DURATION, 0, 1);
             multiplier = lerp(WOOD_PROFILE_BOOST_PEAK, 1, smootherstep01(t));
           }
           woodPanVelocity = baseVelocity * multiplier;
