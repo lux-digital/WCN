@@ -3098,6 +3098,11 @@
       opacity: 0;
       transform: translate3d(-50%, 0, 0) scale(.24);
       pointer-events: none;
+      /* Match the deliberate 1.45s shortcut-button exit. This duration applies while
+         ENTERING is-moving; removing the class still uses the normal reveal timing above. */
+      transition:
+        opacity 1.45s cubic-bezier(.22, 1, .36, 1),
+        transform 1.45s cubic-bezier(.22, 1, .36, 1);
     }
     #volumeControl.is-docked {
       top: max(9px, env(safe-area-inset-top));
@@ -7539,7 +7544,10 @@
         productThumbButtons.querySelectorAll('.productThumbButton').forEach((button, buttonIndex) => {
           button.addEventListener('click', () => {
             const label = button.dataset.productLabel || PRODUCT_THUMBS[buttonIndex]?.label || 'LUX LAP';
-            const direction = (PRODUCT_THUMBS.findIndex(item => item.label === label) >= PRODUCT_THUMBS.findIndex(item => item.label === activeProductLabel)) ? 1 : -1;
+            /* The texture has one continuous physical pan direction. Profile index order
+               must never reverse that motion for the duration of a swap, otherwise the
+               incoming texture appears to move backward and then flips direction again. */
+            const direction = Math.sign(woodPanVelocity) || woodPanAutoDirection || 1;
             transitionWoodgrainProfile(label, direction);
           });
         });
@@ -8885,7 +8893,7 @@ void main(){
         const buttonHeight = Math.max(MOBILE_RUNTIME ? 38 : 40, ...linkButtons.map(button => button.offsetHeight || 0));
         const volumeHeight = volumeButton ? (volumeButton.offsetHeight || (MOBILE_RUNTIME ? 54 : 58)) : (MOBILE_RUNTIME ? 54 : 58);
         const artworkBottom = getOpeningArtworkBottom(stageRect);
-        const buttonGap = clamp(stageRect.height * .010, 7, 12);
+        const buttonGap = clamp(stageRect.height * .022, 16, 28);
         const speakerGap = clamp(stageRect.height * .008, 6, 10);
         const minCueGap = 7;
         const minCueSize = MOBILE_RUNTIME ? 72 : 92;
@@ -8970,6 +8978,11 @@ void main(){
 
       function showVolumeAtDestination() {
         volumeMoveTimer = 0;
+        /* Relocate ONLY after the icon has completed its fade/scale-out. Removing the
+           opening inline top earlier made the undocked icon visibly jump to the old
+           --volume-opening-top fallback before it disappeared. */
+        if (volumeDocked) volumeControl.style.removeProperty('top');
+        else syncVolumeOpeningGap();
         volumeControl.classList.toggle('is-docked', volumeDocked);
         stage.classList.toggle('volume-ui-docked', volumeDocked);
         /* The slider appears only after the icon has arrived at top center. */
@@ -8988,8 +9001,9 @@ void main(){
         if (!volumeControl.classList.contains('is-ready')) return;
         if (volumeDocked === dock && !replay && !volumeMoveTimer) return;
         volumeDocked = dock;
-        if (dock) volumeControl.style.removeProperty('top');
-        else syncVolumeOpeningGap();
+        /* Keep the icon physically where it is while it exits. Its destination top/class
+           is applied by showVolumeAtDestination() only once opacity has reached zero. */
+        if (!dock) syncVolumeOpeningGap();
         if (volumeMoveTimer) clearTimeout(volumeMoveTimer);
         if (volumeMoveRaf) cancelAnimationFrame(volumeMoveRaf);
         volumeMoveRaf = 0;
@@ -8998,7 +9012,7 @@ void main(){
         // Animating it here as well replayed the entrance a SECOND time and caused
         // a visible flash on the way back to the top.
         /* Location swaps only while invisible: shrink/fade out, then fade in. */
-        volumeMoveTimer = setTimeout(showVolumeAtDestination, 840);
+        volumeMoveTimer = setTimeout(showVolumeAtDestination, 1450);
       }
 
       function syncVolumePositionWithScroll() {
