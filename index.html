@@ -5531,10 +5531,16 @@
          to the one continuous texture movement, then ease back to normal cruise. */
       let woodProfileBoostActive = false;
       let woodProfileBoostElapsed = 0;
-      const WOOD_PROFILE_BOOST_IN_DURATION = 0.48;
-      const WOOD_PROFILE_BOOST_HOLD_DURATION = 0.34;
-      const WOOD_PROFILE_BOOST_OUT_DURATION = 1.70;
-      const WOOD_PROFILE_BOOST_PEAK = 2.55;
+      let woodProfileBoostStartMultiplier = 1;
+      /* A profile/mood swap should be visibly felt in the continuously moving woodgrain.
+         The normal cruise is only 34px/s, so a 2–3x multiplier was nearly invisible on
+         a large viewer. This intentionally rises to a much stronger peak, but does so
+         with a long ease-in and an even longer ease-out so it reads as acceleration,
+         never as a jump. */
+      const WOOD_PROFILE_BOOST_IN_DURATION = 0.72;
+      const WOOD_PROFILE_BOOST_HOLD_DURATION = 0.32;
+      const WOOD_PROFILE_BOOST_OUT_DURATION = 1.85;
+      const WOOD_PROFILE_BOOST_PEAK = 7.0;
       let woodViewerInteractionEnabled = false;
       const WOOD_PAN_AUTO_SPEED = 34;
       const WOOD_PAN_DRAG_SAMPLE_EASE = 0.58;
@@ -6894,14 +6900,17 @@
       }
 
       function startWoodProfileSpeedPulse() {
-        /* Preserve whichever direction the texture is already travelling. A profile click
-           is a speed accent only — never a direction command. */
+        /* Preserve whichever direction the texture is already travelling. A thumbnail
+           change is a speed accent only — never a direction command. If another change
+           is clicked while a pulse is already running, begin from the CURRENT visible
+           speed instead of dropping back to cruise first. */
         const direction = Math.sign(woodPanVelocity) || woodPanAutoDirection || 1;
         woodPanAutoDirection = direction;
         woodPanReleaseActive = false;
+        const baseSpeed = Math.max(1, WOOD_PAN_AUTO_SPEED);
+        woodProfileBoostStartMultiplier = clamp(Math.abs(woodPanVelocity) / baseSpeed, 1, WOOD_PROFILE_BOOST_PEAK);
         woodProfileBoostElapsed = 0;
         woodProfileBoostActive = true;
-        /* Do not snap velocity here. updateWoodStripLoop eases into the boost. */
       }
 
       async function transitionWoodgrainProfile(productLabel) {
@@ -7634,7 +7643,7 @@
           if (woodProfileBoostElapsed <= WOOD_PROFILE_BOOST_IN_DURATION) {
             // Clearly visible ease-in: accelerate only in the EXISTING direction.
             const t = clamp(woodProfileBoostElapsed / WOOD_PROFILE_BOOST_IN_DURATION, 0, 1);
-            multiplier = lerp(1, WOOD_PROFILE_BOOST_PEAK, smootherstep01(t));
+            multiplier = lerp(woodProfileBoostStartMultiplier, WOOD_PROFILE_BOOST_PEAK, smootherstep01(t));
           } else if (woodProfileBoostElapsed <= WOOD_PROFILE_BOOST_IN_DURATION + WOOD_PROFILE_BOOST_HOLD_DURATION) {
             // Hold the faster speed briefly so the pulse reads visually during the swap.
             multiplier = WOOD_PROFILE_BOOST_PEAK;
