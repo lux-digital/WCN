@@ -378,7 +378,8 @@
       /* Once the final animated-thumbnail scene owns mobile handoff, native iframe
          scrolling must not move the sticky stage even by the first few pixels of a
          swipe. Vertical travel is forwarded to Elementor manually from JS instead. */
-      #stage.wcn-mobile-handoff-pinned {
+      #stage.wcn-mobile-handoff-pinned,
+      #stage.wcn-mobile-story-pinned {
         touch-action: none !important;
         overscroll-behavior-y: none !important;
       }
@@ -10590,7 +10591,12 @@ void main(){
         targetStorySequenceProgress = clamp(storyTargetFrame / STORY_LAST_FRAME, 0, 1);
 
         let autoplayStarted = false;
-        if (!storySequenceAutoplayActive && !moodClipActive) {
+        /* MOBILE STORY SCRUB
+           square.json is deliberately gesture-driven on phones. Timed story autoplay
+           made the browser alternate between JS-owned and native scrolling, which is
+           exactly what produced the small container bounce on every new swipe. Desktop
+           keeps the authored autoplay ranges unchanged. */
+        if (!MOBILE_RUNTIME && !storySequenceAutoplayActive && !moodClipActive) {
           if (userScrollDirection > 0) {
             /* The first forward clip is special: Scroll_01 crossing frame 60 starts it.
                Every later range is triggered only by crossing its authored frame boundary. */
@@ -10614,6 +10620,14 @@ void main(){
           }
         }
         if (!storySequenceAutoplayActive && !autoplayStarted) lastManualStoryFrame = storyTargetFrame;
+
+        /* On mobile the final square.json frame is reached by swiping rather than by the
+           fifth timed autoplay. Start the existing final mood transition at that same
+           authored endpoint so the visual sequence remains identical. */
+        if (MOBILE_RUNTIME && !moodClipActive && !moodClipComplete &&
+            userScrollDirection > 0 && storyTargetFrame >= STORY_LAST_FRAME - .35) {
+          startMoodClip(1);
+        }
 
         /* Scroll_01 leaves manual scrubbing at frame 52. While that one forward run owns
            the background, wheel/touch input is locked. It crosses frame 60 and starts the
@@ -11569,7 +11583,11 @@ void main(){
               return;
             }
           }
-          requestParentPageScroll(deltaPx);
+          if (deltaPx > 0 && !parentOverlayActive) {
+            postElementorHandoffMessage('scroll-parent-end', { velocityY: 0 });
+          } else {
+            requestParentPageScroll(deltaPx);
+          }
           return;
         }
 
@@ -11603,6 +11621,12 @@ void main(){
         window.scrollBy(0, deltaPx * reverseMultiplier);
       }, { passive: false });
 
+      function mobileStoryOwnsGesture() {
+        if (!MOBILE_RUNTIME || moodClipActive || moodClipComplete) return false;
+        const raw = calculateRawScrollProgress();
+        return raw >= STORY_SEQUENCE_START - .006 && raw <= STORY_SEQUENCE_HOLD_END + .004;
+      }
+
       window.addEventListener('touchstart', event => {
         if (!MOBILE_RUNTIME || !event.touches || event.touches.length !== 1) return;
         const touch = event.touches[0];
@@ -11632,10 +11656,13 @@ void main(){
            Chrome cannot move the iframe's own scroll position before our handoff logic
            has measured direction. Controls remain fully tappable; touch-action:none on
            the stage removes only native panning. */
-        if (moodClipComplete && !moodClipActive && parentScrollHandoffEnabled &&
+        if (((moodClipComplete && !moodClipActive && parentScrollHandoffEnabled) ||
+             (mobileStoryOwnsGesture() && mobileTimelineTouchSource === 'page')) &&
             mobileTimelineTouchSource !== 'control' && event.cancelable) {
           event.preventDefault();
         }
+        stage.classList.toggle('wcn-mobile-story-pinned',
+          mobileStoryOwnsGesture() && mobileTimelineTouchSource === 'page');
       }, { passive: false });
 
       window.addEventListener('touchmove', event => {
@@ -11685,6 +11712,19 @@ void main(){
 
         const desiredDirection = totalY < 0 ? 1 : -1;
 
+        /* MOBILE SQUARE.JSON SCRUB
+           Own the whole story gesture, not only its authored autoplay islands. Native
+           touch scrolling is suppressed and the same finger delta advances the iframe
+           scroll position manually. The sticky stage therefore never rubber-bands, while
+           square.json still follows the user's repeated upward/downward swipes. */
+        if (mobileStoryOwnsGesture() && mobileTimelineTouchSource === 'page') {
+          event.preventDefault();
+          mobileTimelineTouchDirection = desiredDirection;
+          const storyStep = clamp(-incrementalTouchY * 1.05, -92, 92);
+          if (Math.abs(storyStep) > .01) window.scrollBy(0, storyStep);
+          return;
+        }
+
         /* MOBILE REVERSE JPG SCRUB: iOS native rubber-band scroll could move
            the entire sticky experience, then snap it back while the JPGs were
            *also* running backwards. Own only this narrow manual JPG segment;
@@ -11704,20 +11744,19 @@ void main(){
             (parentOverlayActive || desiredDirection > 0)) {
           event.preventDefault();
           mobileTimelineTouchDirection = desiredDirection;
-          /* A swipe begun during the hold may NOT suddenly push the Gallery in the
-             middle of that same gesture when the hold timer expires. */
-          if (desiredDirection > 0 && !parentOverlayActive && !moodExitIsReady()) return;
-          /* Finger upward = page downward, matching native touch-page direction.
-             Send true 1:1 travel DURING the swipe, plus a filtered velocity sample.
-             Elementor uses that release velocity to continue coasting with native-like
-             deceleration after the finger lifts. */
-          const parentDeltaY = -incrementalTouchY;
-          const instantParentVelocity = clamp(parentDeltaY / incrementalTouchDt * 1000, -5200, 5200);
-          mobileHandoffVelocityY = mobileHandoffGestureActive
-            ? mobileHandoffVelocityY * .58 + instantParentVelocity * .42
-            : instantParentVelocity;
-          mobileHandoffGestureActive = true;
-          requestParentPageScroll(parentDeltaY);
+          /* ONE HANDOFF MOTION
+             The swipe is now a trigger, not the first half of the Gallery movement.
+             Previously touchmove pushed WordPress 1:1 and touchend started a second eased
+             animation, so changing the easing could barely affect the visible motion.
+             Start the exact same parent animation used by PROJECT GALLERY once, then let
+             Elementor own the entire accelerate/decelerate curve. */
+          if (desiredDirection > 0 && !parentOverlayActive) {
+            if (!moodExitIsReady()) return;
+            if (!mobileHandoffGestureActive) {
+              mobileHandoffGestureActive = true;
+              postElementorHandoffMessage('scroll-parent-end', { velocityY: 0 });
+            }
+          }
           return;
         }
 
@@ -11751,11 +11790,7 @@ void main(){
       }, { passive: false });
 
       window.addEventListener('touchend', () => {
-        if (MOBILE_RUNTIME && mobileHandoffGestureActive && parentScrollHandoffEnabled) {
-          postElementorHandoffMessage('scroll-parent-end', {
-            velocityY: clamp(mobileHandoffVelocityY, -5200, 5200)
-          });
-        }
+        stage.classList.remove('wcn-mobile-story-pinned');
         mobileTimelineTouchId = null;
         mobileTimelineTouchDirection = 0;
         mobileTimelineTouchSource = 'page';
@@ -11764,9 +11799,7 @@ void main(){
         mobileTimelineTouchLastAt = 0;
       }, { passive: true });
       window.addEventListener('touchcancel', () => {
-        if (MOBILE_RUNTIME && mobileHandoffGestureActive && parentScrollHandoffEnabled) {
-          postElementorHandoffMessage('scroll-parent-end', { velocityY: 0 });
-        }
+        stage.classList.remove('wcn-mobile-story-pinned');
         mobileTimelineTouchId = null;
         mobileTimelineTouchDirection = 0;
         mobileTimelineTouchSource = 'page';
