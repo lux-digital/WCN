@@ -3270,14 +3270,13 @@
       position: absolute;
       inset: 1px;
       border-radius: 50%;
-      border: 1px solid rgba(255,255,255,0);
+      border: 0;
       background: radial-gradient(circle, rgba(255,255,255,.11) 0%, rgba(255,255,255,.025) 42%, transparent 72%);
       opacity: 0;
       transform: scale(.78);
       pointer-events: none;
       transition: opacity .42s cubic-bezier(.22,1,.36,1),
-                  transform .58s cubic-bezier(.22,1,.36,1),
-                  border-color .38s ease;
+                  transform .58s cubic-bezier(.22,1,.36,1);
     }
     #volumeLottie,
     #volumeFallbackIcon {
@@ -3291,7 +3290,6 @@
       #volumeButton:focus-visible::before {
         opacity: .95;
         transform: scale(1.19);
-        border-color: rgba(255,255,255,.20);
       }
       #volumeButton:hover #volumeLottie,
       #volumeButton:hover #volumeFallbackIcon,
@@ -4467,7 +4465,7 @@
           <input id="volumeSlider" tabindex="-1" type="range" min="0" max="100" value="80" step="1" aria-label="Audio volume" aria-valuetext="80 percent">
         </div>
       </div>
-      <!-- Sound/ambient.mp3 plays throughout; ambient/ocean/woodgrain MP3s are mixed in JS. -->
+      <!-- Ambient/Ocean remain external; animated-thumbnail environment audio is embedded in each MP4. -->
       <audio id="experienceAudio" loop preload="none"></audio>
 
 
@@ -4778,11 +4776,13 @@
         AUDIO_TRACK_PATH = 'Sound/ambient.mp3', // continuous soundscape bed; loops across all scenes
         OCEAN_SOUND_PATH = 'Sound/Ocean.mp3',
         OCEAN_START_LEVEL = 0.12, // low wave bed at the top; grows as water approaches
-        SOUND_AMBIENT_MIX = 0.72, // independent from foreground ocean/woodgrain effects
-        SOUND_ENVIRONMENT_MIX = 1.0,
-        SOUND_OCEAN_MIX = 0.30, // preserve the existing ocean/ambience/woodgrain balance
-        MASTER_AUDIO_BOOST = 3.5, // ~+10.9 dB before compression, across ALL sound layers
-        MOOD_AUDIO_CROSSFADE_MS = 1550,
+        SOUND_AMBIENT_MIX = 0.72,
+        SOUND_OCEAN_MIX = 0.05,
+        MOOD_AMBIENT_BED_LEVEL = 0.20, // ambient.mp3 settles to 20% as the animated-thumbnail scene arrives
+        MOOD_OCEAN_BED_LEVEL = 0.00, // Ocean.mp3 fades completely away in the animated-thumbnail scene
+        MOOD_VIDEO_AUDIO_MIX = 0.42, // one consistent embedded-MP4 audio level, still controlled by the master slider
+        MASTER_AUDIO_BOOST = 3.5, // ~+10.9 dB before compression, across ALL routed sound layers
+        MOOD_VIDEO_AUDIO_CROSSFADE_MS = 900, // match the established visual background crossfade without changing it
         STORY_SEQUENCE_LOTTIE = 'square.json', STORY_SEQUENCE_FRAME_COUNT = 369;
 
       function isMobilePanoramaDevice() {
@@ -5264,8 +5264,11 @@
       }
       function playMoodVideo(video) {
         if (!video) return;
-        video.muted = true;
         video.loop = true;
+        /* Visual playback is always allowed to continue. Before sound has been enabled
+           the MP4 stays muted; after the user's sound gesture its audio level is owned
+           independently by updateSoundscape(), never by the visual crossfade. */
+        if (!soundEnabled) video.muted = true;
         const result = video.play();
         if (result && typeof result.catch === 'function') result.catch(() => {});
       }
@@ -5439,9 +5442,10 @@
       let volumeAnimation = null, volumeLottieReady = false;
       let soundEnabled = false, volumeEverActivated = false, volumeDocked = false;
       let moodAudioTransition = null;
-      const soundscapeTracks = new Map(); // Only the audible woodgrain and its incoming neighbor play.
+      const soundscapeTracks = new Map(); // Ambient + ocean only; woodgrain sound now comes from each MP4 itself.
       let masterAudioContext = null, masterAudioInput = null, masterAudioLimiter = null;
       const connectedAudioElements = new WeakSet();
+      const moodVideoAudioNodes = new Map();
       let scrollInputEnergy = 0, scrollInputLastAt = 0, timelinePlaybackRate = 1;
       let mobileTimelineTouchLastY = 0;
       let mobileTimelineTouchLastAt = 0;
@@ -7047,7 +7051,7 @@
         if (targetIndex < 0 || targetIndex >= MOOD_ITEMS.length) return;
         if (getMoodVisualProgress() < MOOD_VIEWER_START - .006) return;
 
-        primeMoodAudioOnGesture(targetIndex);
+        primeMoodVideoAudioOnGesture(targetIndex);
         moodTransitioning = true;
         if (!moodBackgroundUserInteracted) {
           cancelMoodBackgroundAutoFade();
@@ -7095,7 +7099,8 @@
         woodViewerStripIncoming.style.transform = 'translate3d(0,0,0)';
         startWoodProfileSpeedPulse();
 
-        /* Blend to the matching MP3 in lockstep with the thumbnail/image fade. */
+        /* Crossfade the embedded audio from the same two MP4s. This is audio-only;
+           the existing visual background transition below is intentionally untouched. */
         startMoodAudioCrossfade(activeMoodIndex, targetIndex);
 
         /* No full-screen dark overlay in this comparison build. */
@@ -7536,6 +7541,7 @@
         moodVideoPlayers.forEach(video => {
           if (!video) return;
           video.muted = true;
+          video.volume = 0;
           video.loop = true;
           if (video !== moodVideo || MOBILE_RUNTIME) video.pause();
         });
@@ -9098,20 +9104,20 @@ void main(){
       }
 
       /* =========================================================
-         LAYERED SOUNDSCAPE — every track starts only after the user's
-         audio-button click (browser autoplay policy).
+         LAYERED SOUNDSCAPE — every audible layer is still gated by the
+         user's sound-button click for browser autoplay policy.
 
-         Sound/ambient.mp3  always loops while enabled.
-         Sound/Ocean.mp3    loops; grows with Scroll_01 frame 0 -> 52.
-         Sound/<WOODGRAIN TITLE>.mp3 loops; enters as white begins, then
-                               smoothly crossfades when woodgrains change.
+         Sound/ambient.mp3  + Sound/Ocean.mp3 remain the underlying bed.
+         As the animated-thumbnail scene arrives, that existing bed eases
+         down to 30% of its previous level instead of disappearing.
 
-         Use the exact MOOD_ITEMS names for future MP3 filenames.
-         The 80% slider is the MASTER gain applied to all layers.
+         Each Mood/*.mp4 now supplies its OWN looping environment sound.
+         Only the active MP4 is audible. During a woodgrain/background swap,
+         outgoing and incoming MP4 audio crossfade independently of — but on
+         the same timing as — the already-approved visual MP4 crossfade.
+
+         The 80% slider remains the MASTER level for every layer.
          ========================================================= */
-      /* HTMLMediaElement.volume is capped at 1.0; it cannot amplify quiet MP3s.
-         Route the existing layered mix through ONE Web Audio preamp + gentle limiter.
-         Create/resume the AudioContext only during the user's sound-button gesture. */
       function connectTrackToMasterAudio(track) {
         if (!track || !masterAudioContext || !masterAudioInput || connectedAudioElements.has(track.audio)) return;
         try {
@@ -9121,6 +9127,42 @@ void main(){
           track.mediaSource = source;
         } catch (error) {
           console.warn('[West Coast Naturals] Unable to connect sound to master output:', error);
+        }
+      }
+
+      function connectMoodVideoToMaster(video) {
+        if (!video || !masterAudioContext || !masterAudioInput || moodVideoAudioNodes.has(video)) return;
+        if (connectedAudioElements.has(video)) return;
+        try {
+          const source = masterAudioContext.createMediaElementSource(video);
+          const gain = masterAudioContext.createGain();
+          gain.gain.value = 0;
+          source.connect(gain);
+          gain.connect(masterAudioInput);
+          connectedAudioElements.add(video);
+          moodVideoAudioNodes.set(video, { source, gain });
+        } catch (error) {
+          /* If a browser refuses MediaElementSource for a video, direct element.volume
+             remains as a fallback and the visual video is never disturbed. */
+          console.warn('[West Coast Naturals] Unable to route MP4 audio through master output:', error);
+        }
+      }
+
+      function setMoodVideoAudioLevel(video, level) {
+        if (!video) return;
+        const safeLevel = clamp(Number(level) || 0, 0, 1);
+        const routed = moodVideoAudioNodes.get(video);
+        if (routed && masterAudioContext) {
+          video.muted = false;
+          video.volume = 1;
+          try {
+            routed.gain.gain.setValueAtTime(safeLevel, masterAudioContext.currentTime);
+          } catch (_) {
+            routed.gain.gain.value = safeLevel;
+          }
+        } else {
+          video.volume = safeLevel;
+          video.muted = !soundEnabled || safeLevel <= .0005;
         }
       }
 
@@ -9147,12 +9189,15 @@ void main(){
             masterAudioInput = preamp;
             masterAudioLimiter = limiter;
             for (const track of soundscapeTracks.values()) connectTrackToMasterAudio(track);
+            moodVideoPlayers.forEach(connectMoodVideoToMaster);
           } catch (error) {
             console.warn('[West Coast Naturals] Could not start amplified audio output:', error);
             try { if (masterAudioContext) masterAudioContext.close(); } catch (_) {}
             masterAudioContext = masterAudioInput = masterAudioLimiter = null;
             return;
           }
+        } else {
+          moodVideoPlayers.forEach(connectMoodVideoToMaster);
         }
         if (masterAudioContext.state === 'suspended') {
           masterAudioContext.resume().catch(error => {
@@ -9163,9 +9208,6 @@ void main(){
 
       function makeSoundscapeTrack(key, relativePath, existingElement = null) {
         if (soundscapeTracks.has(key)) return soundscapeTracks.get(key);
-        /* Elementor's FVDEMV media plugin replaces window.Audio with its own
-           constructor. Always create a genuine browser HTMLAudioElement instead
-           of calling the potentially overwritten global Audio function. */
         const audio = existingElement || document.createElement('audio');
         audio.loop = true;
         audio.preload = 'none';
@@ -9182,12 +9224,6 @@ void main(){
         soundscapeTracks.set(key, track);
         connectTrackToMasterAudio(track);
         return track;
-      }
-
-      function getMoodAudioTrack(index) {
-        if (index < 0 || index >= MOOD_ITEMS.length) return null;
-        const name = MOOD_ITEMS[index].name;
-        return makeSoundscapeTrack(`mood:${index}`, `Sound/${name}.mp3`);
       }
 
       function tryPlaySoundscapeTrack(track, userGesture = false) {
@@ -9215,15 +9251,29 @@ void main(){
         }
       }
 
-      function primeMoodAudioOnGesture(index) {
-        /* This runs synchronously when a woodgrain button is clicked, BEFORE any
-           asynchronous image preloading, for reliable mobile audio permission. */
+      function primeMoodVideoAudioOnGesture(index) {
+        /* Run synchronously from the sound button / Next / Previous / dot gesture so
+           mobile Safari and Chrome can authorize embedded MP4 audio before any awaits. */
         if (!soundEnabled) return;
-        const track = getMoodAudioTrack(index);
-        if (track) {
-          track.audio.volume = 0;
-          tryPlaySoundscapeTrack(track, true);
-        }
+        const video = getMoodMediaElement(index);
+        if (!video || video.tagName !== 'VIDEO') return;
+        connectMoodVideoToMaster(video);
+        setMoodVideoAudioLevel(video, 0);
+        video.loop = true;
+        video.muted = false;
+        const wasPaused = video.paused;
+        try {
+          const playResult = video.play();
+          if (playResult && typeof playResult.then === 'function' && wasPaused) {
+            playResult.then(() => {
+              /* If the thumbnail scene is not visible yet, a brief zero-volume play is
+                 enough to prime the element; stop decoding it until the scene needs it. */
+              if (getMoodVisualProgress() < MOOD_VIDEO_START - .01 && index === activeMoodIndex) {
+                video.pause();
+              }
+            }).catch(() => {});
+          }
+        } catch (_) {}
       }
 
       function startMoodAudioCrossfade(fromIndex, toIndex) {
@@ -9232,9 +9282,14 @@ void main(){
           to: toIndex,
           startedAt: performance.now()
         };
-        /* Other browsers permit this after the user's original audio gesture;
-           on mobile the destination has already been primed by the click. */
-        if (soundEnabled) tryPlaySoundscapeTrack(getMoodAudioTrack(toIndex));
+        if (soundEnabled) {
+          const incoming = getMoodMediaElement(toIndex);
+          if (incoming?.tagName === 'VIDEO') {
+            connectMoodVideoToMaster(incoming);
+            setMoodVideoAudioLevel(incoming, 0);
+            playMoodVideo(incoming);
+          }
+        }
       }
 
       function updateSoundscape(time = performance.now()) {
@@ -9245,8 +9300,6 @@ void main(){
         const ocean = soundscapeTracks.get('ocean');
         if (!ambient || !ocean) return;
 
-        /* The real JPG playhead, including timed autoplay, drives the waves. At
-           Scroll052 they reach full strength (now capped at 30%) near the water. */
         const displayedFrame = backgroundAutoplayActive
           ? backgroundAutoplayFrame : smoothScrollFrame;
         const oceanGrowth = smootherstep01(rangeProgress(
@@ -9254,51 +9307,42 @@ void main(){
         ));
         const oceanBeforeMood = OCEAN_START_LEVEL + (1 - OCEAN_START_LEVEL) * oceanGrowth;
 
-        /* The same progress that drives the white wash and new mood image drives
-           the actual sound mix, in both scroll directions and the timed mood clip. */
+        /* The same visual progress that reveals the thumbnail scene controls the mix.
+           ambient.mp3 eases from 100% to 20%; Ocean.mp3 eases fully to silence; the
+           active MP4 eases from 0 to its one consistent target level. Reverse scrolling
+           naturally restores the original ambient/ocean balance. */
         const moodProgress = getMoodVisualProgress();
         const moodFade = smootherstep01(rangeProgress(
           moodProgress, MOOD_WHITE_START, MOOD_VIDEO_END
         ));
-        const oceanGain = oceanBeforeMood * Math.cos(moodFade * Math.PI / 2);
-        const moodGain = Math.sin(moodFade * Math.PI / 2);
+        const ambientBedGain = 1 - (1 - MOOD_AMBIENT_BED_LEVEL) * moodFade;
+        const oceanBedGain = 1 - (1 - MOOD_OCEAN_BED_LEVEL) * moodFade;
+        const moodVideoSceneGain = moodFade;
 
-        ambient.audio.volume = clamp(master * SOUND_AMBIENT_MIX, 0, 1);
-        ocean.audio.volume = clamp(master * SOUND_OCEAN_MIX * oceanGain, 0, 1);
+        ambient.audio.volume = clamp(master * SOUND_AMBIENT_MIX * ambientBedGain, 0, 1);
+        ocean.audio.volume = clamp(master * SOUND_OCEAN_MIX * oceanBeforeMood * oceanBedGain, 0, 1);
         tryPlaySoundscapeTrack(ambient);
         tryPlaySoundscapeTrack(ocean);
 
         const gains = new Map();
         if (moodAudioTransition) {
           const t = smootherstep01(clamp(
-            (time - moodAudioTransition.startedAt) / MOOD_AUDIO_CROSSFADE_MS, 0, 1
+            (time - moodAudioTransition.startedAt) / MOOD_VIDEO_AUDIO_CROSSFADE_MS, 0, 1
           ));
+          /* Equal-power audio crossfade: no dip in the middle and no volume spike. */
           gains.set(moodAudioTransition.from, Math.cos(t * Math.PI / 2));
           gains.set(moodAudioTransition.to, Math.sin(t * Math.PI / 2));
         } else {
           gains.set(activeMoodIndex, 1);
         }
 
-        for (const [key, track] of soundscapeTracks) {
-          if (!key.startsWith('mood:')) continue;
-          const index = Number(key.slice(5));
-          const gain = (gains.get(index) || 0) * moodGain;
-          const level = clamp(master * SOUND_ENVIRONMENT_MIX * gain, 0, 1);
-          track.audio.volume = level;
-          if (level > .001) {
-            tryPlaySoundscapeTrack(track);
-          } else if (index !== activeMoodIndex &&
-                     (!moodAudioTransition || index !== moodAudioTransition.to)) {
-            /* Do not leave old woodgrain MP3s silently streaming forever. */
-            if (!track.audio.paused) track.audio.pause();
-          }
-        }
-
-        /* Start the selected woodgrain when its fade becomes audible. If a user
-           enables sound after arriving at the thumbnail scene, it starts at once. */
-        if (moodGain > .001) {
-          for (const index of gains.keys()) tryPlaySoundscapeTrack(getMoodAudioTrack(index));
-        }
+        moodVideoPlayers.forEach((video, index) => {
+          if (!video) return;
+          const gain = gains.get(index) || 0;
+          const level = master * MOOD_VIDEO_AUDIO_MIX * moodVideoSceneGain * gain;
+          setMoodVideoAudioLevel(video, level);
+          if (level > .001 && video.paused) playMoodVideo(video);
+        });
       }
 
       function setSoundEnabled(enabled) {
@@ -9312,18 +9356,20 @@ void main(){
 
         if (soundEnabled) {
           unlockMasterAudio();
-          /* IMPORTANT: play() is called directly inside the button event to unlock
-             the ambient, ocean and current woodgrain on desktop and mobile. */
           tryPlaySoundscapeTrack(soundscapeTracks.get('ambient'), true);
           tryPlaySoundscapeTrack(soundscapeTracks.get('ocean'), true);
-          primeMoodAudioOnGesture(activeMoodIndex);
-          if (moodAudioTransition) primeMoodAudioOnGesture(moodAudioTransition.to);
+          primeMoodVideoAudioOnGesture(activeMoodIndex);
+          if (moodAudioTransition) primeMoodVideoAudioOnGesture(moodAudioTransition.to);
           updateSoundscape();
         } else {
           for (const track of soundscapeTracks.values()) {
             track.audio.pause();
             track.audio.volume = 0;
           }
+          moodVideoPlayers.forEach(video => {
+            setMoodVideoAudioLevel(video, 0);
+            video.muted = true;
+          });
         }
         if (soundEnabled) {
           if (!volumeEverActivated) {
@@ -9341,9 +9387,9 @@ void main(){
         }
       }
 
-      /* The ambient element already exists in the HTML; environmental audio
-         tracks are created only as needed, so future woodgrain MP3 files can be
-         added without editing this code. */
+      /* The old per-woodgrain Sound/<name>.mp3 files are no longer created or played.
+         Only the persistent ambient/ocean bed remains external; each background MP4
+         supplies its own looping environment audio. */
       makeSoundscapeTrack('ambient', AUDIO_TRACK_PATH, experienceAudio);
       makeSoundscapeTrack('ocean', OCEAN_SOUND_PATH);
       volumeButton.addEventListener('click', () => setSoundEnabled(!soundEnabled));
