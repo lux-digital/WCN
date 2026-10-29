@@ -4778,7 +4778,7 @@
         OCEAN_START_LEVEL = 0.12, // low wave bed at the top; grows as water approaches
         SOUND_AMBIENT_MIX = 0.72,
         SOUND_OCEAN_MIX = 0.05,
-        MOOD_AMBIENT_BED_LEVEL = 0.20, // ambient.mp3 settles to 20% as the animated-thumbnail scene arrives
+        MOOD_AMBIENT_BED_LEVEL = 0.00, // ambient.mp3 fades fully to silence as the animated-thumbnail scene arrives
         MOOD_OCEAN_BED_LEVEL = 0.00, // Ocean.mp3 fades completely away in the animated-thumbnail scene
         MOOD_VIDEO_AUDIO_MIX = 0.42, // one consistent embedded-MP4 audio level, still controlled by the master slider
         MASTER_AUDIO_BOOST = 3.5, // ~+10.9 dB before compression, across ALL routed sound layers
@@ -9308,7 +9308,7 @@ void main(){
         const oceanBeforeMood = OCEAN_START_LEVEL + (1 - OCEAN_START_LEVEL) * oceanGrowth;
 
         /* The same visual progress that reveals the thumbnail scene controls the mix.
-           ambient.mp3 eases from 100% to 20%; Ocean.mp3 eases fully to silence; the
+           ambient.mp3 and Ocean.mp3 both ease fully to silence; the
            active MP4 eases from 0 to its one consistent target level. Reverse scrolling
            naturally restores the original ambient/ocean balance. */
         const moodProgress = getMoodVisualProgress();
