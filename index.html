@@ -4800,6 +4800,18 @@
       }
 
       const MOBILE_RUNTIME = isMobilePanoramaDevice();
+      if (MOBILE_RUNTIME) {
+        document.documentElement.classList.add('wcn-touch-runtime');
+        const style = document.createElement('style');
+        style.textContent = `
+          .wcn-touch-runtime #moodSection video,
+          .wcn-touch-runtime #moodImage { transform:none!important; will-change:opacity!important; }
+          .wcn-touch-runtime #mobileProfilesToggle,
+          .wcn-touch-runtime #productThumbButtons { touch-action:none!important; }
+          .wcn-touch-runtime #moodBackgroundAdjust { backdrop-filter:none!important; -webkit-backdrop-filter:none!important; }
+        `;
+        document.head.appendChild(style);
+      }
 
       function getMobilePerformanceTier() {
         if (!isMobilePanoramaDevice()) return 'desktop';
@@ -5262,15 +5274,30 @@
         if (MOOD_ITEMS[index]?.mediaType !== 'video') return moodImage;
         return moodVideoByIndex.get(index) || moodImage;
       }
+      let touchIncomingMoodIndex = null;
+      const moodPlayPending = new WeakSet();
+      const moodPlayRetryAt = new WeakMap();
       function playMoodVideo(video) {
-        if (!video) return;
+        if (!video || video.tagName !== 'VIDEO' || !mediaIsVisible()) return;
+        const index = moodVideoPlayers.indexOf(video);
+        if (MOBILE_RUNTIME && index !== (touchIncomingMoodIndex ?? activeMoodIndex)) return;
+        if (moodPlayPending.has(video) || performance.now() < (moodPlayRetryAt.get(video) || 0)) return;
+        if (MOBILE_RUNTIME) moodVideoPlayers.forEach(other => { if (other !== video) other.pause(); });
         video.loop = true;
         /* Visual playback is always allowed to continue. Before sound has been enabled
            the MP4 stays muted; after the user's sound gesture its audio level is owned
            independently by updateSoundscape(), never by the visual crossfade. */
         if (!soundEnabled) video.muted = true;
         const result = video.play();
-        if (result && typeof result.catch === 'function') result.catch(() => {});
+        if (result && typeof result.then === 'function') {
+          moodPlayPending.add(video);
+          result.catch(() => {
+            moodPlayRetryAt.set(video, performance.now() + 2000);
+            video.muted = true;
+            const mutedPlay = video.play();
+            if (mutedPlay?.catch) mutedPlay.catch(() => {});
+          }).finally(() => moodPlayPending.delete(video));
+        }
       }
       function cancelMoodMediaAnimations() {
         moodBackgroundMedia.forEach(element => {
@@ -5294,6 +5321,53 @@
           if (video === active) playMoodVideo(video);
           else video.pause();
         });
+      }
+
+      const moodStillFallback = document.createElement('img');
+      moodStillFallback.id = 'moodStillFallback';
+      moodStillFallback.alt = '';
+      moodStillFallback.setAttribute('aria-hidden', 'true');
+      moodStillFallback.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:21;opacity:0;pointer-events:none;background:#262626';
+      moodSection.appendChild(moodStillFallback);
+      let moodStillIndex = -1, moodStillRequest = 0;
+      moodVideoPlayers.forEach(video => {
+        ['waiting', 'stalled', 'error'].forEach(type => video.addEventListener(type, () => {
+          video.dataset.wcnWaiting = '1';
+        }));
+        ['playing', 'loadeddata'].forEach(type => video.addEventListener(type, () => {
+          delete video.dataset.wcnWaiting;
+        }));
+      });
+      const moodStillCache = new Map();
+      const moodStillRetryAt = new Map();
+      function moodStillPath(index) { return MOOD_ITEMS[index].media.replace(/\.mp4$/i, '.jpg'); }
+      function updateMoodStillFallback(opacity) {
+        const index = touchIncomingMoodIndex ?? activeMoodIndex;
+        const video = moodVideoByIndex.get(index);
+        if (opacity > .001 && moodStillIndex !== index && performance.now() >= (moodStillRetryAt.get(index) || 0)) {
+          moodStillIndex = index;
+          const request = ++moodStillRequest;
+          const path = moodStillPath(index);
+          // Load beside the selected MP4, retaining the last good still during retries.
+          let job = moodStillCache.get(path);
+          if (!job) {
+            job = loadImage(encodeURI(path));
+            moodStillCache.set(path, job);
+            job.catch(() => moodStillCache.delete(path));
+          }
+          job.then(image => {
+            if (request === moodStillRequest) moodStillFallback.src = image.src;
+          }).catch(error => {
+            if (request === moodStillRequest) moodStillIndex = -1;
+            moodStillRetryAt.set(index, performance.now() + 30000);
+            console.warn('[West Coast Naturals] Background still unavailable:', path, error);
+          });
+        }
+        const needsStill = video && (video.readyState < 2 || video.error || video.paused || video.dataset.wcnWaiting === '1');
+        moodStillFallback.style.opacity = needsStill && mediaIsVisible() ? String(opacity) : '0';
+        moodStillFallback.style.filter = video?.style.filter || 'none';
+        moodStillFallback.style.transform = MOBILE_RUNTIME ? 'none' : (video?.style.transform || 'none');
+        if (needsStill && video) video.style.opacity = '0';
       }
 
       function waitForMoodVideoFrame(video, timeoutMs = 900) {
@@ -5586,6 +5660,7 @@
       function smootherstep01(v) { const x = clamp(v, 0, 1); return x * x * x * (x * (x * 6 - 15) + 10); }
 
       function registerFastScrollGesture(deltaPixels, now = performance.now()) {
+        if (MOBILE_RUNTIME) return;
         const amount = Math.abs(deltaPixels);
         if (!Number.isFinite(amount) || amount < .1) return;
         const elapsed = scrollInputLastAt ? Math.max(0, now - scrollInputLastAt) : 5000;
@@ -5596,6 +5671,7 @@
       }
 
       function updateTimelinePlaybackRate(time, dt) {
+        if (MOBILE_RUNTIME) { timelinePlaybackRate = 1; return; }
         const idle = scrollInputLastAt ? Math.max(0, time - scrollInputLastAt) : 5000;
         const currentEnergy = scrollInputEnergy * Math.exp(-idle / FAST_SCROLL_RELEASE_MS);
         const effort = smootherstep01(clamp(
@@ -6187,6 +6263,7 @@
 
       function applyParentOverlayProgress(value) {
         parentOverlayProgress = clamp(Number(value) || 0, 0, 1);
+        if (parentOverlayProgress >= .995) stopExperienceMedia();
         if (!elementorExitWhiteFade) return;
 
         /* A smootherstep curve gives the requested slow, soft transition: almost no
@@ -6525,6 +6602,7 @@
 
 
       function updateMoodBackgroundParallax(dt) {
+        if (MOBILE_RUNTIME) return;
         /* Mouse only: touch users keep the background steady so vertical page gestures
            and the existing mobile panorama controls remain completely predictable. */
         const allowPointerDrift = !window.matchMedia('(pointer: coarse)').matches;
@@ -6554,7 +6632,7 @@
         /* Apply blur/darkening ONLY to the mood background media elements. Using a
            full-screen backdrop-filter here also filtered the panorama/Lottie layers behind
            the mood section whenever the media itself was not fully opaque. */
-        const blurPx = effect * 14;
+        const blurPx = MOBILE_RUNTIME ? 0 : effect * 14;
         const brightness = 1 - effect * 0.62;
         const filter = `blur(${blurPx.toFixed(2)}px) brightness(${brightness.toFixed(3)})`;
         moodBackgroundMedia.forEach(media => { if (media) media.style.filter = filter; });
@@ -6685,6 +6763,8 @@
         /* 2) Fade Coastal Sand in over the white background. */
 
         const videoOpacity = smootherstep01(rangeProgress(p, MOOD_VIDEO_START, MOOD_VIDEO_END));
+        updateMoodStillFallback(videoOpacity);
+        if (videoOpacity <= .001 || !mediaIsVisible()) moodVideoPlayers.forEach(video => video.pause());
         const quickFallback = document.getElementById('wcnFastMoodFallback');
         if (quickFallback && quickFallback.dataset.wcnFastVisible === 'true') {
           // The fallback is optional, but MUST leave with the video on reverse.
@@ -6760,6 +6840,7 @@
 
 
         /* The dark readability gradient rises in with the footer again. */
+        updateMoodStillFallback(videoOpacity);
         const gradientOpacity = clamp(footerOpacity * 0.82, 0, 1);
         moodBottomGradient.style.opacity = String(gradientOpacity);
         moodBottomGradient.style.transform = `translate3d(0,${footerY}px,0)`;
@@ -6947,9 +7028,14 @@
         return queueViewerSelection(() => performWoodgrainProfileTransition(productLabel));
       }
       function transitionMoodItem(targetIndex, direction = 1) {
+        // Authorize audio synchronously while the click still has user activation.
+        if (soundEnabled) {
+          unlockMasterAudio();
+          primeMoodVideoAudioOnGesture(targetIndex);
+        }
         return queueViewerSelection(async () => {
           try { await performMoodItemTransition(targetIndex, direction); }
-          finally { moodTransitioning = false; }
+          finally { moodTransitioning = false; touchIncomingMoodIndex = null; }
         });
       }
       async function performWoodgrainProfileTransition(productLabel) {
@@ -7076,6 +7162,7 @@
           applyMoodBackgroundClarity(100);
         }
 
+        if (MOBILE_RUNTIME) touchIncomingMoodIndex = targetIndex;
         const fromItem = MOOD_ITEMS[activeMoodIndex];
         const toItem = MOOD_ITEMS[targetIndex];
 
@@ -7491,6 +7578,13 @@
           });
         }
 
+        [mobileProfilesToggle, productThumbButtons].forEach(control => {
+          if (!control || control.dataset.touchGuard) return;
+          control.dataset.touchGuard = '1';
+          ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(type => {
+            control.addEventListener(type, event => event.stopPropagation(), { passive: true });
+          });
+        });
         setMobileProfilesOpen(false, { immediate: true });
       }
 
@@ -7704,7 +7798,15 @@
         applyWoodViewerPanPosition();
       }
 
+      let lastTouchStoryPaint = -Infinity, pendingTouchStoryFrame = null;
       function setStoryLottieLogicalFrame(logicalFrame) {
+        if (MOBILE_RUNTIME) {
+          const now = performance.now();
+          pendingTouchStoryFrame = logicalFrame;
+          if (now - lastTouchStoryPaint < 1000 / 30) return;
+          lastTouchStoryPaint = now;
+          pendingTouchStoryFrame = null;
+        }
         if (!storySquareLottieReady || !storySquareLottie) return;
         const logicalProgress = STORY_LAST_FRAME <= 0 ? 0 : clamp(logicalFrame / STORY_LAST_FRAME, 0, 1);
         const lottieFrame = logicalProgress * Math.max(0, storySquareLottieTotalFrames - 1);
@@ -7712,6 +7814,11 @@
       }
 
       function updateStoryTextMotion() {
+        if (MOBILE_RUNTIME && pendingTouchStoryFrame !== null && performance.now() - lastTouchStoryPaint >= 1000 / 30) {
+          const frame = pendingTouchStoryFrame;
+          pendingTouchStoryFrame = null;
+          setStoryLottieLogicalFrame(frame);
+        }
         const p = smoothStoryProgress;
         /* Keep the exact same story visibility handoff as the former story animation: the
            Lottie cannot appear before Scroll_01 reaches frame 60. */
@@ -9139,12 +9246,28 @@ void main(){
         if (!track || !masterAudioContext || !masterAudioInput || connectedAudioElements.has(track.audio)) return;
         try {
           const source = masterAudioContext.createMediaElementSource(track.audio);
-          source.connect(masterAudioInput);
+          const gain = masterAudioContext.createGain();
+          gain.gain.value = 0;
+          source.connect(gain);
+          gain.connect(masterAudioInput);
+          track.gain = gain;
           connectedAudioElements.add(track.audio);
           track.mediaSource = source;
         } catch (error) {
           console.warn('[West Coast Naturals] Unable to connect sound to master output:', error);
         }
+      }
+
+      function setSoundscapeTrackLevel(track, level) {
+        if (!track) return;
+        const value = clamp(Number(level) || 0, 0, 1);
+        track.level = value;
+        if (track.gain) {
+          track.audio.volume = 1;
+          track.gain.gain.setTargetAtTime(value, masterAudioContext.currentTime, .025);
+        } else track.audio.volume = value;
+        track.audio.muted = value <= .0005;
+        if (value <= .0005) track.audio.pause();
       }
 
       function connectMoodVideoToMaster(video) {
@@ -9170,10 +9293,10 @@ void main(){
         const safeLevel = clamp(Number(level) || 0, 0, 1);
         const routed = moodVideoAudioNodes.get(video);
         if (routed && masterAudioContext) {
-          video.muted = false;
+          video.muted = safeLevel <= .0005;
           video.volume = 1;
           try {
-            routed.gain.gain.setValueAtTime(safeLevel, masterAudioContext.currentTime);
+            routed.gain.gain.setTargetAtTime(safeLevel, masterAudioContext.currentTime, .025);
           } catch (_) {
             routed.gain.gain.value = safeLevel;
           }
@@ -9244,7 +9367,7 @@ void main(){
       }
 
       function tryPlaySoundscapeTrack(track, userGesture = false) {
-        if (!track || track.failed || !soundEnabled) return;
+        if (!track || track.failed || !soundEnabled || (!userGesture && !(track.level > .0005))) return;
         if (!track.audio.paused || track.pending) return;
         if (!userGesture && performance.now() < track.retryAfter) return;
         try {
@@ -9309,8 +9432,28 @@ void main(){
         }
       }
 
+      let experienceInView = true;
+      function mediaIsVisible() {
+        return !document.hidden && experienceInView && parentOverlayProgress < .995;
+      }
+      function stopExperienceMedia() {
+        for (const track of soundscapeTracks.values()) setSoundscapeTrackLevel(track, 0);
+        moodVideoPlayers.forEach(video => { video.pause(); setMoodVideoAudioLevel(video, 0); video.muted = true; });
+      }
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopExperienceMedia();
+        else updateSoundscape();
+      });
+      window.addEventListener('pagehide', stopExperienceMedia);
+      if (typeof IntersectionObserver !== 'undefined') {
+        new IntersectionObserver(entries => {
+          experienceInView = entries[0].isIntersecting;
+          if (!experienceInView) stopExperienceMedia();
+        }).observe(stage);
+      }
       function updateSoundscape(time = performance.now()) {
         if (!soundEnabled) return;
+        if (!mediaIsVisible()) { stopExperienceMedia(); return; }
         const exitFadeGain = 1 - smootherstep01(parentOverlayProgress);
         const master = clamp(Number(volumeSlider.value) / 100, 0, 1) * exitFadeGain;
         const ambient = soundscapeTracks.get('ambient');
@@ -9336,8 +9479,8 @@ void main(){
         const oceanBedGain = 1 - (1 - MOOD_OCEAN_BED_LEVEL) * moodFade;
         const moodVideoSceneGain = moodFade;
 
-        ambient.audio.volume = clamp(master * SOUND_AMBIENT_MIX * ambientBedGain, 0, 1);
-        ocean.audio.volume = clamp(master * SOUND_OCEAN_MIX * oceanBeforeMood * oceanBedGain, 0, 1);
+        setSoundscapeTrackLevel(ambient, master * SOUND_AMBIENT_MIX * ambientBedGain);
+        setSoundscapeTrackLevel(ocean, master * SOUND_OCEAN_MIX * oceanBeforeMood * oceanBedGain);
         tryPlaySoundscapeTrack(ambient);
         tryPlaySoundscapeTrack(ocean);
 
@@ -9347,8 +9490,8 @@ void main(){
             (time - moodAudioTransition.startedAt) / MOOD_VIDEO_AUDIO_CROSSFADE_MS, 0, 1
           ));
           /* Equal-power audio crossfade: no dip in the middle and no volume spike. */
-          gains.set(moodAudioTransition.from, Math.cos(t * Math.PI / 2));
-          gains.set(moodAudioTransition.to, Math.sin(t * Math.PI / 2));
+          gains.set(moodAudioTransition.from, MOBILE_RUNTIME ? 0 : Math.cos(t * Math.PI / 2));
+          gains.set(moodAudioTransition.to, MOBILE_RUNTIME ? 1 : Math.sin(t * Math.PI / 2));
         } else {
           gains.set(activeMoodIndex, 1);
         }
@@ -9359,6 +9502,7 @@ void main(){
           const level = master * MOOD_VIDEO_AUDIO_MIX * moodVideoSceneGain * gain;
           setMoodVideoAudioLevel(video, level);
           if (level > .001 && video.paused) playMoodVideo(video);
+          if (moodVideoSceneGain <= .001) video.pause();
         });
       }
 
@@ -9381,7 +9525,7 @@ void main(){
         } else {
           for (const track of soundscapeTracks.values()) {
             track.audio.pause();
-            track.audio.volume = 0;
+            setSoundscapeTrackLevel(track, 0);
           }
           moodVideoPlayers.forEach(video => {
             setMoodVideoAudioLevel(video, 0);
@@ -9635,9 +9779,10 @@ void main(){
             loop: false,
             autoplay: false,
             path: STORY_SEQUENCE_LOTTIE,
-            rendererSettings: { preserveAspectRatio: 'xMidYMid meet' }
+            rendererSettings: { preserveAspectRatio: 'xMidYMid meet', progressiveLoad: MOBILE_RUNTIME, hideOnTransparent: true }
           });
 
+          if (MOBILE_RUNTIME) storySquareLottie.setSubframe(false);
           storySquareLottie.addEventListener('DOMLoaded', () => {
             storySquareLottieTotalFrames = Math.max(1, Number(storySquareLottie.totalFrames) || 1);
             storySquareLottieReady = true;
@@ -11536,28 +11681,7 @@ void main(){
         wcnFastWheelEnergy=0;
         wcnFastBegin(towardMood?'colours':'top',direction);
       },{capture:true,passive:false});
-      window.addEventListener('touchstart',event=>{
-        if(!MOBILE_RUNTIME||!event.touches||event.touches.length!==1)return;
-        const e=event.touches[0],target=event.target instanceof Element?event.target:null;
-        wcnFastTouch=target&&target.closest('button,input,#woodViewerShell,#woodDotButtons,#volumeControl,#productThumbButtons')
-          ?null:{x:e.clientX,y:e.clientY,at:performance.now(),lastY:e.clientY};
-      },{capture:true,passive:true});
-      window.addEventListener('touchmove',event=>{
-        if(wcnFast.active){event.preventDefault();event.stopImmediatePropagation();return;}
-        if(!wcnFastTouch||!scrollingReady||parentOverlayActive)return;
-        const e=event.touches&&event.touches[0];if(!e)return;
-        const dy=e.clientY-wcnFastTouch.y,dx=e.clientX-wcnFastTouch.x;
-        const duration=Math.max(10,performance.now()-wcnFastTouch.at);
-        if(Math.abs(dy)<145||Math.abs(dy)<Math.abs(dx)*1.5||duration>195)return;
-        if(Math.abs(dy)/duration<2.5)return;
-        const direction=dy<0?1:-1;
-        if(!wcnFastGestureAllowed(direction))return;
-        event.preventDefault();event.stopImmediatePropagation();
-        wcnFastTouch=null;
-        wcnFastBegin(direction>0?'colours':'top',direction);
-      },{capture:true,passive:false});
-      window.addEventListener('touchend',()=>{wcnFastTouch=null;},{capture:true,passive:true});
-      window.addEventListener('touchcancel',()=>{wcnFastTouch=null;},{capture:true,passive:true});
+      // Fast travel remains available through its buttons; touch swipes follow the story.
 
       /* FORWARD-ONLY SLOWDOWN / NORMAL-SPEED REVERSE
          The authored story and mood sections are physically stretched so scrolling down
@@ -11713,7 +11837,7 @@ void main(){
         /* Controls that are intrinsically horizontal must NEVER steer the master timeline.
            The woodgrain shell is special: horizontal motion belongs to its pan interaction,
            but a clearly vertical swipe must still be allowed to leave the mood section. */
-        if (target && target.closest('#moodBackgroundControl, #woodPrevButton, #woodNextButton, #woodDotButtons, #productThumbButtons')) {
+        if (target && target.closest('button, input, a, #volumeControl, #moodBackgroundControl, #woodPrevButton, #woodNextButton, #woodDotButtons, #productThumbButtons')) {
           mobileTimelineTouchSource = 'control';
         } else if (target && target.closest('#woodViewerShell')) {
           mobileTimelineTouchSource = 'wood';
@@ -12202,6 +12326,11 @@ void main(){
 
 
         const dt = Math.min(.05, (time - previousAnimationTime) / 1000); previousAnimationTime = time;
+        if (document.hidden || !experienceInView || parentOverlayProgress >= .995) {
+          stopExperienceMedia();
+          requestAnimationFrame(masterAnimationLoop);
+          return;
+        }
 
 
 
@@ -12380,7 +12509,7 @@ void main(){
           updateScrollTarget();
           window.dispatchEvent(new Event('wcn-intro-ready'));
           // Optional 48-frame files warm AFTER the approved opening is ready.
-          setTimeout(wcnFastWarmAssets, 1400);
+          if (!MOBILE_RUNTIME) setTimeout(wcnFastWarmAssets, 1400);
 
         } catch (error) {
 
