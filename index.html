@@ -4804,6 +4804,10 @@
         document.documentElement.classList.add('wcn-touch-runtime');
         const style = document.createElement('style');
         style.textContent = `
+          html.wcn-touch-runtime, .wcn-touch-runtime body { overflow:hidden!important; overscroll-behavior:none; }
+          .wcn-touch-runtime #experience { height:100vh!important; }
+          .wcn-touch-runtime #stage { position:fixed!important; inset:0!important; touch-action:none!important; }
+
           .wcn-touch-runtime #moodSection video,
           .wcn-touch-runtime #moodImage { transform:none!important; will-change:opacity!important; }
           .wcn-touch-runtime #mobileProfilesToggle,
@@ -4927,8 +4931,8 @@
       /* The story animation begins at STORY_SEQUENCE_START (frame 60). Forward scrolling
          deliberately stretches this authored range; reverse wheel movement is compensated
          later so the whole experience returns at the original logical speed. */
-      const STORY_SEQUENCE_SCROLL_SLOWDOWN = MOBILE_RUNTIME ? 0.60 : 2.2;
-      const STORY_SEQUENCE_AUTOPLAY_FPS = MOBILE_RUNTIME ? 72 : 38;
+      const STORY_SEQUENCE_SCROLL_SLOWDOWN = 2.2; // desktop only; touch uses TOUCH_FLOW distances
+      const STORY_SEQUENCE_AUTOPLAY_FPS = 38; // desktop only; touch never starts story autoplay
       const STORY_FIRST_AUTOPLAY_END_FRAME = 72; // text000 -> text072
       const STORY_MID_AUTOPLAY_START_FRAME = 80;
       const STORY_MID_AUTOPLAY_END_FRAME = 144;
@@ -5333,9 +5337,11 @@
       moodVideoPlayers.forEach(video => {
         ['waiting', 'stalled', 'error'].forEach(type => video.addEventListener(type, () => {
           video.dataset.wcnWaiting = '1';
+          requestAnimationFrame(() => { if (!moodTransitioning) updateMoodSectionMotion(); });
         }));
         ['playing', 'loadeddata'].forEach(type => video.addEventListener(type, () => {
           delete video.dataset.wcnWaiting;
+          requestAnimationFrame(() => { if (!moodTransitioning) updateMoodSectionMotion(); });
         }));
       });
       const moodStillCache = new Map();
@@ -5513,6 +5519,7 @@
       const MOBILE_AUTOPLAY_WARMUP_FRAME = 34;
       let mobileSequenceUseTick = 0;
       let mobileSequenceDirection = 1;
+      let mobileSequenceDemandFrame = 0;
       let volumeAnimation = null, volumeLottieReady = false;
       let soundEnabled = false, volumeEverActivated = false, volumeDocked = false;
       let moodAudioTransition = null;
@@ -5912,6 +5919,266 @@
         updateHoldHotspotHoverState();
       }
 
+      /* MOBILE/TABLET NAVIGATION
+         One position owns the image sequence, story, hold view and colour reveal.
+         Touch moves that position; only an explicit quick-navigation button runs time.
+         A gesture belongs to a control, a panorama, the wood strip, or the timeline
+         from its first deliberate movement until release. */
+      const TOUCH_FLOW = Object.freeze({
+        sequenceEnd: 1.65,
+        storyLength: 3.10,
+        moodLength: .85,
+        swipeGain: 1.35
+      });
+      const TOUCH_HOLD_POSITION = TOUCH_FLOW.sequenceEnd + TOUCH_FLOW.storyLength;
+      const TOUCH_END_POSITION = TOUCH_HOLD_POSITION + TOUCH_FLOW.moodLength;
+      const touchFlow = { position: 0, displayedPosition: 0, dirty: true, gesture: null };
+
+      function touchRawAt(position) {
+        if (position <= TOUCH_FLOW.sequenceEnd) {
+          return STORY_SEQUENCE_START * clamp(position / TOUCH_FLOW.sequenceEnd, 0, 1);
+        }
+        if (position <= TOUCH_HOLD_POSITION) {
+          return lerp(STORY_SEQUENCE_START, MOOD_WHITE_START,
+            (position - TOUCH_FLOW.sequenceEnd) / TOUCH_FLOW.storyLength);
+        }
+        return lerp(MOOD_WHITE_START, 1,
+          clamp((position - TOUCH_HOLD_POSITION) / TOUCH_FLOW.moodLength, 0, 1));
+      }
+
+      function touchPositionAtRaw(raw) {
+        if (raw <= STORY_SEQUENCE_START) return clamp(raw / STORY_SEQUENCE_START, 0, 1) * TOUCH_FLOW.sequenceEnd;
+        if (raw <= MOOD_WHITE_START) return TOUCH_FLOW.sequenceEnd +
+          rangeProgress(raw, STORY_SEQUENCE_START, MOOD_WHITE_START) * TOUCH_FLOW.storyLength;
+        return TOUCH_HOLD_POSITION + rangeProgress(raw, MOOD_WHITE_START, 1) * TOUCH_FLOW.moodLength;
+      }
+
+      function touchAtHold(position = touchFlow.position) {
+        return Math.abs(position - TOUCH_HOLD_POSITION) < .00001;
+      }
+
+      function setTouchPosition(position) {
+        const next = clamp(position, 0, TOUCH_END_POSITION);
+        if (next === touchFlow.position && !touchFlow.dirty) return;
+        userScrollDirection = Math.sign(next - touchFlow.position);
+        if (userScrollDirection) mobileSequenceDirection = userScrollDirection;
+        touchFlow.position = next;
+        touchFlow.dirty = true;
+        heroTypographyLastUserInputTime = performance.now();
+      }
+
+      function advanceTouchTimeline(deltaPixels, gesture) {
+        if (!scrollingReady || gesture.stopped || wcnFast.active || wcnFast.starting) return;
+        const from = touchFlow.position;
+        const distance = deltaPixels / Math.max(320, viewportHeight) * TOUCH_FLOW.swipeGain;
+        let next = clamp(from + distance, 0, TOUCH_END_POSITION);
+        // Crossing the hold view always ends this gesture, in either direction.
+        // There is no timer or retained momentum that can carry the visitor past it.
+        if ((from < TOUCH_HOLD_POSITION && next >= TOUCH_HOLD_POSITION) ||
+            (from > TOUCH_HOLD_POSITION && next <= TOUCH_HOLD_POSITION)) {
+          next = TOUCH_HOLD_POSITION;
+          gesture.stopped = true;
+        }
+        // Never queue invisible story progress while its artwork is still loading.
+        if (!storySquareLottieReady && from <= TOUCH_FLOW.sequenceEnd && next > TOUCH_FLOW.sequenceEnd) {
+          next = TOUCH_FLOW.sequenceEnd;
+          gesture.stopped = true;
+        }
+        if (from === TOUCH_END_POSITION && distance > 0) {
+          gesture.stopped = true;
+          if (parentScrollHandoffEnabled && !parentOverlayActive) {
+            notifyParentMoodHandoffReady();
+            postElementorHandoffMessage('scroll-parent-end', { velocityY: 0 });
+          }
+          return;
+        }
+        if (next === TOUCH_END_POSITION || next === 0) gesture.stopped = true;
+        setTouchPosition(next);
+      }
+
+      function updateTouchTimeline(force = false) {
+        if (!MOBILE_RUNTIME || !scrollingReady || (wcnFast.active && !force)) return;
+        if (!touchFlow.dirty && !force) return;
+        const position = touchFlow.position;
+        const raw = touchRawAt(position);
+        const wantedFrame = Math.round(calculateTargetFrame(Math.min(raw, MOOD_WHITE_START)));
+        mobileSequenceDemandFrame = wantedFrame;
+        if (!scrollFrames[wantedFrame]) {
+          // Retain the entire last painted state, including its text and buttons.
+          // Only the latest finger position is rendered when that image arrives.
+          loadMobileSequencePair(wantedFrame).then(() => { touchFlow.dirty = true; }).catch(() => {});
+          prefetchMobileSequenceWindow(wantedFrame, mobileSequenceDirection);
+          return;
+        }
+        touchFlow.dirty = false;
+        touchFlow.displayedPosition = position;
+        const wasComplete = moodClipComplete;
+        targetScrollFrame = smoothScrollFrame = wantedFrame;
+        targetStoryProgress = smoothStoryProgress = raw;
+        targetStorySequenceProgress = smoothStorySequenceProgress =
+          clamp((position - TOUCH_FLOW.sequenceEnd) / TOUCH_FLOW.storyLength, 0, 1);
+        lastManualStoryFrame = smoothStorySequenceProgress * STORY_LAST_FRAME;
+        heroTargetScrollFrame = Math.min(HERO_TYPE_CONTINUE_END_FRAME, wantedFrame * BACKGROUND_SCROLL_SLOWDOWN);
+        holdEnvAutoplayBlend = smootherstep01(rangeProgress(wantedFrame,
+          HOLD_ENV_AUTOPLAY_FADE_START_FRAME, SCROLL_FRAME_COUNT - 1));
+        moodClipProgress = clamp((position - TOUCH_HOLD_POSITION) / TOUCH_FLOW.moodLength, 0, 1);
+        moodClipActive = false;
+        moodClipComplete = position >= TOUCH_END_POSITION;
+        if (wantedFrame !== currentScrollFrame || force) {
+          currentScrollFrame = wantedFrame;
+          renderFrame(wantedFrame);
+        }
+        updatePanoramaOpacity();
+        updateHeroScrollTypography(true);
+        updateOpeningTextLottie();
+        updateTextMode();
+        updateStoryTextMotion();
+        updateMoodSectionMotion();
+        if (moodClipComplete && !wasComplete) beginMoodExitSettle();
+        else if (!moodClipComplete && wasComplete) clearMoodExitSettle();
+      }
+
+      function updateTouchHoldEnvironment(dt) {
+        const blend = smootherstep01(rangeProgress(smoothScrollFrame,
+          HOLD_ENV_AUTOPLAY_FADE_START_FRAME, SCROLL_FRAME_COUNT - 1));
+        holdEnvBlend = blend;
+        holdEnvMode = blend > .001 ? 'active' : 'inactive';
+        holdEnvReverseFrameLock = false;
+        holdEnvReverseSuppressed = false;
+        holdEnvMouseBlend = 1;
+        // Return to the aligned camera within the last part of the story on reverse,
+        // while the final JPG is still held. No timed frame lock delays the return.
+        const lookWeight = rangeProgress(touchFlow.displayedPosition,
+          TOUCH_HOLD_POSITION - .40, TOUCH_HOLD_POSITION);
+        const lookLength = Math.max(1, Math.hypot(mouseX, mouseY));
+        const targetYaw = -THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_YAW_DEG) * mouseX / lookLength * lookWeight;
+        const targetPitch = THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_PITCH_DEG) * mouseY / lookLength * lookWeight;
+        const ease = 1 - Math.exp(-HOLD_ENV_ROTATION_EASE * dt);
+        holdEnvYaw += (targetYaw - holdEnvYaw) * ease;
+        holdEnvPitch += (targetPitch - holdEnvPitch) * ease;
+        if (blend <= .001) holdEnvYaw = holdEnvPitch = 0;
+        holdEnvCanvas.style.opacity = String(blend);
+        stage.classList.toggle('mobile-hold-touch', touchAtHold());
+        if (blend > .001 && moodClipProgress < 1 && mediaIsVisible()) {
+          holdEnvCamera.position.set(0, 0, holdEnvCameraDistance);
+          holdEnvCamera.rotation.order = 'YXZ';
+          holdEnvCamera.rotation.y = holdEnvYaw;
+          holdEnvCamera.rotation.x = holdEnvPitch;
+          holdEnvRenderer.render(holdEnvScene, holdEnvCamera);
+        }
+        hideHoldLensFlare();
+      }
+
+      function finishTouchFlowGesture() {
+        const gesture = touchFlow.gesture;
+        if (gesture?.mode === 'main-pan') {
+          isDragging = false;
+          inertialYawVelocity = inertialPitchVelocity = 0;
+        }
+        if (gesture?.mode === 'wood-pan') {
+          woodPanDragging = false;
+          woodPanTouchMode = 'none';
+          const measured = clamp(gesture.velocity, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
+          const direction = Math.sign(measured) || woodPanAutoDirection || 1;
+          woodPanAutoDirection = direction;
+          woodPanReleaseStartVelocity = Math.abs(measured) < 4 ? direction * WOOD_PAN_AUTO_SPEED : measured;
+          woodPanVelocity = woodPanReleaseStartVelocity;
+          const normalized = clamp(Math.abs(woodPanReleaseStartVelocity) / WOOD_PAN_DRAG_MAX_RELEASE_SPEED, 0, 1);
+          woodPanReleaseDuration = lerp(WOOD_PAN_RELEASE_MIN_DURATION, WOOD_PAN_RELEASE_MAX_DURATION, Math.pow(normalized, .72));
+          woodPanReleaseElapsed = 0;
+          woodPanReleaseActive = true;
+          woodViewerShell.classList.remove('is-dragging');
+        }
+        touchFlow.gesture = null;
+      }
+
+      function beginTouchFlowGesture(event) {
+        if (!MOBILE_RUNTIME) return;
+        finishTouchFlowGesture();
+        if (event.touches.length !== 1 || parentOverlayActive) return;
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target || !stage.contains(target)) return;
+        const touch = event.touches[0];
+        const control = target.closest('button, input, a, select, textarea, [role="button"]');
+        let pan = 'none';
+        if (woodViewerInteractionEnabled && target.closest('#woodViewerShell')) pan = 'wood';
+        else if (touchAtHold() && holdEnvLoaded) pan = 'hold';
+        else if (smoothScrollFrame < PANORAMA_FADE_END_FRAME && panoramaLoaded) pan = 'main';
+        touchFlow.gesture = { id: touch.identifier, mode: control ? 'control' : 'pending', pan,
+          x: touch.clientX, y: touch.clientY, lastX: touch.clientX, lastY: touch.clientY,
+          stopped: wcnFast.active || wcnFast.starting, velocity: woodPanVelocity, at: performance.now() };
+        if (!control && event.cancelable) event.preventDefault();
+      }
+
+      function moveTouchFlowGesture(event) {
+        if (!MOBILE_RUNTIME) return;
+        const gesture = touchFlow.gesture;
+        if (!gesture || gesture.mode === 'control' || parentOverlayActive) return;
+        if (event.cancelable) event.preventDefault();
+        if (gesture.stopped) return;
+        const touch = Array.from(event.touches).find(item => item.identifier === gesture.id);
+        if (!touch) return;
+        const totalX = touch.clientX - gesture.x, totalY = touch.clientY - gesture.y;
+        const ax = Math.abs(totalX), ay = Math.abs(totalY);
+        let dx = touch.clientX - gesture.lastX, dy = touch.clientY - gesture.lastY;
+        if (gesture.mode === 'pending') {
+          if (gesture.pan !== 'none' && ax >= 12 && ax > ay * 1.10) {
+            gesture.mode = gesture.pan + '-pan';
+            if (gesture.pan === 'main') isDragging = true;
+            if (gesture.pan === 'wood') {
+              woodPanDragging = true;
+              woodPanReleaseActive = false;
+              woodViewerShell.classList.add('is-dragging');
+            }
+          } else {
+            const threshold = gesture.pan === 'hold' ? 48 : 20;
+            const dominance = gesture.pan === 'hold' ? 1.8 : 1.35;
+            if (ay < threshold || ay < ax * dominance) return;
+            gesture.mode = 'timeline';
+            dy = Math.sign(totalY) * (ay - threshold);
+          }
+        }
+        // Once panning starts, vertical drift can never become a navigation swipe.
+        if (gesture.mode === 'timeline') advanceTouchTimeline(-dy, gesture);
+        else if (gesture.mode === 'main-pan') {
+          yaw -= dx * DRAG_SENSITIVITY * 1.18;
+          pitch = clamp(pitch + dy * DRAG_SENSITIVITY * .82, -MAX_PITCH, MAX_PITCH);
+        } else if (gesture.mode === 'hold-pan') {
+          mouseX = clamp(mouseX + dx / Math.max(220, viewportWidth * .42), -1, 1);
+          mouseY = clamp(mouseY + dy / Math.max(320, viewportHeight * .60), -1, 1);
+          holdTouchLookUnlocked = true;
+        } else if (gesture.mode === 'wood-pan') {
+          woodLoopOffset += dx;
+          const dt = Math.max(.008, (performance.now() - gesture.at) / 1000);
+          const sample = clamp(dx / dt, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
+          gesture.velocity += (sample - gesture.velocity) * WOOD_PAN_DRAG_SAMPLE_EASE;
+          applyWoodViewerPanPosition();
+        }
+        gesture.lastX = touch.clientX;
+        gesture.lastY = touch.clientY;
+        gesture.at = performance.now();
+      }
+
+      if (MOBILE_RUNTIME) {
+        window.addEventListener('touchstart', beginTouchFlowGesture, { capture: true, passive: false });
+        window.addEventListener('touchmove', moveTouchFlowGesture, { capture: true, passive: false });
+        window.addEventListener('touchend', finishTouchFlowGesture, { capture: true, passive: true });
+        window.addEventListener('touchcancel', finishTouchFlowGesture, { capture: true, passive: true });
+        window.addEventListener('blur', finishTouchFlowGesture);
+        // Trackpads attached to an iPad use the same position and boundaries.
+        let touchWheelGesture = null, touchWheelAt = 0;
+        window.addEventListener('wheel', event => {
+          if (event.ctrlKey || !stage.contains(event.target) || parentOverlayActive) return;
+          if (event.target.closest('button, input, a, [role="button"]')) return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const now = performance.now();
+          if (!touchWheelGesture || now - touchWheelAt > 180) touchWheelGesture = { stopped: false };
+          touchWheelAt = now;
+          advanceTouchTimeline(event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewportHeight : 1), touchWheelGesture);
+        }, { capture: true, passive: false });
+      }
+
       function getStorySequenceFrameFromScrollLocal(localProgress) {
         return lerp(0, STORY_LAST_FRAME, clamp(localProgress, 0, 1));
       }
@@ -5922,6 +6189,7 @@
       }
 
       function rawProgressToTravelledPx(rawProgress) {
+        if (MOBILE_RUNTIME) return touchPositionAtRaw(rawProgress) * viewportHeight;
         const raw = clamp(rawProgress, 0, 1);
         const baseActiveDistance = window.innerHeight * (SCROLL_LENGTH_VH / 100);
         const storyStartDistance = baseActiveDistance * STORY_SEQUENCE_START * BACKGROUND_SCROLL_SLOWDOWN;
@@ -5950,12 +6218,14 @@
       }
 
       function isTimelineAutoplayLocked() {
+        if (MOBILE_RUNTIME) return wcnFast.active;
         /* One lock policy: a forward background run, a story autoplay, or the final mood
            clip owns input. Reverse JPG playback is still ordinary scroll-driven motion. */
         return storySequenceAutoplayActive || backgroundAutoplayActive || moodClipActive;
       }
 
       function getTimelineAutoplayLockY() {
+        if (MOBILE_RUNTIME) return null;
         /* Story autoplay deliberately moves the real page position, so it must never be
            pinned to an old Y value. Only the final visual-only mood clip locks the page. */
         if (moodClipActive) return moodClipLockY;
@@ -5970,6 +6240,7 @@
       }
 
       function startStorySequenceAutoplay(fromFrame, toFrame, kind) {
+        if (MOBILE_RUNTIME) return;
         if (storySequenceAutoplayActive) return;
 
         storySequenceAutoplayActive = true;
@@ -6066,6 +6337,7 @@
       }
 
       function startPanoramaReturnAutoplay() {
+        if (MOBILE_RUNTIME) return;
         if (panoramaReturnActive || !scrollingReady) return;
         const experienceTopY = window.scrollY + experience.getBoundingClientRect().top;
         const targetY = Math.max(0, experienceTopY);
@@ -6118,6 +6390,7 @@
       }
 
       function beginMoodReturnHold() {
+        if (MOBILE_RUNTIME) { finishTouchFlowGesture(); clearMoodReturnHold(); return; }
         /* Re-arm only on an actual transition from Gallery covering WCN to the Gallery
            fully returned. Do not restart the hold for unrelated configure messages. */
         moodReturnHolding = true;
@@ -6154,6 +6427,12 @@
 
       function beginMoodExitSettle() {
         clearMoodExitSettle();
+        if (MOBILE_RUNTIME) {
+          moodExitReadyAt = performance.now();
+          notifyParentMoodHandoffReady();
+          updateMoodExitScrollIndicator();
+          return;
+        }
         moodExitReadyAt = performance.now() + MOOD_EXIT_SETTLE_MS;
         /* No queued scroll inputs: the Gallery is released only after full opacity,
            then a visible beat on screen. The scroll indicator appears at unlock. */
@@ -6312,6 +6591,7 @@
       }
 
       function startMoodClip(direction) {
+        if (MOBILE_RUNTIME) return;
         if (moodClipActive) return;
         clearMoodExitSettle();
         clearMoodReturnHold();
@@ -6330,6 +6610,7 @@
       }
 
       function getMoodVisualProgress() {
+        if (MOBILE_RUNTIME) return touchRawAt(touchFlow.displayedPosition);
         if (moodClipActive || moodClipComplete || moodClipProgress > .0001) {
           return MOOD_WHITE_START + (1 - MOOD_WHITE_START) * clamp(moodClipProgress, 0, 1);
         }
@@ -6640,6 +6921,7 @@
         // as its MP4, or a clarity-slider adjustment creates a visible jump.
         const fastStill = document.getElementById('wcnFastMoodFallback');
         if (fastStill) fastStill.style.filter = filter;
+        moodStillFallback.style.filter = filter;
         /* Keep the thumb visually continuous during the automatic 2 second glide. */
         if (syncSlider && moodBackgroundSlider) moodBackgroundSlider.value = numeric.toFixed(2);
       }
@@ -7358,7 +7640,7 @@
           if (event.target.closest('.woodDot, button, input, a, [role="button"]')) return;
           /* Mobile Safari is much more reliable with a direct touch path for this surface.
              Do not let the parallel PointerEvent path compete with it. */
-          if (MOBILE_RUNTIME && event.pointerType === 'touch') return;
+          if (MOBILE_RUNTIME) return;
           if (woodPanDragging || woodPanTouchMode === 'pending') return;
 
           woodPanReleaseActive = false;
@@ -7447,88 +7729,7 @@
         woodViewerShell.addEventListener('pointercancel', finishWoodPanDrag);
         woodViewerShell.addEventListener('lostpointercapture', finishWoodPanDrag);
 
-        /* MOBILE ANIMATED-THUMBNAIL SWIPE
-           This mirrors the desktop grab/drag behavior with direct touch events. A vertical
-           gesture is never prevented, so it remains free to leave the section; once the
-           gesture is clearly horizontal, the woodgrain owns it and the master timeline does not. */
-        if (MOBILE_RUNTIME && !woodViewerShell.dataset.mobileSwipeReady) {
-          woodViewerShell.dataset.mobileSwipeReady = '1';
-          let touchId = null, mode = 'none', startX = 0, startY = 0, lastX = 0, lastTime = 0, releaseVelocity = 0;
-
-          woodViewerShell.addEventListener('touchstart', event => {
-            if (!woodViewerInteractionEnabled) return;
-            if (!event.touches || event.touches.length !== 1) return;
-            if (event.target.closest('.woodDot, button, input, a, [role="button"]')) return;
-            const t = event.touches[0];
-            touchId = t.identifier;
-            mode = 'pending';
-            startX = lastX = t.clientX;
-            startY = t.clientY;
-            lastTime = performance.now();
-            releaseVelocity = woodPanVelocity;
-            woodPanReleaseActive = false;
-          }, { passive: true });
-
-          woodViewerShell.addEventListener('touchmove', event => {
-            if (touchId === null) return;
-            const t = Array.from(event.touches || []).find(item => item.identifier === touchId);
-            if (!t) return;
-            const totalX = t.clientX - startX;
-            const totalY = t.clientY - startY;
-            const ax = Math.abs(totalX), ay = Math.abs(totalY);
-
-            if (mode === 'pending') {
-              if (Math.max(ax, ay) < 8) return;
-              if (ay > ax * 1.08) { mode = 'scroll'; return; }
-              if (ax <= ay * 1.02) return;
-              mode = 'pan';
-              woodPanDragging = true;
-              woodPanTouchMode = 'pan';
-              woodViewerShell.classList.add('is-dragging');
-              lastX = t.clientX;
-              lastTime = performance.now();
-              event.preventDefault();
-              return;
-            }
-
-            if (mode !== 'pan') return;
-            event.preventDefault();
-            const now = performance.now();
-            const dt = Math.max(.008, (now - lastTime) / 1000);
-            const dx = t.clientX - lastX;
-            lastX = t.clientX;
-            lastTime = now;
-            woodLoopOffset += dx;
-            const sample = clamp(dx / dt, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
-            releaseVelocity += (sample - releaseVelocity) * WOOD_PAN_DRAG_SAMPLE_EASE;
-            applyWoodViewerPanPosition();
-          }, { passive: false });
-
-          const finishTouchPan = () => {
-            if (mode === 'pan') {
-              const measured = clamp(releaseVelocity, -WOOD_PAN_DRAG_MAX_RELEASE_SPEED, WOOD_PAN_DRAG_MAX_RELEASE_SPEED);
-              const direction = Math.sign(measured) || woodPanAutoDirection || 1;
-              woodPanAutoDirection = direction;
-              woodPanReleaseStartVelocity = Math.abs(measured) < 4 ? direction * WOOD_PAN_AUTO_SPEED : measured;
-              woodPanVelocity = woodPanReleaseStartVelocity;
-              const normalized = clamp(Math.abs(woodPanReleaseStartVelocity) / WOOD_PAN_DRAG_MAX_RELEASE_SPEED, 0, 1);
-              woodPanReleaseDuration = lerp(WOOD_PAN_RELEASE_MIN_DURATION, WOOD_PAN_RELEASE_MAX_DURATION, Math.pow(normalized, .72));
-              woodPanReleaseElapsed = 0;
-              woodPanReleaseActive = true;
-            }
-            touchId = null;
-            mode = 'none';
-            woodPanDragging = false;
-            woodPanTouchMode = 'none';
-            woodViewerShell.classList.remove('is-dragging');
-          };
-
-          woodViewerShell.addEventListener('touchend', finishTouchPan, { passive: true });
-          woodViewerShell.addEventListener('touchcancel', finishTouchPan, { passive: true });
-        }
       }
-
-
 
       function setMobileProfilesOpen(open, options = {}) {
         if (!MOBILE_RUNTIME || !moodContent) return;
@@ -7824,7 +8025,8 @@
            Lottie cannot appear before Scroll_01 reaches frame 60. */
         const hasReachedStartFrame = smoothScrollFrame >= STORY_SEQUENCE_START_FRAME;
         const active = (storySequenceAutoplayActive || hasReachedStartFrame) && p <= STORY_SEQUENCE_HOLD_END;
-        storySequenceLottie.style.opacity = active && activeHoldHotspotIndex < 0 ? '1' : '0';
+        const touchStoryVisible = !MOBILE_RUNTIME || (touchFlow.displayedPosition >= TOUCH_FLOW.sequenceEnd && touchFlow.displayedPosition < TOUCH_HOLD_POSITION);
+        storySequenceLottie.style.opacity = active && touchStoryVisible && activeHoldHotspotIndex < 0 ? '1' : '0';
         if (!active) return;
 
         /* Existing scroll/autoplay code still works in the old 0..368 logical frame
@@ -8680,26 +8882,8 @@ void main(){
 
 
 
-      function handleMobileVerticalGesture(deltaY) {
-        if (!MOBILE_RUNTIME || Math.abs(deltaY) < .01) return;
-        const desiredDirection = deltaY < 0 ? 1 : -1;
-        if (moodClipActive) {
-          if (desiredDirection !== moodClipDirection) {
-            moodClipDirection = desiredDirection;
-            moodClipComplete = false;
-            moodClipReverseSuppressed = false;
-          }
-          return;
-        }
-        if (storySequenceAutoplayActive) {
-          retargetStoryAutoplayDirection(desiredDirection);
-          return;
-        }
-        if (backgroundAutoplayActive || panoramaReturnActive) return;
-        window.scrollBy(0, -deltaY);
-      }
-
       window.addEventListener('pointermove', event => {
+        if (MOBILE_RUNTIME) return;
 
         if (event.pointerType !== 'touch') {
           holdPointerClientX = event.clientX;
@@ -8740,7 +8924,7 @@ void main(){
       stage.addEventListener('pointerdown', event => {
 
         if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"], #wcnFastLinks')) return;
-        if (MOBILE_RUNTIME && event.pointerType === 'touch') return;
+        if (MOBILE_RUNTIME) return;
         if (smoothScrollFrame >= PANORAMA_FADE_END_FRAME) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
 
@@ -8949,125 +9133,6 @@ void main(){
 
       ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => stage.addEventListener(type, finishHoldTouch));
 
-      /* Dedicated mobile touch path: vertical stays native; horizontal pans the active panorama. */
-      let mobilePanGestureId = null, mobilePanGestureMode = 'none';
-      let mobilePanStartX = 0, mobilePanStartY = 0, mobilePanPrevX = 0, mobilePanPrevY = 0, mobilePanPrevTime = 0;
-      let mobilePanYawVelocity = 0, mobilePanPitchVelocity = 0;
-
-      function getMobilePanTarget() {
-        if (!MOBILE_RUNTIME) return 'none';
-        if (panoramaLoaded && smoothScrollFrame < PANORAMA_FADE_END_FRAME) return 'main';
-        if (holdEnvLoaded && holdEnvBlend > .035 && (holdEnvMode === 'active' || holdEnvMode === 'entering') && smoothStoryProgress < MOOD_WHITE_START) return 'hold';
-        return 'none';
-      }
-
-      stage.addEventListener('touchstart', event => {
-        if (!MOBILE_RUNTIME || !event.touches || event.touches.length !== 1) return;
-        if (event.target.closest && event.target.closest('#moodContent button, #moodContent input, #moodContent a, #moodContent [role="button"], #wcnFastLinks')) return;
-        if (getMobilePanTarget() === 'none') return;
-        const touch = event.touches[0];
-        mobilePanGestureId = touch.identifier;
-        mobilePanGestureMode = 'pending';
-        mobilePanStartX = mobilePanPrevX = touch.clientX;
-        mobilePanStartY = mobilePanPrevY = touch.clientY;
-        mobilePanPrevTime = performance.now();
-        mobilePanYawVelocity = mobilePanPitchVelocity = 0;
-      }, { passive: true });
-
-      stage.addEventListener('touchmove', event => {
-        if (!MOBILE_RUNTIME || mobilePanGestureId === null) return;
-        const touch = Array.from(event.touches || []).find(item => item.identifier === mobilePanGestureId);
-        if (!touch) return;
-
-        if (mobilePanGestureMode === 'pending') {
-          const totalX = touch.clientX - mobilePanStartX;
-          const totalY = touch.clientY - mobilePanStartY;
-          const ax = Math.abs(totalX), ay = Math.abs(totalY);
-          if (Math.max(ax, ay) < 7) return;
-          if (ay > ax * 1.04) { mobilePanGestureMode = 'scroll'; return; }
-          if (ax > ay * 1.01) {
-            mobilePanGestureMode = getMobilePanTarget();
-            if (mobilePanGestureMode === 'none') return;
-            mobilePanPrevX = touch.clientX; mobilePanPrevY = touch.clientY; mobilePanPrevTime = performance.now();
-            if (mobilePanGestureMode === 'main') isDragging = true;
-            if (mobilePanGestureMode === 'hold') { holdTouchLookUnlocked = true; holdEnvMouseBlend = 1; }
-            event.preventDefault();
-          }
-          return;
-        }
-
-        if (mobilePanGestureMode === 'scroll' || mobilePanGestureMode === 'none') return;
-        event.preventDefault();
-        const now = performance.now();
-        const dt = Math.max(.008, (now - mobilePanPrevTime) / 1000);
-        const dx = touch.clientX - mobilePanPrevX, dy = touch.clientY - mobilePanPrevY;
-
-        if (mobilePanGestureMode === 'main') {
-          const yd = -dx * DRAG_SENSITIVITY * 1.18;
-          const pd = dy * DRAG_SENSITIVITY * .82;
-          yaw += yd; pitch = clamp(pitch + pd, -MAX_PITCH, MAX_PITCH);
-          mobilePanYawVelocity += (yd / dt - mobilePanYawVelocity) * .38;
-          mobilePanPitchVelocity += (pd / dt - mobilePanPitchVelocity) * .38;
-          renderPanorama();
-        } else if (mobilePanGestureMode === 'hold') {
-          mouseX = clamp(mouseX + dx / Math.max(220, viewportWidth * .42), -1, 1);
-          mouseY = clamp(mouseY + dy / Math.max(320, viewportHeight * .60), -1, 1);
-          holdEnvMouseBlend = 1;
-        }
-        mobilePanPrevX = touch.clientX; mobilePanPrevY = touch.clientY; mobilePanPrevTime = now;
-      }, { passive: false });
-
-      function finishMobilePanGesture() {
-        if (!MOBILE_RUNTIME) return;
-        if (mobilePanGestureMode === 'main') {
-          isDragging = false;
-          inertialYawVelocity = clamp(mobilePanYawVelocity, -MAX_DRAG_VELOCITY, MAX_DRAG_VELOCITY);
-          inertialPitchVelocity = clamp(mobilePanPitchVelocity, -MAX_DRAG_VELOCITY, MAX_DRAG_VELOCITY);
-        }
-        mobilePanGestureId = null; mobilePanGestureMode = 'none';
-        mobilePanYawVelocity = mobilePanPitchVelocity = 0;
-      }
-      stage.addEventListener('touchend', finishMobilePanGesture, { passive: true });
-      stage.addEventListener('touchcancel', finishMobilePanGesture, { passive: true });
-
-
-
-
-
-
-
-
-
-      function animateHeroText() {
-        /* Both elements use the exact same authored fade/scale entrance.
-           The volume Lottie itself loops; only its container entrance is timed. */
-        const openingKeyframes = [
-          { opacity: 0,    transform: 'scale(.20)',  offset: 0 },
-          { opacity: .10,  transform: 'scale(.43)',  offset: .035 },
-          { opacity: .20,  transform: 'scale(.57)',  offset: .075 },
-          { opacity: .33,  transform: 'scale(.70)',  offset: .13 },
-          { opacity: .48,  transform: 'scale(.81)',  offset: .21 },
-          { opacity: .64,  transform: 'scale(.89)',  offset: .31 },
-          { opacity: .79,  transform: 'scale(.945)', offset: .44 },
-          { opacity: .90,  transform: 'scale(.977)', offset: .59 },
-          { opacity: .97,  transform: 'scale(.993)', offset: .76 },
-          { opacity: 1,    transform: 'scale(.999)', offset: .91 },
-          { opacity: 1,    transform: 'scale(1)',    offset: 1 }
-        ];
-        const timing = { duration: 3600, easing: 'linear', fill: 'forwards' };
-        heroText.animate(openingKeyframes, timing);
-        volumeControl.classList.add('is-ready');
-        syncVolumeOpeningGap();
-        volumeIntroAnimation = volumeButton.animate(openingKeyframes, timing);
-        // The two opening shortcuts share the SAME entrance, including when
-        // quick reverse travel replays the title/volume animation at the top.
-        wcnFastAnimateButtonsEntrance(openingKeyframes, timing);
-      }
-
-      /* Opening controls are one vertical composition:
-         opening-text Lottie -> quick links -> undocked volume -> flexible gap -> Scroll Lottie.
-         The flexible gap absorbs aspect-ratio differences instead of leaving a fake hole
-         when the speaker docks at the top. */
       function getOpeningArtworkBottom(stageRect) {
         let artworkBottom = NaN;
         if (openingTextReady && openingTextLottie) {
@@ -9696,6 +9761,7 @@ void main(){
 
       function pruneMobileSequenceCache(centerFrame) {
         if (!MOBILE_RUNTIME) return;
+        centerFrame = mobileSequenceDemandFrame;
         const loaded = [];
         for (let i = 0; i < SCROLL_FRAME_COUNT; i++) {
           if (scrollFrames[i]) loaded.push(i);
@@ -10412,6 +10478,7 @@ void main(){
       }
 
       function getHoldForwardBlend() {
+        if (MOBILE_RUNTIME) return smootherstep01(rangeProgress(smoothScrollFrame, HOLD_ENV_AUTOPLAY_FADE_START_FRAME, SCROLL_FRAME_COUNT - 1));
         /* The semi-panorama can now be revealed by either route:
            1) the automatic frame-60 -> frame-108 background playback, or
            2) the original scroll-position fallback.
@@ -10515,6 +10582,7 @@ void main(){
 
       function updateHoldEnvironment(dt, nowMs = performance.now()) {
         if (!holdEnvLoaded || !holdEnvRenderer || !holdEnvCamera || !holdEnvMesh) return;
+        if (MOBILE_RUNTIME) { updateTouchHoldEnvironment(dt); return; }
 
         const reversing = targetStoryProgress < smoothStoryProgress - .00008;
         const movingForward = targetStoryProgress > smoothStoryProgress + .00008;
@@ -10722,6 +10790,7 @@ void main(){
 
 
       function calculateRawScrollProgress() {
+        if (MOBILE_RUNTIME) return touchRawAt(touchFlow.displayedPosition);
 
         const travelled = Math.max(0, -experience.getBoundingClientRect().top);
         const baseActiveDistance = window.innerHeight * (SCROLL_LENGTH_VH / 100);
@@ -10761,6 +10830,7 @@ void main(){
 
 
       function updateScrollTarget() {
+        if (MOBILE_RUNTIME) { touchFlow.dirty = true; return; }
         if (!scrollingReady || wcnFast.active) return;
 
         const travelled = Math.max(0, -experience.getBoundingClientRect().top);
@@ -10779,16 +10849,6 @@ void main(){
         lastUserTravelledPx = travelled;
         targetStoryProgress = raw;
         targetScrollFrame = calculateTargetFrame(raw);
-
-        /* MOBILE 720p SCROLL RUNWAY
-           Start decoding the later Scroll_01 frames well BEFORE the user reaches them.
-           Mobile now stays scroll-driven through frame 52 onward, so this runway is purely
-           a look-ahead cache rather than a blocking autoplay dependency. */
-        if (MOBILE_RUNTIME && userScrollDirection > 0 &&
-            targetScrollFrame >= MOBILE_AUTOPLAY_WARMUP_FRAME &&
-            targetScrollFrame < BACKGROUND_AUTOPLAY_START_FRAME + 1) {
-          prefetchMobileSequenceWindow(BACKGROUND_AUTOPLAY_START_FRAME, 1);
-        }
 
         if (moodClipReverseSuppressed && raw < MOOD_REVERSE_ESCAPE_MIN_PROGRESS) {
           moodClipReverseSuppressed = false;
@@ -10834,14 +10894,6 @@ void main(){
           }
         }
         if (!storySequenceAutoplayActive && !autoplayStarted) lastManualStoryFrame = storyTargetFrame;
-
-        /* On mobile the final square.json frame is reached by swiping rather than by the
-           fifth timed autoplay. Start the existing final mood transition at that same
-           authored endpoint so the visual sequence remains identical. */
-        if (MOBILE_RUNTIME && !moodClipActive && !moodClipComplete &&
-            userScrollDirection > 0 && storyTargetFrame >= STORY_LAST_FRAME - .35) {
-          startMoodClip(1);
-        }
 
         /* Scroll_01 leaves manual scrubbing at frame 52. While that one forward run owns
            the background, wheel/touch input is locked. It crosses frame 60 and starts the
@@ -11076,6 +11128,7 @@ void main(){
 
 
       function animateScrollSequence() {
+        if (MOBILE_RUNTIME) { scrollAnimationRunning = false; touchFlow.dirty = true; return; }
 
 
 
@@ -11330,40 +11383,78 @@ void main(){
       function wcnFastAssetPath(index) {
         return 'Scroll_01_fast/Scroll-fast' + String(index).padStart(2, '0') + '.jpg';
       }
-      function wcnFastLoad(index) {
-        index = Math.max(0,Math.min(WCN_FAST_TOTAL - 1,Math.round(index)));
-        if (wcnFastImages[index]) return Promise.resolve(wcnFastImages[index]);
-        if (wcnFastImageJobs.has(index)) return wcnFastImageJobs.get(index);
-        const job = new Promise((resolve,reject) => {
-          const img = new Image(); img.decoding='async';
-          img.onload=()=>{
-            wcnFastImages[index]=img;
-            resolve(img);
-          };
-          img.onerror=()=>reject(new Error('Could not load '+wcnFastAssetPath(index)));
-          // Use the same page-relative path convention as all approved WCN assets.
-          // A missing/mis-capitalized GitHub Pages file must raise visible feedback
-          // rather than silently making BOTH buttons appear broken.
-          img.src=new URL(wcnFastAssetPath(index),document.baseURI).href;
-        });
-        wcnFastImageJobs.set(index,job);
-        job.catch(()=>{wcnFastImageJobs.delete(index);});
+      // Cache all 48 compressed JPGs. Keep only a small decoded window on touch
+      // devices; required navigation assets remain available without 48 GPU-sized images.
+      const wcnFastAssetURLs = new Map(), wcnFastAssetJobs = new Map();
+      function wcnFastFetch(index) {
+        if (wcnFastAssetURLs.has(index)) return Promise.resolve(wcnFastAssetURLs.get(index));
+        if (wcnFastAssetJobs.has(index)) return wcnFastAssetJobs.get(index);
+        const job = (async () => {
+          let lastError;
+          for (let attempt = 0; attempt < 4; attempt++) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 12000);
+            try {
+              const url = new URL(wcnFastAssetPath(index), document.baseURI);
+              if (attempt) url.searchParams.set('wcn_retry', `${Date.now()}-${attempt}`);
+              const response = await fetch(url, { signal: controller.signal });
+              if (!response.ok) throw new Error(`Fast frame ${index}: HTTP ${response.status}`);
+              const blob = await response.blob();
+              if (!blob.size) throw new Error(`Fast frame ${index} was empty`);
+              const assetURL = URL.createObjectURL(blob);
+              wcnFastAssetURLs.set(index, assetURL);
+              return assetURL;
+            } catch (error) {
+              lastError = error;
+              if (attempt < 3) await wait(400 * Math.pow(2, attempt));
+            } finally { clearTimeout(timer); }
+          }
+          throw lastError;
+        })().finally(() => wcnFastAssetJobs.delete(index));
+        wcnFastAssetJobs.set(index, job);
         return job;
       }
+      function wcnFastLoad(index) {
+        index = clamp(Math.round(index), 0, WCN_FAST_TOTAL - 1);
+        if (wcnFastImages[index]) return Promise.resolve(wcnFastImages[index]);
+        if (wcnFastImageJobs.has(index)) return wcnFastImageJobs.get(index);
+        const job = wcnFastFetch(index).then(src => loadImage(src)).then(async image => {
+          if (image.decode) await image.decode();
+          wcnFastImages[index] = image;
+          return image;
+        }).catch(error => {
+          const badURL = wcnFastAssetURLs.get(index);
+          if (badURL) URL.revokeObjectURL(badURL);
+          wcnFastAssetURLs.delete(index);
+          throw error;
+        }).finally(() => wcnFastImageJobs.delete(index));
+        wcnFastImageJobs.set(index, job);
+        return job;
+      }
+      let wcnFastWarmPromise = null;
       function wcnFastWarmAssets() {
-        if(wcnFastAssetWarmupStarted) return;
-        wcnFastAssetWarmupStarted=true;
-        // Warm endpoints first, then batches; optional assets NEVER block the approved loader.
-        Promise.allSettled([wcnFastLoad(0), wcnFastLoad(47)]).then(()=>{
-          let cursor=1;
-          const batch=()=>{
-            if(cursor>=47)return;
-            const end=Math.min(47,cursor+4);
-            const tasks=[];
-            for(;cursor<end;cursor++)tasks.push(wcnFastLoad(cursor));
-            Promise.allSettled(tasks).then(()=>setTimeout(batch,75));
-          };
-          batch();
+        if (wcnFastWarmPromise) return wcnFastWarmPromise;
+        let cursor = 0;
+        const worker = async () => {
+          while (cursor < WCN_FAST_TOTAL) await wcnFastFetch(cursor++);
+        };
+        wcnFastWarmPromise = Promise.all(Array.from({ length: 4 }, worker)).then(() => true)
+          .catch(error => { wcnFastWarmPromise = null; throw error; });
+        wcnFastWarmPromise.catch(() => {});
+        return wcnFastWarmPromise;
+      }
+      function wcnFastPrefetch(center, direction) {
+        const wanted = [];
+        for (let offset = -2; offset <= 8; offset++) {
+          const index = center + offset * direction;
+          if (index >= 0 && index < WCN_FAST_TOTAL) wanted.push(index);
+        }
+        wanted.forEach(index => wcnFastLoad(index).catch(() => {}));
+        if (MOBILE_RUNTIME) wcnFastImages.forEach((image, index) => {
+          if (image && Math.abs(index - center) > 12) {
+            image.src = '';
+            wcnFastImages[index] = null;
+          }
         });
       }
       function wcnFastFallbackSource() {
@@ -11406,7 +11497,9 @@ void main(){
       function wcnFastUpdateLinks() {
         if(!wcnFastLinks || !scrollingReady)return;
         const atOpening = !wcnFast.active && !wcnFast.starting && !parentOverlayActive &&
-          !moodClipActive && !moodClipComplete && calculateRawScrollProgress() < .024;
+          !moodClipActive && !moodClipComplete &&
+          (!MOBILE_RUNTIME || (touchFlow.displayedPosition <= .0001 && smoothScrollFrame <= .5 && holdEnvBlend <= .001)) &&
+          calculateRawScrollProgress() < .024;
         if (atOpening !== wcnFastButtonsShown) {
           if (atOpening) {
             if (wcnFastButtonsIntroPlayed) wcnFastAnimateButtonsReturn();
@@ -11449,6 +11542,7 @@ void main(){
       }
       async function wcnFastBegin(destination, direction=1) {
         if(wcnFast.active || wcnFast.starting || parentOverlayActive)return false;
+        if (MOBILE_RUNTIME) finishTouchFlowGesture();
         if(!scrollingReady){
           wcnFastSetStatus('Experience is still loading',false,2300);
           return false;
@@ -11460,10 +11554,13 @@ void main(){
         wcnFastSetStatus('Loading quick navigation…');
         const isForward=direction>=0;
         try {
-          await Promise.race([
-            wcnFastLoad(isForward?0:47),
-            new Promise((_,reject)=>setTimeout(()=>reject(new Error('Fast JPG request timed out')),6500))
-          ]);
+          await wcnFastWarmAssets();
+          await Promise.all(Array.from({ length: 9 }, (_, i) => wcnFastLoad(isForward ? i : 47 - i)));
+          // Establish the actual destination before the fast overlay can expose it.
+          if (MOBILE_RUNTIME) {
+            mobileSequenceDemandFrame = isForward ? SCROLL_FRAME_COUNT - 1 : 0;
+            await loadMobileSequencePair(mobileSequenceDemandFrame);
+          }
         }catch(err){
           console.warn('[WCN optional fast route]',err);
           wcnFast.starting=false;
@@ -11471,14 +11568,15 @@ void main(){
           wcnFastSetStatus('Fast image sequence could not load. Check Scroll_01_fast/Scroll-fast00.jpg to Scroll-fast47.jpg on GitHub (including capitalization).',true,9000);
           return false;
         }
-        // If the starting frame succeeded, DO NOT wait for all 48 frames before
-        // launching. The remaining 1280x720 JPGs are warmed opportunistically.
+        // All 48 JPGs are downloaded; the first nine are decoded before playback.
         wcnFastSetStatus('');
         wcnFastSetButtonBusy(destination,false);
         wcnFastStopOrdinaryAutoplay();
         wcnFast.direction=isForward?1:-1;
         wcnFast.destination=destination;
         wcnFast.startedAt=performance.now();
+        wcnFast.lastTickAt=wcnFast.startedAt;
+        wcnFast.playhead=0;
         wcnFast.previousFrame=-1;
         wcnFast.active=true;
         wcnFast.starting=false;
@@ -11495,19 +11593,32 @@ void main(){
         return true;
       }
       function wcnFastSetFrame(frame) {
-        frame=Math.max(0,Math.min(47,frame));
-        if(frame===wcnFast.previousFrame)return;
-        const img=wcnFastImages[frame];
-        if(img)wcnFastFrame.src=img.src;
-        else {
-          // The next JPG is loaded opportunistically; retain the previous picture meanwhile.
-          wcnFastLoad(frame).catch(()=>{});
-          const nearby=wcnFastImages.find((v,index)=>v && Math.abs(index-frame)<2);
-          if(nearby)wcnFastFrame.src=nearby.src;
+        frame = clamp(frame, 0, WCN_FAST_TOTAL - 1);
+        if (frame === wcnFast.previousFrame) return true;
+        const image = wcnFastImages[frame];
+        if (!image) {
+          wcnFastLoad(frame).catch(error => {
+            if (!wcnFast.active || wcnFast.transitionStarted) return;
+            wcnFast.active = false;
+            wcnFastTravel.classList.remove('is-active');
+            stage.classList.remove('wcn-fast-routing');
+            wcnFastSetStatus('Quick navigation could not finish loading. Please tap the button to try again.', true, 8000);
+            console.warn('[WCN] Fast frame unavailable:', error);
+          });
+          return false;
         }
-        wcnFast.previousFrame=frame;
+        wcnFastFrame.src = image.src;
+        wcnFast.previousFrame = frame;
+        wcnFastPrefetch(frame, wcnFast.direction);
+        return true;
       }
       function wcnFastArriveInColours() {
+        if (MOBILE_RUNTIME) {
+          setTouchPosition(TOUCH_END_POSITION);
+          updateTouchTimeline(true);
+          beginMoodExitSettle();
+          return;
+        }
         // Establish the SAME final scene state that the approved visual-only mood clip produces.
         const endY=rawProgressToPageY(MOOD_WHITE_START);
         window.scrollTo(0,endY);
@@ -11556,6 +11667,13 @@ void main(){
         wcnFastShowFallback(wcnFast.destination==='gallery');
       }
       function wcnFastArriveAtTop() {
+        if (MOBILE_RUNTIME) {
+          setTouchPosition(0);
+          updateTouchTimeline(true);
+          heroText.style.visibility = 'visible';
+          heroTextInner.style.opacity = '1';
+          return;
+        }
         window.scrollTo(0,0);
         backgroundAutoplayActive=backgroundAutoplayComplete=backgroundReverseActive=false;
         backgroundAutoplayFrame=holdEnvAutoplayBlend=0;
@@ -11626,17 +11744,20 @@ void main(){
         },overlayFadeMs+32);
       }
       function wcnFastTick(now) {
-        if(!wcnFast.active || wcnFast.transitionStarted)return;
-        const elapsed=Math.max(0,(now-wcnFast.startedAt)/1000);
-        const progress=Math.min(1,elapsed/(47/24));
-        const logicalFrame=wcnFast.direction>0?Math.round(progress*47):47-Math.round(progress*47);
-        wcnFastSetFrame(logicalFrame);
-        // Show the fast JPGs early, before the 360 fade has consumed their playback time.
-        const reveal=Math.min(1,progress/.16);
-        wcnFastFrame.style.opacity=String(wcnFast.direction>0?reveal:Math.min(1,(1-progress)/.16));
-        // White begins near the destination, not over the majority of the 48 JPGs.
-        wcnFastWhite.style.opacity=String(Math.min(1,Math.max(0,(progress-.83)/.17)));
-        if(progress>=1){wcnFast.transitionStarted=true;wcnFastFinish();}
+        if (!wcnFast.active || wcnFast.transitionStarted) return;
+        const dt = clamp((now - wcnFast.lastTickAt) / 1000, 0, .10);
+        wcnFast.lastTickAt = now;
+        const nextPlayhead = Math.min(47, wcnFast.playhead + dt * 24);
+        const logicalFrame = wcnFast.direction > 0 ? Math.round(nextPlayhead) : 47 - Math.round(nextPlayhead);
+        // A late decode pauses the clock, retaining the last visible JPG. It cannot
+        // advance the route into a white screen or silently skip to the destination.
+        if (!wcnFastSetFrame(logicalFrame)) return;
+        wcnFast.playhead = nextPlayhead;
+        const progress = nextPlayhead / 47;
+        const reveal = Math.min(1, progress / .16);
+        wcnFastFrame.style.opacity = String(wcnFast.direction > 0 ? reveal : Math.min(1, (1 - progress) / .16));
+        wcnFastWhite.style.opacity = String(Math.min(1, Math.max(0, (progress - .83) / .17)));
+        if (progress >= 1) { wcnFast.transitionStarted = true; wcnFastFinish(); }
       }
       // Direct button handlers, independent of the fast-gesture threshold. The
       // user always sees immediate loading feedback even on a slow connection.
@@ -11658,6 +11779,7 @@ void main(){
          to the original listeners WITHOUT ANY CHANGE. Fast-wheel intention is cumulative,
          and quick mobile swipes require distance+velocity+dominant vertical movement. */
       window.addEventListener('wheel',event=>{
+        if (MOBILE_RUNTIME) return;
         if(wcnFast.active){event.preventDefault();event.stopImmediatePropagation();return;}
         if(!scrollingReady||event.ctrlKey||wcnFast.starting||parentOverlayActive)return;
         const target=event.target instanceof Element?event.target:null;
@@ -11690,6 +11812,7 @@ void main(){
          entire experience—not just the story frames—so the JPG background, semi-panorama,
          text sequence and page position remain synchronized. */
       window.addEventListener('wheel', event => {
+        if (MOBILE_RUNTIME) return;
         if (event.ctrlKey || !scrollingReady) return;
         /* Measure deliberate wheel/trackpad effort BEFORE autoplay intercepts the event.
            Single slow ticks retain the established speed; rapid successive movement
@@ -11814,192 +11937,9 @@ void main(){
         window.scrollBy(0, deltaPx * reverseMultiplier);
       }, { passive: false });
 
-      function mobileStoryOwnsGesture() {
-        if (!MOBILE_RUNTIME || moodClipActive || moodClipComplete) return false;
-        const raw = calculateRawScrollProgress();
-        return raw >= STORY_SEQUENCE_START - .006 && raw <= STORY_SEQUENCE_HOLD_END + .004;
-      }
-
-      window.addEventListener('touchstart', event => {
-        if (!MOBILE_RUNTIME || !event.touches || event.touches.length !== 1) return;
-        const touch = event.touches[0];
-        const target = event.target instanceof Element ? event.target : null;
-        mobileTimelineTouchId = touch.identifier;
-        mobileTimelineTouchStartX = touch.clientX;
-        mobileTimelineTouchStartY = touch.clientY;
-        moodExitTouchStartAt = performance.now();
-        mobileTimelineTouchLastY = touch.clientY;
-        mobileTimelineTouchLastAt = moodExitTouchStartAt;
-        mobileHandoffGestureActive = false;
-        mobileHandoffVelocityY = 0;
-        mobileTimelineTouchDirection = 0;
-
-        /* Controls that are intrinsically horizontal must NEVER steer the master timeline.
-           The woodgrain shell is special: horizontal motion belongs to its pan interaction,
-           but a clearly vertical swipe must still be allowed to leave the mood section. */
-        if (target && target.closest('button, input, a, #volumeControl, #moodBackgroundControl, #woodPrevButton, #woodNextButton, #woodDotButtons, #productThumbButtons')) {
-          mobileTimelineTouchSource = 'control';
-        } else if (target && target.closest('#woodViewerShell')) {
-          mobileTimelineTouchSource = 'wood';
-        } else {
-          mobileTimelineTouchSource = 'page';
-        }
-
-        /* At the completed thumbnail scene, claim the gesture immediately so Safari/
-           Chrome cannot move the iframe's own scroll position before our handoff logic
-           has measured direction. Controls remain fully tappable; touch-action:none on
-           the stage removes only native panning. */
-        if (((moodClipComplete && !moodClipActive && parentScrollHandoffEnabled) ||
-             (mobileStoryOwnsGesture() && mobileTimelineTouchSource === 'page')) &&
-            mobileTimelineTouchSource !== 'control' && event.cancelable) {
-          event.preventDefault();
-        }
-        stage.classList.toggle('wcn-mobile-story-pinned',
-          mobileStoryOwnsGesture() && mobileTimelineTouchSource === 'page');
-      }, { passive: false });
-
       window.addEventListener('touchmove', event => {
-        if (!MOBILE_RUNTIME) {
-          if (isTimelineAutoplayLocked() || panoramaReturnActive) event.preventDefault();
-          return;
-        }
-        const touch = Array.from(event.touches || []).find(item => item.identifier === mobileTimelineTouchId) || (event.touches && event.touches[0]);
-        if (!touch) return;
-
-        const nowTouchMove = performance.now();
-        const incrementalTouchY = touch.clientY - mobileTimelineTouchLastY;
-        const incrementalTouchDt = clamp(nowTouchMove - mobileTimelineTouchLastAt, 8, 80);
-        mobileTimelineTouchLastY = touch.clientY;
-        mobileTimelineTouchLastAt = nowTouchMove;
-        const totalX = touch.clientX - mobileTimelineTouchStartX;
-        const totalY = touch.clientY - mobileTimelineTouchStartY;
-        const absX = Math.abs(totalX), absY = Math.abs(totalY);
-
-        /* The final thumbnail scene is pinned from the very first movement. This happens
-           before gesture thresholds and before the control-source early return, so no
-           part of the iframe can physically slide upward under a finger. */
-        if (moodClipComplete && !moodClipActive && parentScrollHandoffEnabled && event.cancelable) {
-          event.preventDefault();
-        }
-
-        /* Sliders/arrows/dots/product buttons are self-contained controls. Never let a
-           slightly diagonal finger movement pull the page/story away from the mood section. */
-        if (mobileTimelineTouchSource === 'control') return;
-
-        /* The completed thumbnail scene is a handoff surface, so it should react as
-           readily as a normal webpage. Older 14/16px gates made the first part of each
-           swipe feel ignored and encouraged repeated swipes. Everywhere else keep the
-           more conservative threshold used to distinguish panning from page travel. */
-        const moodHandoffGesture = moodClipComplete && !moodClipActive && parentScrollHandoffEnabled;
-        const gestureWakePx = moodHandoffGesture ? 6 : 14;
-        const verticalWakePx = moodHandoffGesture ? 7 : 16;
-        if (Math.max(absX, absY) < gestureWakePx) return;
-
-        /* Horizontal-dominant gestures belong to panoramas / woodgrain panning. Requiring
-           a vertical-dominant gesture here removes the old left/right -> timeline leak. */
-        if (absX > absY * 1.08) return;
-        if (absY < verticalWakePx || absY < absX * 1.02) return;
-        if (isTimelineAutoplayLocked() || panoramaReturnActive) {
-          registerFastScrollGesture(incrementalTouchY * 2.5);
-        }
-
-        const desiredDirection = totalY < 0 ? 1 : -1;
-
-        /* MOBILE SQUARE.JSON SCRUB
-           Own the whole story gesture, not only its authored autoplay islands. Native
-           touch scrolling is suppressed and the same finger delta advances the iframe
-           scroll position manually. The sticky stage therefore never rubber-bands, while
-           square.json still follows the user's repeated upward/downward swipes. */
-        if (mobileStoryOwnsGesture() && mobileTimelineTouchSource === 'page') {
-          event.preventDefault();
-          mobileTimelineTouchDirection = desiredDirection;
-          const storyStep = clamp(-incrementalTouchY * 1.05, -92, 92);
-          if (Math.abs(storyStep) > .01) window.scrollBy(0, storyStep);
-          return;
-        }
-
-        /* MOBILE REVERSE JPG SCRUB: iOS native rubber-band scroll could move
-           the entire sticky experience, then snap it back while the JPGs were
-           *also* running backwards. Own only this narrow manual JPG segment;
-           do NOT intercept panoramas, Lottie autoplay, or thumbnail gestures. */
-        if (desiredDirection < 0 && !isTimelineAutoplayLocked() &&
-            !moodClipActive && !moodClipComplete && !parentOverlayActive &&
-            smoothScrollFrame > PANORAMA_FADE_END_FRAME + 2 &&
-            calculateRawScrollProgress() < STORY_SEQUENCE_START - .007 &&
-            mobileTimelineTouchSource === 'page') {
-          event.preventDefault();
-          const reverseStep = clamp(-incrementalTouchY * 1.10, -76, 76);
-          if (Math.abs(reverseStep) > .01) window.scrollBy(0, reverseStep);
-          return;
-        }
-
-        if (moodClipComplete && !moodClipActive && parentScrollHandoffEnabled &&
-            (parentOverlayActive || desiredDirection > 0)) {
-          event.preventDefault();
-          mobileTimelineTouchDirection = desiredDirection;
-          /* ONE HANDOFF MOTION
-             The swipe is now a trigger, not the first half of the Gallery movement.
-             Previously touchmove pushed WordPress 1:1 and touchend started a second eased
-             animation, so changing the easing could barely affect the visible motion.
-             Start the exact same parent animation used by PROJECT GALLERY once, then let
-             Elementor own the entire accelerate/decelerate curve. */
-          if (desiredDirection > 0 && !parentOverlayActive) {
-            if (!moodExitIsReady()) return;
-            if (!mobileHandoffGestureActive) {
-              mobileHandoffGestureActive = true;
-              postElementorHandoffMessage('scroll-parent-end', { velocityY: 0 });
-            }
-          }
-          return;
-        }
-
-        if (moodClipComplete && !moodClipActive && desiredDirection < 0) {
-          event.preventDefault();
-          mobileTimelineTouchDirection = desiredDirection;
-          /* Require a new upward swipe after the returning Gallery has rested. */
-          if (!moodReturnCanReverse(true)) return;
-          startMoodClip(-1);
-          return;
-        }
-        if (!moodClipActive && !moodClipComplete && moodClipReverseSuppressed && moodClipProgress <= .001 &&
-            desiredDirection > 0 && calculateRawScrollProgress() >= MOOD_REVERSE_ESCAPE_MIN_PROGRESS) {
-          event.preventDefault();
-          mobileTimelineTouchDirection = desiredDirection;
-          moodClipReverseSuppressed = false;
-          startMoodClip(1);
-          return;
-        }
-
-        if (!isTimelineAutoplayLocked() && !panoramaReturnActive) return;
-        event.preventDefault();
-        if (desiredDirection === mobileTimelineTouchDirection) return;
-        mobileTimelineTouchDirection = desiredDirection;
-        if (storySequenceAutoplayActive) retargetStoryAutoplayDirection(desiredDirection);
-        else if (moodClipActive && desiredDirection !== moodClipDirection) {
-          moodClipDirection = desiredDirection;
-          moodClipComplete = false;
-          moodClipReverseSuppressed = false;
-        }
+        if (!MOBILE_RUNTIME && (isTimelineAutoplayLocked() || panoramaReturnActive)) event.preventDefault();
       }, { passive: false });
-
-      window.addEventListener('touchend', () => {
-        stage.classList.remove('wcn-mobile-story-pinned');
-        mobileTimelineTouchId = null;
-        mobileTimelineTouchDirection = 0;
-        mobileTimelineTouchSource = 'page';
-        mobileHandoffGestureActive = false;
-        mobileHandoffVelocityY = 0;
-        mobileTimelineTouchLastAt = 0;
-      }, { passive: true });
-      window.addEventListener('touchcancel', () => {
-        stage.classList.remove('wcn-mobile-story-pinned');
-        mobileTimelineTouchId = null;
-        mobileTimelineTouchDirection = 0;
-        mobileTimelineTouchSource = 'page';
-        mobileHandoffGestureActive = false;
-        mobileHandoffVelocityY = 0;
-        mobileTimelineTouchLastAt = 0;
-      }, { passive: true });
 
       window.addEventListener('scroll', updateScrollTarget, { passive: true });
 
@@ -12196,6 +12136,7 @@ void main(){
 
 
       function updateBackgroundSequenceAutoplay(dt) {
+        if (MOBILE_RUNTIME) return;
         if (!scrollingReady) return;
 
         if (backgroundAutoplayActive) {
@@ -12369,7 +12310,11 @@ void main(){
         const lockedY = getTimelineAutoplayLockY();
         if (lockedY !== null && Math.abs(window.scrollY - lockedY) > .5) window.scrollTo(0, lockedY);
 
-        if (!wcnFast.active) {
+        if (MOBILE_RUNTIME) {
+          updateTouchTimeline();
+          if (pendingTouchStoryFrame !== null) updateStoryTextMotion();
+        }
+        if (!MOBILE_RUNTIME && !wcnFast.active) {
           updateTimelinePlaybackRate(time, dt);
           updateBackgroundSequenceAutoplay(dt);
           updateStorySequenceAutoplay(time, dt);
@@ -12509,7 +12454,7 @@ void main(){
           updateScrollTarget();
           window.dispatchEvent(new Event('wcn-intro-ready'));
           // Optional 48-frame files warm AFTER the approved opening is ready.
-          if (!MOBILE_RUNTIME) setTimeout(wcnFastWarmAssets, 1400);
+          setTimeout(() => { wcnFastWarmAssets().catch(() => {}); }, 1400);
 
         } catch (error) {
 
