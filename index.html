@@ -6826,11 +6826,10 @@
       function preloadMoodImage(src) {
         if (moodPreloadedImages.has(src)) return moodPreloadedImages.get(src);
 
-        const promise = new Promise((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve(image);
-          image.onerror = reject;
-          image.src = encodeURI(src);
+        const promise = loadImage(encodeURI(src)).catch(error => {
+          // A failed request must not poison every later visit to this colour.
+          moodPreloadedImages.delete(src);
+          throw error;
         });
 
         moodPreloadedImages.set(src, promise);
@@ -6934,7 +6933,26 @@
         woodProfileBoostActive = true;
       }
 
-      async function transitionWoodgrainProfile(productLabel) {
+      // Colour and profile transitions share texture layers. Serialize their commits,
+      // and resolve the colour only when the queued profile actually starts.
+      let viewerSelectionQueue = Promise.resolve();
+      function queueViewerSelection(action) {
+        const result = viewerSelectionQueue.then(action);
+        viewerSelectionQueue = result.catch(error => {
+          console.warn('[West Coast Naturals] Viewer selection failed:', error);
+        });
+        return viewerSelectionQueue;
+      }
+      function transitionWoodgrainProfile(productLabel) {
+        return queueViewerSelection(() => performWoodgrainProfileTransition(productLabel));
+      }
+      function transitionMoodItem(targetIndex, direction = 1) {
+        return queueViewerSelection(async () => {
+          try { await performMoodItemTransition(targetIndex, direction); }
+          finally { moodTransitioning = false; }
+        });
+      }
+      async function performWoodgrainProfileTransition(productLabel) {
         const activeMood = MOOD_ITEMS[activeMoodIndex];
         const nextPath = resolveWoodgrainPath(productLabel, activeMood.name);
         const nextOverlay = resolveWoodgrainOverlayPath(productLabel);
@@ -7041,7 +7059,7 @@
         try { await incoming.finished; } catch (e) { }
       }
 
-      async function transitionMoodItem(targetIndex, direction = 1) {
+      async function performMoodItemTransition(targetIndex, direction = 1) {
         const oldFastFallback = document.getElementById('wcnFastMoodFallback');
         if (oldFastFallback) {
           oldFastFallback.style.opacity = '0';
@@ -7713,37 +7731,36 @@
       }
 
 
-      function loadImage(src) {
-
-
-
-        return new Promise((resolve, reject) => {
-
-
-
-          const image = new Image();
-
-
-
-          image.onload = async () => { try { if (image.decode) await image.decode(); } catch (e) { } resolve(image); };
-
-
-
-          image.onerror = () => reject(new Error(`Failed to load ${src}`));
-
-
-
-          image.src = src;
-
-
-
-        });
-
-
-
+      // Retry transient network failures without letting a stalled request hang startup.
+      async function loadImage(src) {
+        let lastError;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            return await new Promise((resolve, reject) => {
+              const image = new Image();
+              let settled = false;
+              const finish = (error) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                image.onload = image.onerror = null;
+                if (error) { image.src = ''; reject(error); }
+                else resolve(image);
+              };
+              const timer = setTimeout(() => finish(new Error(`Timed out loading ${src}`)), 12000);
+              image.onload = () => finish();
+              image.onerror = () => finish(new Error(`Failed to load ${src}`));
+              const url = new URL(src, document.baseURI);
+              if (attempt) url.searchParams.set('wcn_retry', `${Date.now()}-${attempt}`);
+              image.src = url.href;
+            });
+          } catch (error) {
+            lastError = error;
+            if (attempt < 3) await wait(400 * Math.pow(2, attempt));
+          }
+        }
+        throw lastError;
       }
-
-
 
       function getCoverRect(image, targetWidth, targetHeight) {
 
@@ -9663,14 +9680,20 @@ void main(){
               if (status) status.textContent = `Loading image sequence ${loaded} / ${total}`;
             }
           };
-          const promises = [];
-          for (let frame = 0; frame < SCROLL_FRAME_COUNT; frame++) {
-            promises.push(Promise.all([
-              loadImage(scrollImagePath(frame)).then(image => { track(); return image; }),
-              loadImage(maskImagePath(frame)).then(image => { track(); return image; })
-            ]).then(([image, mask]) => { scrollFrames[frame] = image; maskFrames[frame] = mask; }));
+          // Six frame-pair workers: at most twelve image requests at once.
+          let nextFrame = 0;
+          async function loadWorker() {
+            while (nextFrame < SCROLL_FRAME_COUNT) {
+              const frame = nextFrame++;
+              const [image, mask] = await Promise.all([
+                loadImage(scrollImagePath(frame)).then(image => { track(); return image; }),
+                loadImage(maskImagePath(frame)).then(image => { track(); return image; })
+              ]);
+              scrollFrames[frame] = image;
+              maskFrames[frame] = mask;
+            }
           }
-          await Promise.all(promises);
+          await Promise.all(Array.from({ length: Math.min(6, SCROLL_FRAME_COUNT) }, loadWorker));
           scrollingReady = true;
         }
 
@@ -12378,7 +12401,12 @@ void main(){
           detail.textContent = error && error.stack ? error.stack : message;
           detail.style.whiteSpace = 'pre-wrap';
           detail.style.textAlign = 'left';
-          errorBox.append(heading, detail);
+          const retry = document.createElement('button');
+          retry.type = 'button';
+          retry.textContent = 'Try again';
+          retry.style.cssText = 'padding:12px 24px;cursor:pointer;font:inherit';
+          retry.addEventListener('click', () => window.location.reload());
+          errorBox.append(heading, detail, retry);
           loader.appendChild(errorBox);
 
 
