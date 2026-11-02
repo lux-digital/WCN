@@ -4660,6 +4660,107 @@
        accepting an unrelated build can crash startup inside vendor code.
        Snapshot the page's existing globals, load pinned builds for this widget,
        then restore the page globals so other widgets are not affected. */
+    /* Shared by dependency loading and page initialization. Retry state survives a
+       document reload, including Safari sessions where sessionStorage is unavailable. */
+    window.__wcnStartupRecovery = (() => {
+      const MAX_AUTO_RELOADS = 3;
+      const RETRY_DELAYS_MS = [3000, 6000, 12000];
+      const ATTEMPT_PARAM = '__wcn_reload';
+      const CACHE_PARAM = '__wcn_retry_at';
+      const storageKey = 'wcn:startup-retry:' + window.location.pathname;
+      let timer = 0, ticker = 0, recovering = false, navigating = false;
+      let pauseHandler = null, message = null;
+      const readAttempt = value => {
+        const count = Number(value);
+        return Number.isInteger(count) && count >= 0 ? Math.min(count, MAX_AUTO_RELOADS) : 0;
+      };
+      let attempt = readAttempt(new URL(window.location.href).searchParams.get(ATTEMPT_PARAM));
+      try { attempt = Math.max(attempt, readAttempt(window.sessionStorage.getItem(storageKey))); } catch (_) {}
+      const clearTimers = () => {
+        clearTimeout(timer); clearInterval(ticker);
+        timer = ticker = 0;
+      };
+      const reload = (manual = false) => {
+        if (navigating) return;
+        clearTimers();
+        if (!manual && navigator.onLine === false) {
+          if (message) message.textContent = 'Waiting for your connection. We’ll try again automatically.';
+          return;
+        }
+        navigating = true;
+        const nextAttempt = manual ? 0 : attempt + 1;
+        try { window.sessionStorage.setItem(storageKey, String(nextAttempt)); } catch (_) {}
+        const url = new URL(window.location.href);
+        url.searchParams.set(ATTEMPT_PARAM, String(nextAttempt));
+        url.searchParams.set(CACHE_PARAM, String(Date.now()));
+        // Replace rather than adding failed loads to the visitor's Back-button history.
+        window.location.replace(url.href);
+      };
+      const fail = error => {
+        console.error('[West Coast Naturals] Startup failed:', error);
+        if (recovering) return;
+        recovering = true;
+        try { if (pauseHandler) pauseHandler(); } catch (_) {}
+        const loader = document.getElementById('loader');
+        if (!loader) return;
+        loader.classList.remove('hidden');
+        loader.replaceChildren();
+        const box = document.createElement('div');
+        box.style.cssText = 'max-width:520px;padding:30px;text-align:center;line-height:1.6;font-family:Arial,sans-serif';
+        box.setAttribute('role', 'status');
+        box.setAttribute('aria-live', 'polite');
+        const heading = document.createElement('strong');
+        heading.textContent = 'Loading was interrupted';
+        message = document.createElement('p');
+        message.style.cssText = 'margin:14px 0 22px;font-size:15px;letter-spacing:normal';
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = 'Try again now';
+        retry.style.cssText = 'padding:12px 24px;border:1px solid #fff;border-radius:3px;background:#fff;color:#111;cursor:pointer;font:inherit;letter-spacing:normal';
+        retry.addEventListener('click', () => reload(true));
+        box.append(heading, message, retry);
+        loader.appendChild(box);
+        if (attempt >= MAX_AUTO_RELOADS) {
+          message.textContent = 'We couldn’t finish loading. Please try again in a moment.';
+          return;
+        }
+        if (navigator.onLine === false) {
+          message.textContent = 'Waiting for your connection. We’ll try again automatically.';
+          return;
+        }
+        const delay = RETRY_DELAYS_MS[attempt];
+        const retryAt = Date.now() + delay;
+        const updateMessage = () => {
+          const seconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
+          message.textContent = `Trying again automatically in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}…`;
+        };
+        updateMessage();
+        ticker = setInterval(updateMessage, 1000);
+        timer = setTimeout(() => reload(), delay);
+      };
+      window.addEventListener('online', () => {
+        if (recovering && attempt < MAX_AUTO_RELOADS) reload();
+      });
+      window.addEventListener('pagehide', clearTimers);
+      return {
+        fail,
+        isRecovering: () => recovering,
+        setPauseHandler: handler => { pauseHandler = handler; },
+        complete: () => {
+          clearTimers();
+          recovering = false;
+          attempt = 0;
+          try { window.sessionStorage.removeItem(storageKey); } catch (_) {}
+          const url = new URL(window.location.href);
+          if (url.searchParams.has(ATTEMPT_PARAM) || url.searchParams.has(CACHE_PARAM)) {
+            url.searchParams.delete(ATTEMPT_PARAM);
+            url.searchParams.delete(CACHE_PARAM);
+            try { window.history.replaceState(window.history.state, '', url.href); } catch (_) {}
+          }
+        }
+      };
+    })();
+
     window.__wcnLibrariesReady = (async () => {
       const label = document.getElementById('loaderText');
       const bar = document.getElementById('loaderProgress');
@@ -9133,6 +9234,36 @@ void main(){
 
       ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => stage.addEventListener(type, finishHoldTouch));
 
+      function animateHeroText() {
+        /* Both elements use the exact same authored fade/scale entrance.
+           The volume Lottie itself loops; only its container entrance is timed. */
+        const openingKeyframes = [
+          { opacity: 0,    transform: 'scale(.20)',  offset: 0 },
+          { opacity: .10,  transform: 'scale(.43)',  offset: .035 },
+          { opacity: .20,  transform: 'scale(.57)',  offset: .075 },
+          { opacity: .33,  transform: 'scale(.70)',  offset: .13 },
+          { opacity: .48,  transform: 'scale(.81)',  offset: .21 },
+          { opacity: .64,  transform: 'scale(.89)',  offset: .31 },
+          { opacity: .79,  transform: 'scale(.945)', offset: .44 },
+          { opacity: .90,  transform: 'scale(.977)', offset: .59 },
+          { opacity: .97,  transform: 'scale(.993)', offset: .76 },
+          { opacity: 1,    transform: 'scale(.999)', offset: .91 },
+          { opacity: 1,    transform: 'scale(1)',    offset: 1 }
+        ];
+        const timing = { duration: 3600, easing: 'linear', fill: 'forwards' };
+        heroText.animate(openingKeyframes, timing);
+        volumeControl.classList.add('is-ready');
+        syncVolumeOpeningGap();
+        volumeIntroAnimation = volumeButton.animate(openingKeyframes, timing);
+        // The two opening shortcuts share the SAME entrance, including when
+        // quick reverse travel replays the title/volume animation at the top.
+        wcnFastAnimateButtonsEntrance(openingKeyframes, timing);
+      }
+
+      /* Opening controls are one vertical composition:
+         opening-text Lottie -> quick links -> undocked volume -> flexible gap -> Scroll Lottie.
+         The flexible gap absorbs aspect-ratio differences instead of leaving a fake hole
+         when the speaker docks at the top. */
       function getOpeningArtworkBottom(stageRect) {
         let artworkBottom = NaN;
         if (openingTextReady && openingTextLottie) {
@@ -11565,7 +11696,7 @@ void main(){
           console.warn('[WCN optional fast route]',err);
           wcnFast.starting=false;
           wcnFastSetButtonBusy(destination,false);
-          wcnFastSetStatus('Fast image sequence could not load. Check Scroll_01_fast/Scroll-fast00.jpg to Scroll-fast47.jpg on GitHub (including capitalization).',true,9000);
+          wcnFastSetStatus('Quick navigation couldn’t load. Please tap the button to try again.',true,9000);
           return false;
         }
         // All 48 JPGs are downloaded; the first nine are decoded before playback.
@@ -12263,6 +12394,7 @@ void main(){
 
 
       function masterAnimationLoop(time) {
+        if (window.__wcnStartupRecovery.isRecovering()) return;
 
 
 
@@ -12456,41 +12588,13 @@ void main(){
           // Optional 48-frame files warm AFTER the approved opening is ready.
           setTimeout(() => { wcnFastWarmAssets().catch(() => {}); }, 1400);
 
+          window.__wcnStartupRecovery.complete();
         } catch (error) {
-
-
-
-          console.error(error); loader.classList.remove('hidden');
-
-
-
-          const message = error && error.message ? error.message : String(error);
-          loader.innerHTML = '';
-          const errorBox = document.createElement('div');
-          errorBox.style.cssText = 'max-width:600px;padding:30px;text-align:center;line-height:1.6;font-family:Arial,sans-serif';
-          const heading = document.createElement('strong');
-          heading.textContent = 'Experience could not finish loading';
-          const detail = document.createElement('p');
-          detail.style.cssText = 'margin-top:12px;font-size:13px;letter-spacing:normal;overflow-wrap:anywhere';
-          detail.textContent = error && error.stack ? error.stack : message;
-          detail.style.whiteSpace = 'pre-wrap';
-          detail.style.textAlign = 'left';
-          const retry = document.createElement('button');
-          retry.type = 'button';
-          retry.textContent = 'Try again';
-          retry.style.cssText = 'padding:12px 24px;cursor:pointer;font:inherit';
-          retry.addEventListener('click', () => window.location.reload());
-          errorBox.append(heading, detail, retry);
-          loader.appendChild(errorBox);
-
-
-
+          window.__wcnStartupRecovery.fail(error);
         }
-
-
-
       }
 
+      window.__wcnStartupRecovery.setPauseHandler(stopExperienceMedia);
 
 
       requestAnimationFrame(masterAnimationLoop);
@@ -12503,22 +12607,7 @@ void main(){
 
     })();
     }).catch(error => {
-      console.error('[West Coast Naturals] Startup failed:', error);
-      const loader = document.getElementById('loader');
-      if (!loader) return;
-      loader.classList.remove('hidden');
-      loader.innerHTML = '';
-      const box = document.createElement('div');
-      box.style.cssText = 'max-width:600px;padding:30px;text-align:center;line-height:1.6;font-family:Arial,sans-serif';
-      const heading = document.createElement('strong');
-      heading.textContent = 'Experience could not start';
-      const details = document.createElement('p');
-      details.style.cssText = 'margin-top:12px;font-size:13px;letter-spacing:normal;overflow-wrap:anywhere';
-      details.textContent = error && error.stack ? error.stack : (error && error.message ? error.message : String(error));
-      details.style.whiteSpace = 'pre-wrap';
-      details.style.textAlign = 'left';
-      box.append(heading, details);
-      loader.appendChild(box);
+      window.__wcnStartupRecovery.fail(error);
     });
   </script>
 
