@@ -6039,9 +6039,9 @@
       }
 
       /* MOBILE/TABLET NAVIGATION
-         One controller owns touch and authored story/reveal clips. The JPG sequence
-         advances ONLY through manual intervals; story autoplay never moves its frame.
-         A fresh gesture is required to leave the pannable semi-panorama. */
+         A vertical gesture plays the complete image sequence, then the first story
+         clip. The finished background stays pannable throughout all five story clips.
+         A fresh gesture is required to leave the final semi-panorama hold. */
       const TOUCH_FLOW = Object.freeze({
         sequenceEnd: 1.20,
         storyLength: 1.90,
@@ -6084,12 +6084,7 @@
       }
 
       function touchSequenceFrameAt(position) {
-        if (position <= TOUCH_FLOW.sequenceEnd) return STORY_SEQUENCE_START_FRAME * position / TOUCH_FLOW.sequenceEnd;
-        const storyFrame = touchStoryFrameAt(position);
-        const automaticFrames = STORY_AUTOPLAY_RANGES.reduce((sum, range) =>
-          sum + clamp(storyFrame - range.start, 0, range.end - range.start), 0);
-        return lerp(STORY_SEQUENCE_START_FRAME, SCROLL_FRAME_COUNT - 1,
-          clamp((storyFrame - automaticFrames) / STORY_MANUAL_TOTAL_SPAN, 0, 1));
+        return (SCROLL_FRAME_COUNT - 1) * clamp(position / TOUCH_FLOW.sequenceEnd, 0, 1);
       }
 
       function touchRawAt(position) {
@@ -6114,6 +6109,19 @@
         return Math.abs(position - TOUCH_HOLD_POSITION) < .00001;
       }
 
+      function touchCanPanHold() {
+        return holdEnvLoaded && touchFlow.displayedPosition >= TOUCH_FLOW.sequenceEnd &&
+          touchFlow.displayedPosition <= TOUCH_HOLD_POSITION &&
+          touchFlow.autoplay?.kind !== 'sequence';
+      }
+
+      function startTouchSequence(direction) {
+        touchFlow.autoplay = { kind: 'sequence', low: 0, high: TOUCH_FLOW.sequenceEnd, direction, rate: 1 };
+        if (direction < 0) mouseX = mouseY = 0;
+        mobileSequenceDirection = direction;
+        prefetchMobileSequenceWindow(Math.round(touchSequenceFrameAt(touchFlow.position)), direction);
+      }
+
       function setTouchPosition(position) {
         const next = clamp(position, 0, TOUCH_END_POSITION);
         if (next === touchFlow.position && !touchFlow.dirty) return;
@@ -6134,6 +6142,11 @@
           // Reverse from the visible playhead; never restart a clip at an old anchor.
           touchFlow.autoplay.direction = direction;
           touchFlow.autoplay.rate = Math.min(4, Math.max(touchFlow.autoplay.rate, 1 + Math.abs(deltaPixels) / 90));
+          return;
+        }
+        if ((from < TOUCH_FLOW.sequenceEnd - .000001 && direction > 0) ||
+            (from <= TOUCH_FLOW.sequenceEnd + .000001 && from > 0 && direction < 0)) {
+          startTouchSequence(direction);
           return;
         }
         let next = clamp(from + distance, 0, TOUCH_END_POSITION);
@@ -6187,8 +6200,14 @@
         // Do not run the clock ahead of a requested image or an unavailable story.
         if (Math.abs(touchFlow.position - touchFlow.displayedPosition) > .000001 ||
             (clip.kind === 'story' && !storySquareLottieReady)) return;
+        // Align the panned view before fading back into its matching final image.
+        if (clip.kind === 'sequence' && clip.direction < 0 &&
+            touchFlow.position >= TOUCH_FLOW.sequenceEnd &&
+            (Math.abs(holdEnvYaw) > .00005 || Math.abs(holdEnvPitch) > .00005)) return;
         clip.rate += (1 - clip.rate) * Math.min(1, dt * 3);
-        const speed = clip.kind === 'story'
+        const speed = clip.kind === 'sequence'
+          ? TOUCH_FLOW.sequenceEnd * BACKGROUND_AUTOPLAY_FPS / (SCROLL_FRAME_COUNT - 1)
+          : clip.kind === 'story'
           ? (clip.high - clip.low) * STORY_SEQUENCE_AUTOPLAY_FPS / (clip.end - clip.start)
           : TOUCH_FLOW.moodLength * Math.max(.75, parentHandoffRate) / MOOD_CLIP_DURATION;
         const next = clamp(touchFlow.position + clip.direction * dt * speed * clip.rate, clip.low, clip.high);
@@ -6196,9 +6215,14 @@
         const complete = clip.direction > 0 ? next >= clip.high - .000001 : next <= clip.low + .000001;
         if (complete) {
           setTouchPosition(clip.direction > 0 ? clip.high : clip.low);
-          touchFlow.autoplay = null;
+          // The story waits here for the final image and its Lottie to be ready.
+          // No further swipe is required for the first clip.
+          touchFlow.autoplay = clip.kind === 'sequence' && clip.direction > 0
+            ? { ...touchStorySegments[0], kind: 'story', direction: 1, rate: 1 }
+            : null;
           touchFlow.dirty = true;
-          if (touchFlow.gesture) touchFlow.gesture.stopped = true;
+          // Completing a story clip must never interrupt a horizontal panorama drag.
+          if (touchFlow.gesture?.mode === 'timeline') touchFlow.gesture.stopped = true;
         }
       }
 
@@ -6217,8 +6241,11 @@
           return;
         }
         touchFlow.dirty = false;
+        const previousRaw = touchRawAt(touchFlow.displayedPosition);
         touchFlow.displayedPosition = position;
         const wasComplete = moodClipComplete;
+        const previousMoodProgress = moodClipProgress;
+        const backgroundChanged = wantedFrame !== currentScrollFrame || force;
         targetScrollFrame = smoothScrollFrame = wantedFrame;
         targetStoryProgress = smoothStoryProgress = raw;
         targetStorySequenceProgress = smoothStorySequenceProgress =
@@ -6230,20 +6257,22 @@
         moodClipProgress = clamp((position - TOUCH_HOLD_POSITION) / TOUCH_FLOW.moodLength, 0, 1);
         moodClipActive = touchFlow.autoplay?.kind === 'mood';
         moodClipComplete = position >= TOUCH_END_POSITION;
-        if (wantedFrame !== currentScrollFrame || force) {
+        if (backgroundChanged) {
           currentScrollFrame = wantedFrame;
           renderFrame(wantedFrame);
+          updatePanoramaOpacity();
+          updateHeroScrollTypography(true);
+          updateOpeningTextLottie();
+          updateTextMode();
         }
-        updatePanoramaOpacity();
-        updateHeroScrollTypography(true);
-        updateOpeningTextLottie();
-        updateTextMode();
         updateStoryTextMotion();
-        updateMoodSectionMotion();
+        const scrollCueChanged = (previousRaw >= MOOD_WHITE_START - .0005) !== (raw >= MOOD_WHITE_START - .0005);
+        if (force || scrollCueChanged || previousMoodProgress !== moodClipProgress || wasComplete !== moodClipComplete) updateMoodSectionMotion();
         if (moodClipComplete && !wasComplete) beginMoodExitSettle();
         else if (!moodClipComplete && wasComplete) clearMoodExitSettle();
       }
 
+      const touchHoldRenderState = { dirty: true, yaw: NaN, pitch: NaN, distance: NaN, opacity: -1, interactive: null };
       function updateTouchHoldEnvironment(dt) {
         const blend = smootherstep01(rangeProgress(smoothScrollFrame,
           HOLD_ENV_AUTOPLAY_FADE_START_FRAME, SCROLL_FRAME_COUNT - 1));
@@ -6252,25 +6281,38 @@
         holdEnvReverseFrameLock = false;
         holdEnvReverseSuppressed = false;
         holdEnvMouseBlend = 1;
-        // Return to the aligned camera within the last part of the story on reverse,
-        // while the final JPG is still held. No timed frame lock delays the return.
-        const lookWeight = rangeProgress(touchFlow.displayedPosition,
-          TOUCH_HOLD_POSITION - .40, TOUCH_HOLD_POSITION);
+        const returningToSequence = touchFlow.autoplay?.kind === 'sequence' && touchFlow.autoplay.direction < 0;
+        const lookWeight = touchFlow.displayedPosition >= TOUCH_FLOW.sequenceEnd && !returningToSequence ? 1 : 0;
         const lookLength = Math.max(1, Math.hypot(mouseX, mouseY));
         const targetYaw = -THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_YAW_DEG) * mouseX / lookLength * lookWeight;
         const targetPitch = THREE.MathUtils.degToRad(HOLD_ENV_MOUSE_PITCH_DEG) * mouseY / lookLength * lookWeight;
         const ease = 1 - Math.exp(-HOLD_ENV_ROTATION_EASE * dt);
         holdEnvYaw += (targetYaw - holdEnvYaw) * ease;
         holdEnvPitch += (targetPitch - holdEnvPitch) * ease;
+        if (Math.abs(targetYaw - holdEnvYaw) < .00005) holdEnvYaw = targetYaw;
+        if (Math.abs(targetPitch - holdEnvPitch) < .00005) holdEnvPitch = targetPitch;
         if (blend <= .001) holdEnvYaw = holdEnvPitch = 0;
-        holdEnvCanvas.style.opacity = String(blend);
-        stage.classList.toggle('mobile-hold-touch', touchAtHold());
+        if (touchHoldRenderState.opacity !== blend) {
+          holdEnvCanvas.style.opacity = String(blend);
+          touchHoldRenderState.opacity = blend;
+        }
+        const interactive = touchCanPanHold();
+        if (touchHoldRenderState.interactive !== interactive) {
+          stage.classList.toggle('mobile-hold-touch', interactive);
+          touchHoldRenderState.interactive = interactive;
+        }
         if (blend > .001 && moodClipProgress < 1 && mediaIsVisible()) {
-          holdEnvCamera.position.set(0, 0, holdEnvCameraDistance);
-          holdEnvCamera.rotation.order = 'YXZ';
-          holdEnvCamera.rotation.y = holdEnvYaw;
-          holdEnvCamera.rotation.x = holdEnvPitch;
-          holdEnvRenderer.render(holdEnvScene, holdEnvCamera);
+          if (touchHoldRenderState.dirty || touchHoldRenderState.yaw !== holdEnvYaw ||
+              touchHoldRenderState.pitch !== holdEnvPitch || touchHoldRenderState.distance !== holdEnvCameraDistance) {
+            holdEnvCamera.position.set(0, 0, holdEnvCameraDistance);
+            holdEnvCamera.rotation.order = 'YXZ';
+            holdEnvCamera.rotation.y = holdEnvYaw;
+            holdEnvCamera.rotation.x = holdEnvPitch;
+            holdEnvRenderer.render(holdEnvScene, holdEnvCamera);
+            Object.assign(touchHoldRenderState, { dirty: false, yaw: holdEnvYaw, pitch: holdEnvPitch, distance: holdEnvCameraDistance });
+          }
+        } else {
+          touchHoldRenderState.dirty = true;
         }
         hideHoldLensFlare();
       }
@@ -6308,7 +6350,7 @@
         const control = target.closest('button, input, a, select, textarea, [role="button"]');
         let pan = 'none';
         if (woodViewerInteractionEnabled && target.closest('#woodViewerShell')) pan = 'wood';
-        else if (touchAtHold() && holdEnvLoaded) pan = 'hold';
+        else if (touchCanPanHold()) pan = 'hold';
         else if (smoothScrollFrame < PANORAMA_FADE_END_FRAME && panoramaLoaded) pan = 'main';
         touchFlow.gesture = { id: touch.identifier, mode: control ? 'control' : 'pending', pan,
           x: touch.clientX, y: touch.clientY, lastX: touch.clientX, lastY: touch.clientY,
@@ -8268,12 +8310,15 @@
         applyWoodViewerPanPosition();
       }
 
+      // A small tolerance avoids turning a 60 Hz display into a 20 fps Lottie
+      // when two browser frames arrive fractionally short of 33.333 ms.
+      const TOUCH_STORY_PAINT_INTERVAL_MS = 1000 / 30 - 1;
       let lastTouchStoryPaint = -Infinity, pendingTouchStoryFrame = null;
       function setStoryLottieLogicalFrame(logicalFrame) {
         if (MOBILE_RUNTIME) {
           const now = performance.now();
           pendingTouchStoryFrame = logicalFrame;
-          if (now - lastTouchStoryPaint < 1000 / 30) return;
+          if (now - lastTouchStoryPaint < TOUCH_STORY_PAINT_INTERVAL_MS) return;
           lastTouchStoryPaint = now;
           pendingTouchStoryFrame = null;
         }
@@ -8284,7 +8329,7 @@
       }
 
       function updateStoryTextMotion() {
-        if (MOBILE_RUNTIME && pendingTouchStoryFrame !== null && performance.now() - lastTouchStoryPaint >= 1000 / 30) {
+        if (MOBILE_RUNTIME && pendingTouchStoryFrame !== null && performance.now() - lastTouchStoryPaint >= TOUCH_STORY_PAINT_INTERVAL_MS) {
           const frame = pendingTouchStoryFrame;
           pendingTouchStoryFrame = null;
           setStoryLottieLogicalFrame(frame);
@@ -9596,8 +9641,8 @@ void main(){
          user's sound-button click for browser autoplay policy.
 
          Sound/ambient.mp3  + Sound/Ocean.mp3 remain the underlying bed.
-         As the animated-thumbnail scene arrives, that existing bed eases
-         down to 30% of its previous level instead of disappearing.
+         As the animated-thumbnail scene arrives, both tracks fade to silence.
+         Returning upward fades them back in over time, even after a fast swipe.
 
          Each Mood/*.mp4 now supplies its OWN looping environment sound.
          Only the active MP4 is audible. During a woodgrain/background swap,
@@ -9801,24 +9846,63 @@ void main(){
         return !document.hidden && experienceInView && parentOverlayProgress < .995;
       }
       function stopExperienceMedia() {
+        resetAudioReturnFades();
         for (const track of soundscapeTracks.values()) setSoundscapeTrackLevel(track, 0);
         moodVideoPlayers.forEach(video => { video.pause(); setMoodVideoAudioLevel(video, 0); video.muted = true; });
       }
       document.addEventListener('visibilitychange', () => {
+        previousAnimationTime = performance.now();
+        touchHoldRenderState.dirty = true;
         if (document.hidden) stopExperienceMedia();
         else updateSoundscape();
       });
       window.addEventListener('pagehide', stopExperienceMedia);
+      window.addEventListener('pageshow', () => {
+        previousAnimationTime = performance.now();
+        touchHoldRenderState.dirty = true;
+      });
       if (typeof IntersectionObserver !== 'undefined') {
         new IntersectionObserver(entries => {
+          if (experienceInView !== entries[0].isIntersecting) previousAnimationTime = performance.now();
           experienceInView = entries[0].isIntersecting;
+          if (experienceInView) touchHoldRenderState.dirty = true;
           if (!experienceInView) stopExperienceMedia();
         }).observe(stage);
       }
+      const SOUND_RETURN_FADE_MS = 2800;
+      const audioReturnFades = new Map();
+      function resetAudioReturnFades() {
+        for (const key of ['page', 'bed']) {
+          audioReturnFades.set(key, { value: 0, from: 0, startedAt: null });
+        }
+      }
+      function getAudioReturnGain(key, target, time) {
+        target = clamp(target, 0, 1);
+        let fade = audioReturnFades.get(key);
+        if (!fade) {
+          fade = { value: target, from: target, startedAt: null };
+          audioReturnFades.set(key, fade);
+        }
+        // Keep the approved downward fade and mute response immediate. Only a
+        // returning layer gets a timed rise, independent of scroll/swipe speed.
+        if (target <= fade.value) {
+          fade.value = fade.from = target;
+          fade.startedAt = null;
+        } else {
+          if (fade.startedAt === null) {
+            fade.from = fade.value;
+            fade.startedAt = time;
+          }
+          const progress = smootherstep01(clamp((time - fade.startedAt) / SOUND_RETURN_FADE_MS, 0, 1));
+          fade.value = Math.min(target, lerp(fade.from, 1, progress));
+        }
+        return fade.value;
+      }
+
       function updateSoundscape(time = performance.now()) {
         if (!soundEnabled) return;
         if (!mediaIsVisible()) { stopExperienceMedia(); return; }
-        const exitFadeGain = 1 - smootherstep01(parentOverlayProgress);
+        const exitFadeGain = getAudioReturnGain('page', 1 - smootherstep01(parentOverlayProgress), time);
         const master = clamp(Number(volumeSlider.value) / 100, 0, 1) * exitFadeGain;
         const ambient = soundscapeTracks.get('ambient');
         const ocean = soundscapeTracks.get('ocean');
@@ -9833,14 +9917,15 @@ void main(){
 
         /* The same visual progress that reveals the thumbnail scene controls the mix.
            ambient.mp3 and Ocean.mp3 both ease fully to silence; the
-           active MP4 eases from 0 to its one consistent target level. Reverse scrolling
-           naturally restores the original ambient/ocean balance. */
+           active MP4 eases from 0 to its one consistent target level. A timed return
+           envelope prevents a quick reverse gesture from instantly restoring the bed. */
         const moodProgress = getMoodVisualProgress();
         const moodFade = smootherstep01(rangeProgress(
           moodProgress, MOOD_WHITE_START, MOOD_VIDEO_END
         ));
-        const ambientBedGain = 1 - (1 - MOOD_AMBIENT_BED_LEVEL) * moodFade;
-        const oceanBedGain = 1 - (1 - MOOD_OCEAN_BED_LEVEL) * moodFade;
+        const returningBedGain = getAudioReturnGain('bed', 1 - moodFade, time);
+        const ambientBedGain = MOOD_AMBIENT_BED_LEVEL + (1 - MOOD_AMBIENT_BED_LEVEL) * returningBedGain;
+        const oceanBedGain = MOOD_OCEAN_BED_LEVEL + (1 - MOOD_OCEAN_BED_LEVEL) * returningBedGain;
         const moodVideoSceneGain = moodFade;
 
         setSoundscapeTrackLevel(ambient, master * SOUND_AMBIENT_MIX * ambientBedGain);
@@ -9887,6 +9972,7 @@ void main(){
           if (moodAudioTransition) primeMoodVideoAudioOnGesture(moodAudioTransition.to);
           updateSoundscape();
         } else {
+          resetAudioReturnFades();
           for (const track of soundscapeTracks.values()) {
             track.audio.pause();
             setSoundscapeTrackLevel(track, 0);
@@ -10548,7 +10634,7 @@ void main(){
         }
         if (MOBILE_RUNTIME) {
           markMobileSequenceFrameUsed(frame);
-          prefetchMobileSequenceWindow(frame, mobileSequenceDirection);
+          if (touchFlow.position < TOUCH_FLOW.sequenceEnd) prefetchMobileSequenceWindow(frame, mobileSequenceDirection);
         }
 
         drawCover(sceneCtx, image, sceneCanvas); // cover the entire physical canvas, no letterboxing
@@ -10793,6 +10879,10 @@ void main(){
             if (!MOBILE_RUNTIME) loadHoldHiResInsert(textureLoader);
 
             holdEnvLoaded = true;
+            touchHoldRenderState.dirty = true;
+            if (MOBILE_RUNTIME) holdEnvCanvas.addEventListener('webglcontextrestored', () => {
+              touchHoldRenderState.dirty = true;
+            });
             holdEnvRenderer.render(holdEnvScene, holdEnvCamera);
             resolve();
           }, undefined, reject);
@@ -12351,6 +12441,7 @@ void main(){
         if (holdEnvRenderer) {
           holdEnvRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MOBILE_RUNTIME ? 1 : 1.5));
           holdEnvRenderer.setSize(viewportWidth, viewportHeight, false);
+          touchHoldRenderState.dirty = true;
         }
 
         if (camera) { camera.aspect = viewportWidth / viewportHeight; camera.updateProjectionMatrix(); }
@@ -12590,7 +12681,10 @@ void main(){
 
 
 
-        const dt = Math.min(.05, (time - previousAnimationTime) / 1000); previousAnimationTime = time;
+        // Camera easing still uses bounded steps. Touch playback uses actual visible
+        // elapsed time so dropped frames skip forward instead of stretching the clip.
+        const playbackDt = Math.max(0, (time - previousAnimationTime) / 1000);
+        const dt = Math.min(.05, playbackDt); previousAnimationTime = time;
         if (document.hidden || !experienceInView || parentOverlayProgress >= .995) {
           stopExperienceMedia();
           requestAnimationFrame(masterAnimationLoop);
@@ -12635,7 +12729,7 @@ void main(){
         if (lockedY !== null && Math.abs(window.scrollY - lockedY) > .5) window.scrollTo(0, lockedY);
 
         if (MOBILE_RUNTIME) {
-          updateTouchAutoplay(dt);
+          updateTouchAutoplay(playbackDt);
           updateTouchTimeline();
           resumeVisibleMoodVideo();
           if (pendingTouchStoryFrame !== null) updateStoryTextMotion();
