@@ -5644,6 +5644,7 @@
       let masterAudioContext = null, masterAudioInput = null, masterAudioLimiter = null;
       const connectedAudioElements = new WeakSet();
       const moodVideoAudioNodes = new Map();
+      const moodVideoAudioLevels = new WeakMap();
       let scrollInputEnergy = 0, scrollInputLastAt = 0, timelinePlaybackRate = 1;
       let mobileTimelineTouchLastY = 0;
       let mobileTimelineTouchLastAt = 0;
@@ -6317,11 +6318,15 @@
         hideHoldLensFlare();
       }
 
-      function finishTouchFlowGesture() {
+      function finishTouchFlowGesture(event) {
         const gesture = touchFlow.gesture;
         if (gesture?.mode === 'main-pan') {
           isDragging = false;
-          inertialYawVelocity = inertialPitchVelocity = 0;
+          const released = event?.type === 'touchend';
+          const age = Math.max(0, performance.now() - gesture.at);
+          const releaseWeight = released && age < 140 ? Math.exp(-age / 65) : 0;
+          inertialYawVelocity = gesture.yawVelocity * releaseWeight;
+          inertialPitchVelocity = gesture.pitchVelocity * releaseWeight;
         }
         if (gesture?.mode === 'wood-pan') {
           woodPanDragging = false;
@@ -6352,10 +6357,29 @@
         if (woodViewerInteractionEnabled && target.closest('#woodViewerShell')) pan = 'wood';
         else if (touchCanPanHold()) pan = 'hold';
         else if (smoothScrollFrame < PANORAMA_FADE_END_FRAME && panoramaLoaded) pan = 'main';
+        if (!control && pan === 'main') {
+          inertialYawVelocity = inertialPitchVelocity = 0;
+          mouseX = mouseY = smoothMouseX = smoothMouseY = 0;
+        }
         touchFlow.gesture = { id: touch.identifier, mode: control ? 'control' : 'pending', pan,
           x: touch.clientX, y: touch.clientY, lastX: touch.clientX, lastY: touch.clientY,
-          stopped: wcnFast.active || wcnFast.starting, velocity: woodPanVelocity, at: performance.now() };
+          stopped: wcnFast.active || wcnFast.starting, velocity: woodPanVelocity,
+          yawVelocity: 0, pitchVelocity: 0, startedAt: performance.now(), startPosition: touchFlow.displayedPosition,
+          at: performance.now() };
         if (!control && event.cancelable) event.preventDefault();
+      }
+
+      function tryTouchFastReturn(gesture, totalX, totalY, now) {
+        if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
+            gesture.mode !== 'timeline' || gesture.startPosition < TOUCH_FLOW.sequenceEnd) return false;
+        const distance = clamp(viewportHeight * .14, 110, 180);
+        const elapsed = Math.max(16, now - gesture.startedAt);
+        // Returning up the page means moving the finger downward. Require both
+        // deliberate vertical distance and speed; sideways looking can never skip.
+        if (totalY < distance || totalY < Math.abs(totalX) * 1.8 || totalY / elapsed < .85) return false;
+        gesture.stopped = true;
+        void wcnFastBegin('top', -1);
+        return true;
       }
 
       function moveTouchFlowGesture(event) {
@@ -6363,11 +6387,14 @@
         const gesture = touchFlow.gesture;
         if (!gesture || gesture.mode === 'control' || parentOverlayActive) return;
         if (event.cancelable) event.preventDefault();
-        if (gesture.stopped) return;
         const touch = Array.from(event.touches).find(item => item.identifier === gesture.id);
         if (!touch) return;
         const totalX = touch.clientX - gesture.x, totalY = touch.clientY - gesture.y;
         const ax = Math.abs(totalX), ay = Math.abs(totalY);
+        if (gesture.stopped) {
+          tryTouchFastReturn(gesture, totalX, totalY, performance.now());
+          return;
+        }
         let dx = touch.clientX - gesture.lastX, dy = touch.clientY - gesture.lastY;
         if (gesture.mode === 'pending') {
           if (gesture.pan !== 'none' && ax >= 12 && ax > ay * 1.10) {
@@ -6387,10 +6414,20 @@
           }
         }
         // Once panning starts, vertical drift can never become a navigation swipe.
-        if (gesture.mode === 'timeline') advanceTouchTimeline(-dy, gesture);
+        if (gesture.mode === 'timeline') {
+          if (tryTouchFastReturn(gesture, totalX, totalY, performance.now())) return;
+          advanceTouchTimeline(-dy, gesture);
+        }
         else if (gesture.mode === 'main-pan') {
-          yaw -= dx * DRAG_SENSITIVITY * 1.18;
-          pitch = clamp(pitch + dy * DRAG_SENSITIVITY * .82, -MAX_PITCH, MAX_PITCH);
+          const dt = Math.max(.008, (performance.now() - gesture.at) / 1000);
+          const yd = -dx * DRAG_SENSITIVITY * 1.18;
+          const nextPitch = clamp(pitch + dy * DRAG_SENSITIVITY * .82, -MAX_PITCH, MAX_PITCH);
+          gesture.yawVelocity = clamp(gesture.yawVelocity + (yd / dt - gesture.yawVelocity) * .35,
+            -MAX_DRAG_VELOCITY, MAX_DRAG_VELOCITY);
+          gesture.pitchVelocity = clamp(gesture.pitchVelocity + ((nextPitch - pitch) / dt - gesture.pitchVelocity) * .35,
+            -MAX_DRAG_VELOCITY, MAX_DRAG_VELOCITY);
+          yaw += yd;
+          pitch = nextPitch;
         } else if (gesture.mode === 'hold-pan') {
           mouseX = clamp(mouseX + dx / Math.max(220, viewportWidth * .42), -1, 1);
           mouseY = clamp(mouseY + dy / Math.max(320, viewportHeight * .60), -1, 1);
@@ -7294,7 +7331,7 @@
 
         const videoOpacity = smootherstep01(rangeProgress(p, MOOD_VIDEO_START, MOOD_VIDEO_END));
         updateMoodStillFallback(videoOpacity);
-        if (videoOpacity <= .001 || !mediaIsVisible()) moodVideoPlayers.forEach(video => video.pause());
+        if (videoOpacity <= .001 || !mediaIsVisible()) moodVideoPlayers.forEach(pauseMoodVideoIfSilent);
         const quickFallback = document.getElementById('wcnFastMoodFallback');
         if (quickFallback && quickFallback.dataset.wcnFastVisible === 'true') {
           // The fallback is optional, but MUST leave with the video on reverse.
@@ -9464,6 +9501,9 @@ void main(){
           { opacity: 1,    transform: 'scale(1)',    offset: 1 }
         ];
         const timing = { duration: 3600, easing: 'linear', fill: 'forwards' };
+        // Place the entire stack before any of its entrance animations become
+        // visible, including while desktop sequence assets are still loading.
+        syncOpeningControlsLayout();
         heroText.animate(openingKeyframes, timing);
         volumeControl.classList.add('is-ready');
         syncVolumeOpeningGap();
@@ -9522,15 +9562,25 @@ void main(){
         return { stageRect, buttonHeight, buttonTop, buttonBottom, volumeTop, stackBottom, cueSize, cueTop, safeBottom };
       }
 
+      function syncOpeningControlsLayout() {
+        const layout = getOpeningStackLayout();
+        const links = document.getElementById('wcnFastLinks');
+        if (links) links.style.top = (layout.buttonTop + layout.buttonHeight * .5 - layout.stageRect.top) + 'px';
+        if (!volumeDocked) {
+          const top = Math.max(0, layout.volumeTop - layout.stageRect.top);
+          const previous = Number.parseFloat(volumeControl.style.top);
+          if (!Number.isFinite(previous) || Math.abs(previous - top) > .75) volumeControl.style.top = `${top}px`;
+        }
+        scrollIndicator.style.setProperty('width', layout.cueSize + 'px', 'important');
+        scrollIndicator.style.setProperty('height', layout.cueSize + 'px', 'important');
+        scrollIndicator.style.setProperty('bottom', 'auto', 'important');
+        scrollIndicator.style.setProperty('top', (layout.cueTop - layout.stageRect.top) + 'px', 'important');
+      }
+
       function syncVolumeOpeningGap() {
         if (volumeDocked || !volumeControl || !heroTextInner ||
             !volumeControl.classList.contains('is-ready')) return;
-        const layout = getOpeningStackLayout();
-        const top = Math.max(0, layout.volumeTop - layout.stageRect.top);
-        const previous = Number.parseFloat(volumeControl.style.top);
-        if (!Number.isFinite(previous) || Math.abs(previous - top) > .75) {
-          volumeControl.style.top = `${top}px`;
-        }
+        syncOpeningControlsLayout();
       }
 
       /* The new volume control never joins #heroText or its foreground-mask canvas.
@@ -9700,6 +9750,7 @@ void main(){
       function setMoodVideoAudioLevel(video, level) {
         if (!video) return;
         const safeLevel = clamp(Number(level) || 0, 0, 1);
+        moodVideoAudioLevels.set(video, safeLevel);
         const routed = moodVideoAudioNodes.get(video);
         if (routed && masterAudioContext) {
           video.muted = safeLevel <= .0005;
@@ -9713,6 +9764,13 @@ void main(){
           video.volume = safeLevel;
           video.muted = !soundEnabled || safeLevel <= .0005;
         }
+      }
+
+      function pauseMoodVideoIfSilent(video) {
+        // The picture may already be hidden while its soundtrack is fading out.
+        // Stop decoding only after that fade; hiding the tab still stops immediately.
+        if (soundEnabled && mediaIsVisible() && (moodVideoAudioLevels.get(video) || 0) > .0005) return;
+        video.pause();
       }
 
       function unlockMasterAudio() {
@@ -9872,9 +9930,8 @@ void main(){
       const SOUND_RETURN_FADE_MS = 2800;
       const audioReturnFades = new Map();
       function resetAudioReturnFades() {
-        for (const key of ['page', 'bed']) {
-          audioReturnFades.set(key, { value: 0, from: 0, startedAt: null });
-        }
+        audioReturnFades.clear();
+        audioReturnFades.set('page', { value: 0, from: 0, startedAt: null });
       }
       function getAudioReturnGain(key, target, time) {
         target = clamp(target, 0, 1);
@@ -9899,6 +9956,27 @@ void main(){
         return fade.value;
       }
 
+      function getSceneAudioMix(target, time) {
+        target = clamp(target, 0, 1);
+        let fade = audioReturnFades.get('scene');
+        if (!fade) {
+          fade = { value: target, from: target, direction: 0, startedAt: time };
+          audioReturnFades.set('scene', fade);
+        }
+        const direction = Math.sign(target - fade.value);
+        if (direction !== fade.direction) {
+          fade.from = fade.value;
+          fade.startedAt = time;
+          fade.direction = direction;
+        }
+        if (direction) {
+          const progress = smootherstep01(clamp((time - fade.startedAt) / SOUND_RETURN_FADE_MS, 0, 1));
+          const value = lerp(fade.from, direction > 0 ? 1 : 0, progress);
+          fade.value = direction > 0 ? Math.min(target, value) : Math.max(target, value);
+        }
+        return fade.value;
+      }
+
       function updateSoundscape(time = performance.now()) {
         if (!soundEnabled) return;
         if (!mediaIsVisible()) { stopExperienceMedia(); return; }
@@ -9915,18 +9993,16 @@ void main(){
         ));
         const oceanBeforeMood = OCEAN_START_LEVEL + (1 - OCEAN_START_LEVEL) * oceanGrowth;
 
-        /* The same visual progress that reveals the thumbnail scene controls the mix.
-           ambient.mp3 and Ocean.mp3 both ease fully to silence; the
-           active MP4 eases from 0 to its one consistent target level. A timed return
-           envelope prevents a quick reverse gesture from instantly restoring the bed. */
-        const moodProgress = getMoodVisualProgress();
+        /* One timed crossfade owns BOTH directions, independently of how quickly the
+           user crosses the visual transition. The existing ambient/ocean/MP4 levels
+           are unchanged, and the thumbnail scene still ends with a silent bed. */
+        const moodProgress = wcnFast.active ? (wcnFast.direction > 0 ? 1 : 0) : getMoodVisualProgress();
         const moodFade = smootherstep01(rangeProgress(
           moodProgress, MOOD_WHITE_START, MOOD_VIDEO_END
         ));
-        const returningBedGain = getAudioReturnGain('bed', 1 - moodFade, time);
-        const ambientBedGain = MOOD_AMBIENT_BED_LEVEL + (1 - MOOD_AMBIENT_BED_LEVEL) * returningBedGain;
-        const oceanBedGain = MOOD_OCEAN_BED_LEVEL + (1 - MOOD_OCEAN_BED_LEVEL) * returningBedGain;
-        const moodVideoSceneGain = moodFade;
+        const moodVideoSceneGain = getSceneAudioMix(moodFade, time);
+        const ambientBedGain = 1 - (1 - MOOD_AMBIENT_BED_LEVEL) * moodVideoSceneGain;
+        const oceanBedGain = 1 - (1 - MOOD_OCEAN_BED_LEVEL) * moodVideoSceneGain;
 
         setSoundscapeTrackLevel(ambient, master * SOUND_AMBIENT_MIX * ambientBedGain);
         setSoundscapeTrackLevel(ocean, master * SOUND_OCEAN_MIX * oceanBeforeMood * oceanBedGain);
@@ -9951,7 +10027,7 @@ void main(){
           const level = master * MOOD_VIDEO_AUDIO_MIX * moodVideoSceneGain * gain;
           setMoodVideoAudioLevel(video, level);
           if (level > .001 && video.paused) playMoodVideo(video);
-          if (moodVideoSceneGain <= .001) video.pause();
+          if (moodProgress < MOOD_VIDEO_START && level <= .0005) video.pause();
         });
       }
 
@@ -10252,8 +10328,10 @@ void main(){
             renderer: 'svg',
             loop: false,
             autoplay: false,
-            path: STORY_SEQUENCE_LOTTIE,
-            rendererSettings: { preserveAspectRatio: 'xMidYMid meet', progressiveLoad: MOBILE_RUNTIME, hideOnTransparent: true }
+            path: MOBILE_RUNTIME ? 'mobile/square.json' : STORY_SEQUENCE_LOTTIE,
+            // Build the small composition up front instead of inserting SVG
+            // elements mid-swipe. The touch asset omits repeated blur shadows.
+            rendererSettings: { preserveAspectRatio: 'xMidYMid meet', progressiveLoad: false, hideOnTransparent: true }
           });
 
           if (MOBILE_RUNTIME) storySquareLottie.setSubframe(false);
@@ -11921,25 +11999,7 @@ void main(){
         }
         if(!atOpening)return;
 
-        const layout = getOpeningStackLayout();
-        const buttonCenter = layout.buttonTop + layout.buttonHeight * .5;
-        wcnFastLinks.style.top = (buttonCenter - layout.stageRect.top) + 'px';
-
-        /* If the speaker is still in the opening composition, keep it immediately
-           below the quick links. Once it docks, the links stay put and the extra room
-           automatically becomes part of the flexible Scroll-Lottie gap. */
-        if (!volumeDocked && volumeControl.classList.contains('is-ready')) {
-          const volumeTop = layout.volumeTop - layout.stageRect.top;
-          const previous = Number.parseFloat(volumeControl.style.top);
-          if (!Number.isFinite(previous) || Math.abs(previous - volumeTop) > .75) {
-            volumeControl.style.top = volumeTop + 'px';
-          }
-        }
-
-        scrollIndicator.style.setProperty('width', layout.cueSize + 'px', 'important');
-        scrollIndicator.style.setProperty('height', layout.cueSize + 'px', 'important');
-        scrollIndicator.style.setProperty('bottom', 'auto', 'important');
-        scrollIndicator.style.setProperty('top', (layout.cueTop - layout.stageRect.top) + 'px', 'important');
+        syncOpeningControlsLayout();
       }
       function wcnFastStopOrdinaryAutoplay() {
         // This runs ONLY after a fast shortcut was deliberately invoked.
@@ -12216,7 +12276,8 @@ void main(){
         wcnFastWheelEnergy=0;
         wcnFastBegin(towardMood?'colours':'top',direction);
       },{capture:true,passive:false});
-      // Fast travel remains available through its buttons; touch swipes follow the story.
+      // Rapid upward touch navigation uses tryTouchFastReturn in the touch controller;
+      // ordinary swipes still follow the authored story and panorama holds.
 
       /* FORWARD-ONLY SLOWDOWN / NORMAL-SPEED REVERSE
          The authored story and mood sections are physically stretched so scrolling down

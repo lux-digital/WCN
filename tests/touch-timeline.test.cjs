@@ -15,7 +15,8 @@ function controller() {
     'STORY_MANUAL_SPAN_1', 'STORY_MANUAL_SPAN_2', 'STORY_MANUAL_SPAN_3', 'STORY_MANUAL_SPAN_4', 'STORY_MANUAL_TOTAL_SPAN',
     'MOOD_WHITE_START', 'MOOD_CLIP_DURATION', 'HOLD_ENV_AUTOPLAY_FADE_START_FRAME', 'BACKGROUND_SCROLL_SLOWDOWN',
     'BACKGROUND_AUTOPLAY_START_FRAME', 'BACKGROUND_AUTOPLAY_FPS', 'HERO_TYPE_CONTINUE_END_FRAME',
-    'PANORAMA_FADE_END_FRAME', 'HOLD_ENV_MOUSE_YAW_DEG', 'HOLD_ENV_MOUSE_PITCH_DEG', 'HOLD_ENV_ROTATION_EASE'];
+    'PANORAMA_FADE_END_FRAME', 'HOLD_ENV_MOUSE_YAW_DEG', 'HOLD_ENV_MOUSE_PITCH_DEG', 'HOLD_ENV_ROTATION_EASE',
+    'DRAG_SENSITIVITY', 'MAX_DRAG_VELOCITY', 'MAX_PITCH'];
   // Dependencies precede their consumers.
   const ordered = names.filter(n => n !== 'HERO_TYPE_CONTINUE_END_FRAME').concat('HERO_TYPE_CONTINUE_END_FRAME');
   let declarations = '';
@@ -37,6 +38,8 @@ function controller() {
     updateWoodStripLoop(){}, wcnFastTick(){}, wcnFastUpdateLinks(){}, updateHoldHotspots(){},
     updateMoodBackgroundParallax(){}, syncVolumePositionWithScroll(){}, updateSoundscape(){},
     wcnFast: { active: false, starting: false }, parentOverlayActive: false, parentScrollHandoffEnabled: true, parentHandoffRate: 1,
+    fastRequests:[],wcnFastBegin:(destination,direction)=>{context.fastRequests.push({destination,direction});context.wcnFast.starting=true;},
+    yaw:0,pitch:0,smoothMouseX:0,smoothMouseY:0,inertialYawVelocity:0,inertialPitchVelocity:0,isDragging:false,
     viewportHeight: 1000, viewportWidth: 1000, mobileSequenceDirection: 1, scrollFrames: Array(109).fill({}), currentScrollFrame: -1,
     moodClipComplete: false, moodClipActive: false, moodClipProgress: 0, paints: [], handoffs: [], backgroundUpdates: 0,
     holdEnvLoaded: true, holdEnvYaw: 0, holdEnvPitch: 0, mouseX: 0, mouseY: 0, holdEnvCameraDistance: 1,
@@ -73,6 +76,7 @@ function controller() {
      };`, context);
   context.api.seek(0);
   context.api.tick = dt => { now += dt * 1000; context.api.tickAt(now); };
+  context.api.elapse = ms => { now += ms; };
   const event = (x,y) => ({ target:new Target(), touches:[{identifier:1,clientX:x,clientY:y}], cancelable:true, preventDefault(){} });
   return { api:context.api, context, event };
 }
@@ -206,4 +210,39 @@ test('hidden and offscreen pages pause the story clock', () => {
   context.document.hidden=true;api.tick(30);assert.equal(api.state().position,position);
   context.document.hidden=false;context.experienceInView=false;api.tick(20);assert.equal(api.state().position,position);
   context.experienceInView=true;api.tick(.25);assert.ok(Math.abs(api.state().story-19)<.00001);
+});
+
+test('main touch panorama retains bounded release momentum and drops it on a new touch or cancellation', () => {
+  const {api,context,event}=controller();api.begin(event(100,200));api.elapse(20);api.move(event(150,205));
+  assert.equal(context.isDragging,true);assert.ok(context.yaw<0);
+  api.elapse(16);api.move(event(190,210));api.release({type:'touchend'});
+  assert.equal(context.isDragging,false);assert.ok(context.inertialYawVelocity<0);assert.ok(Math.abs(context.inertialYawVelocity)<=1.25);
+  api.begin(event(190,210));assert.equal(context.inertialYawVelocity,0);
+  api.elapse(20);api.move(event(240,210));api.release({type:'touchcancel'});assert.equal(Math.abs(context.inertialYawVelocity),0);
+  api.begin(event(100,200));api.elapse(20);api.move(event(150,200));api.elapse(200);api.release({type:'touchend'});
+  assert.equal(Math.abs(context.inertialYawVelocity),0,'a held finger should not release old velocity');
+});
+
+test('a fast vertical return swipe invokes the desktop fast route from any story section or thumbnails', () => {
+  for(const where of ['first','middle','colours']) {
+    const {api,context,event}=controller();api.seek(where==='colours'?api.state().end:api.framePosition(where==='first'?40:190));
+    api.begin(event(100,200));api.elapse(100);api.move(event(103,410));
+    assert.equal(context.fastRequests.length,1);assert.deepEqual(context.fastRequests[0],{destination:'top',direction:-1});
+  }
+});
+
+test('slow, short, sideways and forward swipes never trigger fast return', () => {
+  for(const [x,y,ms] of [[103,410,700],[103,260,50],[340,410,100],[103,0,100]]) {
+    const {api,context,event}=controller();api.seek(api.framePosition(190));api.begin(event(100,200));
+    api.elapse(ms);api.move(event(x,y));assert.equal(context.fastRequests.length,0);
+  }
+  const {api,context,event}=controller();api.begin(event(100,200));api.elapse(100);api.move(event(103,410));
+  assert.equal(context.fastRequests.length,0,'opening panorama cannot skip into a return route');
+});
+
+test('a rapid swipe can still skip after a short story clip ends during the same gesture', () => {
+  const {api,context,event}=controller();api.seek(api.framePosition(81));api.begin(event(100,200));
+  api.elapse(30);api.move(event(100,255));
+  api.tick(.04);assert.equal(api.state().gesture.stopped,true);
+  api.elapse(40);api.move(event(100,420));assert.equal(context.fastRequests.length,1);
 });

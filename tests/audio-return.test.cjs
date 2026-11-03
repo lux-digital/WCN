@@ -8,18 +8,20 @@ function soundscape(mobile = true) {
   let progress = 0, now = 0;
   const ambient = { level:0 }, ocean = { level:0 };
   const video = { level:0, paused:false, pause(){this.paused=true;} };
+  const levels=new WeakMap();
   const context = vm.createContext({
     MOBILE_RUNTIME:mobile, soundEnabled:true, performance:{now:()=>now}, mediaIsVisible:()=>true,
     parentOverlayProgress:0, volumeSlider:{value:'80'}, soundscapeTracks:new Map([['ambient',ambient],['ocean',ocean]]),
     backgroundAutoplayActive:false, smoothScrollFrame:108, backgroundAutoplayFrame:0,
     moodAudioTransition:null, activeMoodIndex:0, moodVideoPlayers:[video],
+    wcnFast:{active:false,direction:1}, moodVideoAudioLevels:levels,
     getMoodVisualProgress:()=>progress,
     clamp:(x,a,b)=>Math.max(a,Math.min(b,x)), lerp:(a,b,t)=>a+(b-a)*t,
     rangeProgress:(x,a,b)=>Math.max(0,Math.min(1,(x-a)/(b-a))), smootherstep01:x=>x*x*x*(x*(6*x-15)+10),
     setSoundscapeTrackLevel:(track,level)=>{track.level=level;}, tryPlaySoundscapeTrack(){}, stopExperienceMedia(){},
-    setMoodVideoAudioLevel:(item,level)=>{item.level=level;}, playMoodVideo:item=>{item.paused=false;}
+    setMoodVideoAudioLevel:(item,level)=>{item.level=level;levels.set(item,level);}, playMoodVideo:item=>{item.paused=false;}
   });
-  const names=['BACKGROUND_AUTOPLAY_START_FRAME','OCEAN_START_LEVEL','MOOD_WHITE_START','MOOD_VIDEO_END',
+  const names=['BACKGROUND_AUTOPLAY_START_FRAME','OCEAN_START_LEVEL','MOOD_WHITE_START','MOOD_VIDEO_START','MOOD_VIDEO_END',
     'MOOD_AMBIENT_BED_LEVEL','MOOD_OCEAN_BED_LEVEL','SOUND_AMBIENT_MIX','SOUND_OCEAN_MIX',
     'MOOD_VIDEO_AUDIO_MIX','MOOD_VIDEO_AUDIO_CROSSFADE_MS'];
   let declarations='';
@@ -28,29 +30,45 @@ function soundscape(mobile = true) {
     assert.ok(expression,name);declarations+=`const ${name}=${expression[1]};\n`;
   }
   vm.runInContext(declarations+html.slice(html.indexOf('const SOUND_RETURN_FADE_MS ='),html.indexOf('function setSoundEnabled(')),context);
+  vm.runInContext(html.slice(html.indexOf('function pauseMoodVideoIfSilent('),html.indexOf('function unlockMasterAudio(')),context);
   return {ambient,ocean,video,context,
     update:(time,p=progress)=>{now=time;progress=p;vm.runInContext('updateSoundscape()',context);},
-    reset:()=>vm.runInContext('resetAudioReturnFades()',context)
+    reset:()=>vm.runInContext('resetAudioReturnFades()',context),
+    hidePicture:()=>vm.runInContext('pauseMoodVideoIfSilent(moodVideoPlayers[0])',context)
   };
 }
 
-test('fast upward scrolling fades ambient and ocean in over 2.8 seconds on desktop and touch', () => {
+test('both directions crossfade ambient/ocean and the thumbnail soundtrack over 2.8 seconds on desktop and touch', () => {
   for(const mobile of [true,false]) {
     const s=soundscape(mobile);s.update(0,0);
     const fullAmbient=s.ambient.level, fullOcean=s.ocean.level;
-    s.update(100,1);assert.equal(s.ambient.level,0);assert.equal(s.ocean.level,0);
-    s.update(200,0);assert.equal(s.ambient.level,0);assert.equal(s.ocean.level,0);
-    s.update(1600);assert.ok(Math.abs(s.ambient.level/fullAmbient-.5)<.00001);
+    s.update(100,1);assert.equal(s.ambient.level,fullAmbient);assert.equal(s.ocean.level,fullOcean);assert.equal(s.video.level,0);
+    s.update(1500);assert.ok(Math.abs(s.ambient.level/fullAmbient-.5)<.00001);
+    const halfVideo=s.video.level;
+    s.update(2900);assert.equal(s.ambient.level,0);assert.equal(s.ocean.level,0);assert.equal(s.video.level,halfVideo*2);
+    s.update(3000,0);assert.equal(s.ambient.level,0);assert.equal(s.ocean.level,0);
+    s.hidePicture();assert.equal(s.video.paused,false,'outgoing soundtrack must finish fading');
+    s.update(4400);assert.ok(Math.abs(s.ambient.level/fullAmbient-.5)<.00001);
     assert.ok(Math.abs(s.ocean.level/fullOcean-.5)<.00001);
-    s.update(3000);assert.equal(s.ambient.level,fullAmbient);assert.equal(s.ocean.level,fullOcean);
+    s.update(5800);assert.equal(s.ambient.level,fullAmbient);assert.equal(s.ocean.level,fullOcean);assert.equal(s.video.level,0);
+    assert.equal(s.video.paused,true);
   }
 });
 
-test('turning around mid-fade returns to silence and can restart without a volume jump', () => {
+test('turning around mid-fade stays continuous while the master volume can still mute immediately', () => {
   const s=soundscape();s.update(0,1);s.update(100,0);s.update(1100);
-  assert.ok(s.ambient.level>0);s.update(1200,1);assert.equal(s.ambient.level,0);
-  s.update(1300,0);assert.equal(s.ambient.level,0);s.update(2700);assert.ok(s.ambient.level>0);
-  s.context.volumeSlider.value='0';s.update(2800);assert.equal(s.ambient.level,0);assert.equal(s.ocean.level,0);
+  const level=s.ambient.level;assert.ok(level>0);s.update(1200,1);assert.equal(s.ambient.level,level);
+  s.update(2600);assert.ok(s.ambient.level<level);const turned=s.ambient.level;
+  s.update(2700,0);assert.equal(s.ambient.level,turned);s.update(4100);assert.ok(s.ambient.level>turned);
+  s.context.volumeSlider.value='0';s.update(4200);assert.equal(s.ambient.level,0);assert.equal(s.ocean.level,0);assert.equal(s.video.level,0);
+});
+
+test('fast return starts its crossfade during travel and hidden or muted videos stop immediately', () => {
+  const s=soundscape();s.update(0,1);const full=s.video.level;
+  s.context.wcnFast={active:true,direction:-1};s.update(100,1);s.update(1500);
+  assert.ok(Math.abs(s.video.level/full-.5)<.00001);
+  s.context.mediaIsVisible=()=>false;s.hidePicture();assert.equal(s.video.paused,true);
+  s.video.paused=false;s.context.mediaIsVisible=()=>true;s.context.soundEnabled=false;s.hidePicture();assert.equal(s.video.paused,true);
 });
 
 test('audio returning from the parent gallery fades in and hidden playback resets the fade', () => {
