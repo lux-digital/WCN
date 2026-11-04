@@ -65,21 +65,30 @@ test('a paused visible touch background resumes without requiring another swipe 
   progress=1;video.paused=false;vm.runInContext('resumeVisibleMoodVideo()',context);assert.equal(plays,1);
 });
 
-test('story paint throttling holds approximately 30 fps on a 60 Hz clock and flushes the final frame', () => {
-  let now=0;const paints=[];
-  const context=vm.createContext({MOBILE_RUNTIME:true,performance:{now:()=>now},storySquareLottieReady:true,
-    storySquareLottie:{goToAndStop:frame=>paints.push(frame)},STORY_LAST_FRAME:368,storySquareLottieTotalFrames:370,
-    clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),smoothStoryProgress:.5,smoothStorySequenceProgress:0,
-    smoothScrollFrame:108,storySequenceAutoplayActive:false,STORY_SEQUENCE_START_FRAME:60,STORY_SEQUENCE_HOLD_END:.978,
+test('touch paint throttling catches up to the latest frame and always draws the held frame', () => {
+  let now=0;
+  const paints=[];
+  const clip={state:'ready',frame:-1,container:{style:{}},
+    animation:{totalFrames:70,goToAndStop:frame=>paints.push(frame)}};
+  const context=vm.createContext({
+    MOBILE_RUNTIME:true,performance:{now:()=>now},STORY_LAST_FRAME:100,STORY_SEQUENCE_START_FRAME:60,
+    STORY_SEQUENCE_HOLD_END:.978,STORY_AUTOPLAY_RANGES:[{index:0,start:0,end:100}],
+    storyClips:[clip],visibleStoryClip:null,storySequenceAutoplayActive:false,
+    smoothStorySequenceProgress:0,smoothStoryProgress:.5,smoothScrollFrame:108,
+    clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),lerp:(a,b,t)=>a+(b-a)*t,
+    rangeProgress:(v,a,b)=>Math.max(0,Math.min(1,(v-a)/(b-a))),
     touchFlow:{displayedPosition:1.5},TOUCH_FLOW:{sequenceEnd:1.2},TOUCH_HOLD_POSITION:3.1,
-    storySequenceLottie:{style:{}},activeHoldHotspotIndex:-1,currentStorySequenceFrame:0
+    touchFirstStoryOverlap:()=>0,storySequenceLottie:{style:{}},activeHoldHotspotIndex:-1
   });
   vm.runInContext(html.slice(html.indexOf('const TOUCH_STORY_PAINT_INTERVAL_MS ='),html.indexOf('// Retry transient network failures')),context);
-  for(let i=0;i<60;i++) {
-    now=i*16.666;context.smoothStorySequenceProgress=i/368;
-    vm.runInContext('updateStoryTextMotion()',context);
+  const update=()=>vm.runInContext('updateStoryTextMotion()',context);
+  for(let i=0;i<60;i++){
+    now=i*16.666;
+    context.smoothStorySequenceProgress=i/100;
+    update();
   }
-  assert.ok(paints.length>=29 && paints.length<=31,`expected 30 fps, got ${paints.length}`);
-  now+=40;vm.runInContext('updateStoryTextMotion()',context);
-  assert.equal(paints.at(-1),59/368*369);
+  assert.ok(paints.length>=29 && paints.length<=31);
+  context.smoothStorySequenceProgress=1;
+  update();
+  assert.equal(paints.at(-1),69);
 });

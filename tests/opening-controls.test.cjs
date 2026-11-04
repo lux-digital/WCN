@@ -35,19 +35,21 @@ test('opening buttons and volume are positioned together before appearing, even 
   vm.runInContext('syncOpeningControlsLayout()',context);assert.equal(volume.style.top,before,'opening layout must not reposition a docked speaker');
 });
 
-test('the touch Lottie preserves all animation data except shadow filters and the relative image path',()=>{
-  const original=JSON.parse(fs.readFileSync(path.join(__dirname,'../square.json'),'utf8'));
-  const mobile=JSON.parse(fs.readFileSync(path.join(__dirname,'../mobile/square.json'),'utf8'));
-  let removed=0;
-  for(const comp of [original,...original.assets])for(const layer of comp.layers||[]){
-    if(!layer.ef)continue;
-    const before=layer.ef.length;layer.ef=layer.ef.filter(effect=>effect.mn!=='ADBE Drop Shadow');
-    removed+=before-layer.ef.length;if(!layer.ef.length)delete layer.ef;
-  }
-  for(const asset of original.assets){
-    if(!asset.p||asset.e)continue;
-    asset.u='../'+(asset.u||'');
-    assert.ok(fs.existsSync(path.resolve(__dirname,'../mobile',asset.u,asset.p)));
-  }
-  assert.equal(removed,8);assert.deepEqual(mobile,original);
+test('opening buttons remain below the rendered text on a compact viewport',()=>{
+  const style=()=>({setProperty(key,value){this[key]=value;}});
+  const links={style:{},querySelectorAll:()=>[{offsetHeight:38},{offsetHeight:38}]};
+  const group=(bottom)=>({tagName:'g',getBoundingClientRect:()=>({bottom,width:180,height:45})});
+  const context=vm.createContext({
+    MOBILE_RUNTIME:true,volumeDocked:false,openingTextReady:true,
+    openingTextLottie:{querySelector:()=>({children:[group(275),group(360)]})},
+    stage:{getBoundingClientRect:()=>({top:100,bottom:625,height:525})},
+    document:{getElementById:()=>links},getComputedStyle:()=>({getPropertyValue:()=>'118px'}),
+    volumeButton:{offsetHeight:54},volumeControl:{style:{}},scrollIndicator:{style:style()},
+    clamp:(v,a,b)=>Math.max(a,Math.min(b,v))
+  });
+  vm.runInContext(html.slice(html.indexOf('function getOpeningArtworkBottom'),html.indexOf('/* The new volume control never joins')),context);
+  vm.runInContext('syncOpeningControlsLayout()',context);
+  const buttonTop=100+parseFloat(links.style.top)-19;
+  assert.ok(buttonTop>=368,'allow text clearance even when the cue must shrink');
+  assert.ok(parseFloat(context.volumeControl.style.top)>parseFloat(links.style.top)+19);
 });
