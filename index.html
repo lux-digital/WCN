@@ -5041,6 +5041,8 @@
       const STORY_SEQUENCE_SCROLL_SLOWDOWN = 2.2; // desktop only; touch uses TOUCH_FLOW distances
       // These are scroll coordinates. Each export supplies its own frames and duration.
       const STORY_CLIP_SPAN = 100;
+      const STORY_READ_HOLD_MS = 2500;
+      const STORY_WHEEL_IDLE_MS = 180;
       const STORY_SWIPE_GAP = 8;
       const STORY_AUTOPLAY_RANGES = STORY_CLIP_FILES.map((file, index) => {
         const start = index * (STORY_CLIP_SPAN + STORY_SWIPE_GAP);
@@ -5656,6 +5658,8 @@
       let storySequenceAutoplayActive = false;
       let storySequenceAutoplayFrame = 0, storySequenceAutoplayFrom = 0, storySequenceAutoplayTo = 0;
       let desktopStoryRange = null;
+      let desktopStoryReadUntil = 0;
+      let desktopStoryLastBlockedWheelAt = -Infinity;
       let storyAutoScrollStartY = 0, storyAutoScrollEndY = 0, storyAutoScrollDuration = 0;
       let lastManualStoryFrame = 0;
       let storyFirstSegmentComplete = false, storyMidSegmentHigh = false, storyThirdSegmentHigh = false, storyFourthSegmentHigh = false, storyFifthSegmentHigh = false;
@@ -5903,7 +5907,8 @@
 
       function updateHoldHotspotHoverState() {
         if (MOBILE_RUNTIME) return;
-        if (!holdPointerIsMouse || holdEnvHotspotReveal <= .08 || holdEnvMode === 'realigning' || holdEnvMode === 'fading-out') {
+        if (storySequenceAutoplayActive || performance.now() < desktopStoryReadUntil ||
+            !holdPointerIsMouse || holdEnvHotspotReveal <= .08 || holdEnvMode === 'realigning' || holdEnvMode === 'fading-out') {
           if (activeHoldHotspotIndex !== -1) setActiveHoldHotspot(-1);
           return;
         }
@@ -6023,7 +6028,6 @@
          A fresh gesture is required to leave the final semi-panorama hold. */
       // Begin clip 01 earlier and share its remaining motion with the image run.
       const TOUCH_FIRST_STORY_IMAGE = 44;
-      const TOUCH_FIRST_STORY_OVERLAP = .8;
       const TOUCH_FLOW = Object.freeze({
         sequenceEnd: 1.20,
         storyLength: 1.90,
@@ -6033,7 +6037,7 @@
       });
       const TOUCH_HOLD_POSITION = TOUCH_FLOW.sequenceEnd + TOUCH_FLOW.storyLength;
       const TOUCH_END_POSITION = TOUCH_HOLD_POSITION + TOUCH_FLOW.moodLength;
-      const touchFlow = { position: 0, displayedPosition: 0, dirty: true, gesture: null, autoplay: null, firstStoryStart: null, storyHold: null };
+      const touchFlow = { position: 0, displayedPosition: 0, dirty: true, gesture: null, autoplay: null, firstStoryStart: null, firstStoryProgress: 0, storyHold: null };
       const touchStorySegments = [];
       {
         let frame = 0, position = TOUCH_FLOW.sequenceEnd;
@@ -6097,8 +6101,17 @@
           touchFlow.autoplay?.kind !== 'sequence';
       }
 
+      function touchStoryInputLocked(now = performance.now()) {
+        const clip = touchFlow.autoplay;
+        return clip?.kind === 'story' ||
+          (clip?.kind === 'sequence' && clip.direction > 0 && touchFlow.firstStoryStart !== null) ||
+          now < (touchFlow.storyHold?.readUntil ?? 0);
+      }
+
       function startTouchSequence(direction) {
         touchFlow.storyHold = null;
+        touchFlow.firstStoryStart = null;
+        touchFlow.firstStoryProgress = 0;
         touchFlow.autoplay = { kind: 'sequence', low: 0, high: TOUCH_FLOW.sequenceEnd, direction, rate: 1 };
         if (direction < 0) mouseX = mouseY = 0;
         mobileSequenceDirection = direction;
@@ -6120,6 +6133,10 @@
         const from = touchFlow.position;
         const distance = deltaPixels / Math.max(320, viewportHeight) * TOUCH_FLOW.swipeGain;
         if (Math.abs(distance) < .000001) return;
+        if (touchStoryInputLocked() || gesture.startedAt < (touchFlow.storyHold?.readUntil ?? 0)) {
+          gesture.stopped = true;
+          return;
+        }
         const direction = Math.sign(distance);
         if (touchFlow.autoplay) {
           // Reverse from the visible playhead; never restart a clip at an old anchor.
@@ -6150,6 +6167,10 @@
           const inside = from > range.low + .000001 && from < range.high - .000001;
           if (!crosses && !inside) continue;
           setTouchPosition(inside ? from : (direction > 0 ? range.low : range.high));
+          if (range.index === 0 && direction < 0) {
+            touchFlow.firstStoryStart = null;
+            touchFlow.firstStoryProgress = 0;
+          }
           touchFlow.storyHold = null;
           touchFlow.autoplay = { ...range, kind: 'story', direction, rate: 1 };
           return;
@@ -6176,7 +6197,14 @@
       function updateTouchAutoplay(dt) {
         const clip = touchFlow.autoplay;
         if (!clip || wcnFast.active || wcnFast.starting || parentOverlayActive) return;
-        // Do not run the clock ahead of a requested image or an unavailable story.
+        if (clip.kind === 'sequence' && clip.direction > 0 && touchFlow.firstStoryStart !== null &&
+            touchFlow.firstStoryProgress < 1) {
+          // The text clock continues even when an image is waiting to decode.
+          touchFlow.firstStoryProgress = Math.min(1,
+            touchFlow.firstStoryProgress + dt / storyClipDuration(STORY_AUTOPLAY_RANGES[0]));
+          pendingStoryPaint = true;
+        }
+        // Keep the image timeline behind its decode gate.
         if (Math.abs(touchFlow.position - touchFlow.displayedPosition) > .000001 ||
             (clip.kind === 'story' && storyClips[clip.index].state === 'loading')) return;
         // Align the panned view before fading back into its matching final image.
@@ -6187,18 +6215,22 @@
         const speed = clip.kind === 'sequence'
           ? TOUCH_FLOW.sequenceEnd * BACKGROUND_AUTOPLAY_FPS / (SCROLL_FRAME_COUNT - 1)
           : clip.kind === 'story'
-          ? (clip.high - clip.low) / (clip.index === 0
-            ? touchFirstStoryDuration() * (1 - touchFirstStoryOverlap())
-            : storyClipDuration(clip))
+          ? (clip.high - clip.low) / Math.max(1 / 30,
+            storyClipDuration(clip) * (clip.index === 0 ? 1 - touchFlow.firstStoryProgress : 1))
           : TOUCH_FLOW.moodLength * Math.max(.75, parentHandoffRate) / MOOD_CLIP_DURATION;
-        const next = clamp(touchFlow.position + clip.direction * dt * speed * clip.rate, clip.low, clip.high);
+        const rate = clip.kind === 'story' ? 1 : clip.rate;
+        const next = clamp(touchFlow.position + clip.direction * dt * speed * rate, clip.low, clip.high);
         setTouchPosition(next);
         const complete = clip.direction > 0 ? next >= clip.high - .000001 : next <= clip.low + .000001;
         if (complete) {
           setTouchPosition(clip.direction > 0 ? clip.high : clip.low);
           if (clip.kind === 'story') {
             // Hold the completed export independently of the scroll coordinates.
-            touchFlow.storyHold = { index: clip.index, progress: clip.direction > 0 ? 1 : 0 };
+            touchFlow.storyHold = {
+              index: clip.index,
+              progress: clip.direction > 0 ? 1 : 0,
+              readUntil: clip.direction > 0 ? performance.now() + STORY_READ_HOLD_MS : 0
+            };
           }
           // Continue the first clip on the held image without another swipe.
           touchFlow.autoplay = clip.kind === 'sequence' && clip.direction > 0
@@ -6208,19 +6240,6 @@
           // Completing a story clip must never interrupt a horizontal panorama drag.
           if (touchFlow.gesture?.mode === 'timeline') touchFlow.gesture.stopped = true;
         }
-      }
-
-      function touchFirstStoryDuration() {
-        const nativeDuration = storyClipDuration(STORY_AUTOPLAY_RANGES[0]);
-        if (touchFlow.firstStoryStart === null) return nativeDuration;
-        const overlapSeconds = (SCROLL_FRAME_COUNT - 1 - TOUCH_FIRST_STORY_IMAGE) / BACKGROUND_AUTOPLAY_FPS;
-        return Math.max(nativeDuration, overlapSeconds / TOUCH_FIRST_STORY_OVERLAP);
-      }
-
-      function touchFirstStoryOverlap() {
-        if (touchFlow.firstStoryStart === null) return 0;
-        const remainingFrames = (1 - touchFlow.firstStoryStart / TOUCH_FLOW.sequenceEnd) * (SCROLL_FRAME_COUNT - 1);
-        return clamp(remainingFrames / BACKGROUND_AUTOPLAY_FPS / touchFirstStoryDuration(), 0, TOUCH_FIRST_STORY_OVERLAP);
       }
 
       function updateTouchTimeline(force = false) {
@@ -6240,13 +6259,17 @@
         touchFlow.dirty = false;
         if (position === 0) {
           touchFlow.firstStoryStart = null;
+          touchFlow.firstStoryProgress = 0;
           touchFlow.storyHold = null;
         }
         if (touchFlow.firstStoryStart === null && position < TOUCH_FLOW.sequenceEnd &&
             touchFlow.autoplay?.kind === 'sequence' && touchFlow.autoplay.direction > 0 &&
             storyClips[0].state === 'ready') {
           const start = TOUCH_FLOW.sequenceEnd * TOUCH_FIRST_STORY_IMAGE / (SCROLL_FRAME_COUNT - 1);
-          if (position >= start) touchFlow.firstStoryStart = Math.max(start, touchFlow.displayedPosition);
+          if (position >= start) {
+            touchFlow.firstStoryStart = Math.max(start, touchFlow.displayedPosition);
+            touchFlow.autoplay.rate = 1;
+          }
         }
         const previousRaw = touchRawAt(touchFlow.displayedPosition);
         touchFlow.displayedPosition = position;
@@ -6377,6 +6400,7 @@
 
       function tryTouchFastReturn(gesture, totalX, totalY, now) {
         if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
+            touchStoryInputLocked(now) || gesture.startedAt < (touchFlow.storyHold?.readUntil ?? 0) ||
             gesture.mode !== 'timeline' || gesture.startPosition < (touchFlow.firstStoryStart ?? TOUCH_FLOW.sequenceEnd)) return false;
         const distance = clamp(viewportHeight * .14, 110, 180);
         const elapsed = Math.max(16, now - gesture.startedAt);
@@ -6464,7 +6488,7 @@
           event.preventDefault();
           event.stopImmediatePropagation();
           const now = performance.now();
-          if (!touchWheelGesture || now - touchWheelAt > 180) touchWheelGesture = { stopped: false };
+          if (!touchWheelGesture || now - touchWheelAt > 180) touchWheelGesture = { stopped: false, startedAt: now };
           touchWheelAt = now;
           advanceTouchTimeline(event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewportHeight : 1), touchWheelGesture);
         }, { capture: true, passive: false });
@@ -6520,6 +6544,7 @@
         /* Story autoplay deliberately moves the real page position, so it must never be
            pinned to an old Y value. Only the final visual-only mood clip locks the page. */
         if (moodClipActive) return moodClipLockY;
+        if (performance.now() < desktopStoryReadUntil) return storyAutoScrollEndY;
         return null;
       }
 
@@ -6539,6 +6564,7 @@
         const from = direction > 0 ? range.start : range.end;
         const to = direction > 0 ? range.end : range.start;
         desktopStoryRange = range;
+        desktopStoryReadUntil = 0;
         storySequenceAutoplayActive = true;
         storySequenceAutoplayFrame = from;
         storySequenceAutoplayFrom = from;
@@ -6560,6 +6586,10 @@
         window.scrollTo(0, storyAutoScrollEndY);
         storySequenceAutoplayFrame = finalFrame;
         storySequenceAutoplayActive = false;
+        if (finalFrame === desktopStoryRange.end) {
+          desktopStoryLastBlockedWheelAt = performance.now();
+          desktopStoryReadUntil = desktopStoryLastBlockedWheelAt + STORY_READ_HOLD_MS;
+        }
         lastManualStoryFrame = finalFrame;
         targetStoryProgress = smoothStoryProgress = storyFrameToRawProgress(finalFrame);
         targetStorySequenceProgress = smoothStorySequenceProgress = finalFrame / STORY_LAST_FRAME;
@@ -6573,7 +6603,7 @@
           const remaining = Math.abs(storySequenceAutoplayTo - storySequenceAutoplayFrom) / STORY_CLIP_SPAN;
           storyAutoScrollDuration = Math.max(220, remaining * storyClipDuration(desktopStoryRange) * 1000);
         }
-        storyAutoScrollElapsedMs += Math.max(0, dt) * 1000 * timelinePlaybackRate;
+        storyAutoScrollElapsedMs += Math.max(0, dt) * 1000;
         const t = clamp(storyAutoScrollElapsedMs / Math.max(1, storyAutoScrollDuration), 0, 1);
         const frame = lerp(storySequenceAutoplayFrom, storySequenceAutoplayTo, t);
         storySequenceAutoplayFrame = frame;
@@ -6584,17 +6614,14 @@
         if (t >= 1 - .00001) finishStorySequenceAutoplay();
       }
 
-      function retargetStoryAutoplayDirection(direction) {
-        if (!storySequenceAutoplayActive) return;
-        const desiredDirection = Math.sign(direction);
-        if (desiredDirection === Math.sign(storySequenceAutoplayTo - storySequenceAutoplayFrom)) return;
-        const nextTarget = desiredDirection > 0 ? desktopStoryRange.end : desktopStoryRange.start;
-        storySequenceAutoplayFrom = storySequenceAutoplayFrame;
-        storySequenceAutoplayTo = nextTarget;
-        storyAutoScrollStartY = window.scrollY;
-        storyAutoScrollEndY = storyFrameToPageY(nextTarget);
-        storyAutoScrollElapsedMs = 0;
-        storyAutoScrollDuration = 0;
+      function blockDesktopStoryWheel(now) {
+        const continuingWheel = desktopStoryReadUntil > 0 && now - desktopStoryLastBlockedWheelAt < STORY_WHEEL_IDLE_MS;
+        if (storySequenceAutoplayActive || now < desktopStoryReadUntil || continuingWheel) {
+          desktopStoryLastBlockedWheelAt = now;
+          return true;
+        }
+        desktopStoryReadUntil = 0;
+        return false;
       }
 
       function easeOutQuint01(t) {
@@ -8357,19 +8384,19 @@
             const start = touchFlow.firstStoryStart;
             active = start !== null && position >= start;
             range = STORY_AUTOPLAY_RANGES[0];
-            progress = active ? rangeProgress(position, start, TOUCH_FLOW.sequenceEnd) * touchFirstStoryOverlap() : 0;
+            progress = active ? touchFlow.firstStoryProgress : 0;
           } else {
             active = position <= TOUCH_HOLD_POSITION;
-            if (range.index === 0) progress = lerp(touchFirstStoryOverlap(), 1, progress);
+            if (range.index === 0) progress = lerp(touchFlow.firstStoryProgress || 0, 1, progress);
           }
         }
 
         if (active && activeHoldHotspotIndex < 0) {
           const clip = storyClips[range.index];
           if (clip.state === 'ready') {
-            const lastFrame = clip.animation.totalFrames - 1;
+            const lastFrame = clip.readFrame ?? clip.animation.totalFrames - 1;
             const nativeFrame = progress * lastFrame;
-            const frame = MOBILE_RUNTIME ? Math.round(nativeFrame) : nativeFrame;
+            const frame = Math.floor(nativeFrame + .00001);
             if (clip !== visibleStoryClip || frame !== clip.frame) {
               const now = performance.now();
               const boundary = frame === 0 || frame === lastFrame;
@@ -10362,7 +10389,18 @@ void main(){
               reject(new Error('Lottie could not load its data'));
             });
           });
-          clip.duration = animation.getDuration(false);
+          clip.readFrame = animation.totalFrames - 1;
+          if (range.index === STORY_CLIP_FILES.length - 1) {
+            // The final logo export ends in a fade. Hold its last fully visible frame.
+            const logo = data.assets.flatMap(asset => asset.layers || [])
+              .find(layer => layer.ty === 2 && layer.nm === 'West Coast.png');
+            const opacity = logo?.ks?.o;
+            const fadeStart = opacity?.a === 1 ? opacity.k.at(-2) : null;
+            if (fadeStart?.s?.[0] === 100 && opacity.k.at(-1)?.s?.[0] === 0) {
+              clip.readFrame = clamp(Math.floor(fadeStart.t - data.ip), 0, clip.readFrame);
+            }
+          }
+          clip.duration = clip.readFrame / animation.frameRate;
           clip.state = 'ready';
         } catch (error) {
           clip.state = 'failed';
@@ -11344,7 +11382,8 @@ void main(){
 
       function updateScrollTarget() {
         if (MOBILE_RUNTIME) { touchFlow.dirty = true; return; }
-        if (!scrollingReady || wcnFast.active) return;
+        if (!scrollingReady || wcnFast.active || storySequenceAutoplayActive ||
+            performance.now() < desktopStoryReadUntil) return;
 
         const travelled = Math.max(0, -experience.getBoundingClientRect().top);
         const travelDeltaPx = travelled - lastUserTravelledPx;
@@ -11378,9 +11417,9 @@ void main(){
         targetStorySequenceProgress = clamp(storyTargetFrame / STORY_LAST_FRAME, 0, 1);
 
         let autoplayStarted = false;
-        // On desktop, reaching a clip boundary starts that export.
+        // Later desktop clips are available once the first image handoff has run.
         if (!MOBILE_RUNTIME && !storySequenceAutoplayActive && !moodClipActive) {
-          if (userScrollDirection > 0) {
+          if (userScrollDirection > 0 && desktopStoryRange && !backgroundAutoplayActive) {
             /* The first forward clip is special: Scroll_01 crossing frame 60 starts it.
                Every later range is triggered only by crossing its authored frame boundary. */
             for (let i = 1; i < STORY_AUTOPLAY_RANGES.length; i++) {
@@ -11421,7 +11460,7 @@ void main(){
           holdEnvAutoplayBlend = 0;
           /* The very first story autoplay is owned by this background run. Arm it here,
              rather than inferring it later from the physical scroll position. */
-          if (lastManualStoryFrame <= .5) firstStoryAutoplayPending = true;
+          if (!desktopStoryRange || lastManualStoryFrame <= .5) firstStoryAutoplayPending = true;
         }
 
         /* Once frame 108 has been reached, the background simply stays there. A genuine
@@ -12024,6 +12063,7 @@ void main(){
         touchFlow.autoplay = null;
         storySequenceAutoplayActive=false;
         desktopStoryRange = null;
+        desktopStoryReadUntil = 0;
         backgroundAutoplayActive=false;
         firstStoryAutoplayPending=false;
         moodClipActive=false;
@@ -12280,6 +12320,11 @@ void main(){
         const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?window.innerHeight:1);
         const direction=Math.sign(delta),now=performance.now();
         if(!direction)return;
+        if (blockDesktopStoryWheel(now)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
         if(now-wcnFastWheelAt>155||direction!==wcnFastWheelDir || now-wcnFastWheelFirstAt>165){
           wcnFastWheelEnergy=0;wcnFastWheelFirstAt=now;
         }
@@ -12306,6 +12351,10 @@ void main(){
       window.addEventListener('wheel', event => {
         if (MOBILE_RUNTIME) return;
         if (event.ctrlKey || !scrollingReady) return;
+        if (storySequenceAutoplayActive || performance.now() < desktopStoryReadUntil) {
+          event.preventDefault();
+          return;
+        }
         /* Measure deliberate wheel/trackpad effort BEFORE autoplay intercepts the event.
            Single slow ticks retain the established speed; rapid successive movement
            temporarily accelerates all authored forward/reverse autoplay sections. */
@@ -12332,9 +12381,6 @@ void main(){
           return;
         }
 
-        /* Autoplay no longer traps the user in one direction. If they change their
-           mind mid-clip, reverse that SAME playhead from its current position instead of
-           ignoring the wheel until the clip has finished. */
         if (moodClipActive) {
           const desiredMoodDirection = event.deltaY >= 0 ? 1 : -1;
 
@@ -12369,12 +12415,6 @@ void main(){
             wheelTimelineProgress >= MOOD_WHITE_START - .001) {
           event.preventDefault();
           startMoodClip(1);
-          return;
-        }
-
-        if (storySequenceAutoplayActive) {
-          event.preventDefault();
-          retargetStoryAutoplayDirection(event.deltaY >= 0 ? 1 : -1);
           return;
         }
 
@@ -12821,7 +12861,7 @@ void main(){
         if (!MOBILE_RUNTIME && !wcnFast.active) {
           updateTimelinePlaybackRate(time, dt);
           updateBackgroundSequenceAutoplay(dt);
-          updateStorySequenceAutoplay(time, dt);
+          updateStorySequenceAutoplay(time, playbackDt);
           updateMoodClip(dt * timelinePlaybackRate);
         }
         updateWoodStripLoop(dt);
