@@ -25,7 +25,7 @@ function controller() {
   declarations += html.slice(html.indexOf('const STORY_CLIP_SPAN ='), html.indexOf('const HOLD_ENV_HOTSPOT_IMAGE_WIDTH'));
   let now = 0;
   class Target { closest() { return null; } }
-  const clips = [70,77,111,115].map((totalFrames, index) => {
+  const clips = [71,80,107,115].map((totalFrames, index) => {
     const readFrame = index === 3 ? 76 : totalFrames - 1;
     return {
       state:'ready', readFrame, duration:readFrame/30, frame:-1, container:{style:{visibility:'hidden'}},
@@ -109,7 +109,7 @@ test('clip 01 starts early and plays at its own speed across image decoding stal
   context.scrollFrames.fill({});
   finish(api);
   assert.equal(api.state().frame,108);
-  assert.equal(context.storyClips[0].frame,69);
+  assert.equal(context.storyClips[0].frame,70);
   assert.equal(api.state().canPan,true);
 });
 
@@ -140,7 +140,7 @@ test('the previous clip holds its last frame until the incoming SVG has painted'
   const [outgoing,incoming]=context.storyClips;
   incoming.state='loading';
   api.swipe(5000);api.tick(.5);
-  assert.equal(outgoing.frame,69);
+  assert.equal(outgoing.frame,70);
   assert.equal(outgoing.container.style.visibility,'visible');
   assert.equal(incoming.container.style.visibility,'hidden');
   incoming.animation.goToAndStop=()=>assert.equal(outgoing.container.style.visibility,'visible');
@@ -172,7 +172,7 @@ test('swipes cannot reverse, speed up, or skip the clip or its 2.5 second hold',
   api.tick(.5);
   assert.equal(context.storyClips[0].frame,30);
   finish(api);
-  assert.equal(context.storyClips[0].frame,69);
+  assert.equal(context.storyClips[0].frame,70);
   const held=api.state().position;
   api.tick(2.4);
   api.swipe(5000);
@@ -216,7 +216,7 @@ test('story timing stays the same at 60 fps and 10 fps, with no background redra
     for(let i=0;i<fps;i++)api.tick(1/fps);
     results.push(api.state().story);assert.equal(context.paints.length,paints);assert.equal(context.backgroundUpdates,updates);
   }
-  assert.ok(Math.abs(results[0]-100/(69/30))<.00001);assert.ok(Math.abs(results[1]-100/(69/30))<.00001);
+  assert.ok(Math.abs(results[0]-100/(70/30))<.00001);assert.ok(Math.abs(results[1]-100/(70/30))<.00001);
 });
 
 test('the panorama is pannable in every story section and a clip ending does not stop the drag', () => {
@@ -263,7 +263,7 @@ test('hidden and offscreen pages pause the story clock', () => {
   const position=api.state().position;
   context.document.hidden=true;api.tick(30);assert.equal(api.state().position,position);
   context.document.hidden=false;context.experienceInView=false;api.tick(20);assert.equal(api.state().position,position);
-  context.experienceInView=true;api.tick(.25);assert.ok(Math.abs(api.state().story-50/(69/30))<.00001);
+  context.experienceInView=true;api.tick(.25);assert.ok(Math.abs(api.state().story-50/(70/30))<.00001);
 });
 
 test('main touch panorama retains bounded release momentum and drops it on a new touch or cancellation', () => {
@@ -343,11 +343,45 @@ test('touch holds the exact endpoint through a later scroll recalculation', () =
   finish(api);
   context.smoothStorySequenceProgress=.22;
   vm.runInContext('updateStoryTextMotion()',context);
-  assert.equal(context.storyClips[0].frame,69);
+  assert.equal(context.storyClips[0].frame,70);
   assert.equal(api.state().visibleClip,0);
   api.tick(2.6);
   api.swipe(5000);
   finish(api);
   assert.equal(api.state().visibleClip,1);
-  assert.equal(context.storyClips[1].frame,76);
+  assert.equal(context.storyClips[1].frame,79);
+});
+
+test('loaded exports include the completed type-on frames and share each corrected handoff', async () => {
+  const files = ['square_01.json', 'square_02.json', 'square_03.json', 'square_04.json'];
+  const exports = files.map(file => JSON.parse(fs.readFileSync(require('node:path').join(__dirname, '..', file), 'utf8')));
+  const clips = files.map(() => ({}));
+  const loaded = [];
+  const context = vm.createContext({
+    STORY_CLIP_FILES: files, storyClips: clips, MOBILE_RUNTIME: false, scrollingReady: false,
+    document: { createElement: () => ({}) },
+    storySequenceLottie: { appendChild() {} },
+    fetch: async file => ({ ok: true, json: async () => structuredClone(exports[files.indexOf(file)]) }),
+    AbortController, setTimeout, clearTimeout, console,
+    clamp: (v,a,b) => Math.max(a,Math.min(b,v)),
+    lottie: { loadAnimation({ animationData: data }) {
+      loaded.push(data);
+      return {
+        totalFrames: data.op - data.ip, frameRate: data.fr,
+        addEventListener(name, callback) {
+          if (name !== 'data_failed') queueMicrotask(callback);
+        }
+      };
+    } }
+  });
+  const ranges = html.slice(html.indexOf('const STORY_CLIP_SPAN ='), html.indexOf('const HOLD_ENV_HOTSPOT_IMAGE_WIDTH'));
+  const loader = html.slice(html.indexOf('async function loadStoryClip('), html.indexOf('async function loadScrollAssets('));
+  await vm.runInContext(ranges + loader + 'loadStorySequenceAssets()', context);
+  for (const [index, name] of ['non-repeating woodgrain', 'WITHOUT REPETITION'].entries()) {
+    const layer = exports[index].assets.flatMap(asset => asset.layers || []).find(layer => layer.nm === name);
+    const revealEnd = Math.ceil(layer.t.a.find(animator => animator.nm === 'Animator - Type On (Opacity)').s.e.k.at(-1).t);
+    assert.equal(clips[index].state, 'ready');
+    assert.equal(loaded[index].ip + clips[index].readFrame, revealEnd);
+    assert.equal(loaded[index + 1].ip, revealEnd);
+  }
 });

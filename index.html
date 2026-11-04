@@ -5044,6 +5044,9 @@
       const STORY_READ_HOLD_MS = 2500;
       const STORY_WHEEL_IDLE_MS = 180;
       const STORY_SWIPE_GAP = 8;
+      // The exports end just before these type-on keyframes reach 100%.
+      // The next clip starts on the same completed source frame.
+      const STORY_TEXT_HANDOFF_FRAMES = [70, 149];
       const STORY_AUTOPLAY_RANGES = STORY_CLIP_FILES.map((file, index) => {
         const start = index * (STORY_CLIP_SPAN + STORY_SWIPE_GAP);
         return { file, index, start, end: start + STORY_CLIP_SPAN };
@@ -10354,6 +10357,12 @@ void main(){
           } finally {
             clearTimeout(requestTimer);
           }
+          const startFrame = STORY_TEXT_HANDOFF_FRAMES[range.index - 1];
+          const endFrame = STORY_TEXT_HANDOFF_FRAMES[range.index];
+          if (startFrame !== undefined && startFrame < data.op) data.ip = Math.max(data.ip, startFrame);
+          // Lottie's out-point is exclusive.
+          if (endFrame !== undefined) data.op = Math.max(data.op, endFrame + 1);
+
           if (MOBILE_RUNTIME) {
             // Keep the cheaper touch rendering used on older iPads.
             for (const composition of [data, ...data.assets]) {
