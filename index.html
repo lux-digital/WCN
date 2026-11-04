@@ -5616,7 +5616,8 @@
       const MOBILE_SEQUENCE_CACHE_MAX = 28;
       const MOBILE_SEQUENCE_PREFETCH_AHEAD = 16;
       const MOBILE_SEQUENCE_PREFETCH_BEHIND = 4;
-      const MOBILE_AUTOPLAY_WARMUP_FRAME = 34;
+      const MOBILE_SEQUENCE_FPS = 30;
+      const TOUCH_STORY_READ_HOLD_MS = 750;
       let mobileSequenceUseTick = 0;
       let mobileSequenceDirection = 1;
       let mobileSequenceDemandFrame = 0;
@@ -6030,7 +6031,7 @@
          background stays pannable throughout all four clips.
          A fresh gesture is required to leave the final semi-panorama hold. */
       // Begin clip 01 earlier and share its remaining motion with the image run.
-      const TOUCH_FIRST_STORY_IMAGE = 44;
+      const TOUCH_FIRST_STORY_IMAGE = 36;
       const TOUCH_FLOW = Object.freeze({
         sequenceEnd: 1.20,
         storyLength: 1.90,
@@ -6202,21 +6203,19 @@
         if (!clip || wcnFast.active || wcnFast.starting || parentOverlayActive) return;
         if (clip.kind === 'sequence' && clip.direction > 0 && touchFlow.firstStoryStart !== null &&
             touchFlow.firstStoryProgress < 1) {
-          // The text clock continues even when an image is waiting to decode.
+          // Keep the first story clip on its own clock during the image overlap.
           touchFlow.firstStoryProgress = Math.min(1,
             touchFlow.firstStoryProgress + dt / storyClipDuration(STORY_AUTOPLAY_RANGES[0]));
           pendingStoryPaint = true;
         }
-        // Keep the image timeline behind its decode gate.
-        if (Math.abs(touchFlow.position - touchFlow.displayedPosition) > .000001 ||
-            (clip.kind === 'story' && storyClips[clip.index].state === 'loading')) return;
+        if (clip.kind === 'story' && storyClips[clip.index].state === 'loading') return;
         // Align the panned view before fading back into its matching final image.
         if (clip.kind === 'sequence' && clip.direction < 0 &&
             touchFlow.position >= TOUCH_FLOW.sequenceEnd &&
             (Math.abs(holdEnvYaw) > .00005 || Math.abs(holdEnvPitch) > .00005)) return;
         clip.rate += (1 - clip.rate) * Math.min(1, dt * 3);
         const speed = clip.kind === 'sequence'
-          ? TOUCH_FLOW.sequenceEnd * BACKGROUND_AUTOPLAY_FPS / (SCROLL_FRAME_COUNT - 1)
+          ? TOUCH_FLOW.sequenceEnd * MOBILE_SEQUENCE_FPS / (SCROLL_FRAME_COUNT - 1)
           : clip.kind === 'story'
           ? (clip.high - clip.low) / Math.max(1 / 30,
             storyClipDuration(clip) * (clip.index === 0 ? 1 - touchFlow.firstStoryProgress : 1))
@@ -6232,7 +6231,7 @@
             touchFlow.storyHold = {
               index: clip.index,
               progress: clip.direction > 0 ? 1 : 0,
-              readUntil: clip.direction > 0 ? performance.now() + STORY_READ_HOLD_MS : 0
+              readUntil: clip.direction > 0 ? performance.now() + TOUCH_STORY_READ_HOLD_MS : 0
             };
           }
           // Continue the first clip on the held image without another swipe.
@@ -6251,15 +6250,18 @@
         const position = touchFlow.position;
         const raw = touchRawAt(position);
         const wantedFrame = Math.round(touchSequenceFrameAt(position));
-        mobileSequenceDemandFrame = wantedFrame;
-        if (!scrollFrames[wantedFrame]) {
-          // Retain the entire last painted state, including its text and buttons.
-          // Only the latest finger position is rendered when that image arrives.
-          loadMobileSequencePair(wantedFrame).then(() => { touchFlow.dirty = true; }).catch(() => {});
+        if (wantedFrame !== mobileSequenceDemandFrame) {
+          mobileSequenceDemandFrame = wantedFrame;
           prefetchMobileSequenceWindow(wantedFrame, mobileSequenceDirection);
-          return;
         }
+        // Use the closest decoded frame on the travelled path. A slow JPG can
+        // drop a frame, but it must never stop the playback clock or the story.
+        let frame = wantedFrame;
+        const paintedFrame = Math.max(0, currentScrollFrame);
+        const step = Math.sign(paintedFrame - wantedFrame);
+        while (!scrollFrames[frame] && frame !== paintedFrame) frame += step;
         touchFlow.dirty = false;
+        if (!force && position === touchFlow.displayedPosition && frame === currentScrollFrame) return;
         if (position === 0) {
           touchFlow.firstStoryStart = null;
           touchFlow.firstStoryProgress = 0;
@@ -6278,7 +6280,8 @@
         touchFlow.displayedPosition = position;
         const wasComplete = moodClipComplete;
         const previousMoodProgress = moodClipProgress;
-        const backgroundChanged = wantedFrame !== currentScrollFrame || force;
+        const backgroundChanged = frame !== currentScrollFrame || force;
+        const previousWantedFrame = smoothScrollFrame;
         targetScrollFrame = smoothScrollFrame = wantedFrame;
         targetStoryProgress = smoothStoryProgress = raw;
         targetStorySequenceProgress = smoothStorySequenceProgress =
@@ -6291,12 +6294,15 @@
         moodClipActive = touchFlow.autoplay?.kind === 'mood';
         moodClipComplete = position >= TOUCH_END_POSITION;
         if (backgroundChanged) {
-          currentScrollFrame = wantedFrame;
-          renderFrame(wantedFrame);
+          currentScrollFrame = frame;
+          renderFrame(frame);
+        }
+        if (force || wantedFrame !== previousWantedFrame) {
           updatePanoramaOpacity();
-          updateHeroScrollTypography(true);
-          updateOpeningTextLottie();
-          updateTextMode();
+          if (force || Math.min(wantedFrame, previousWantedFrame) <= 30) {
+            updateHeroScrollTypography(true);
+            updateOpeningTextLottie();
+          }
         }
         updateStoryTextMotion();
         const scrollCueChanged = (previousRaw >= MOOD_WHITE_START - .0005) !== (raw >= MOOD_WHITE_START - .0005);
@@ -10255,7 +10261,6 @@ void main(){
 
       function pruneMobileSequenceCache(centerFrame) {
         if (!MOBILE_RUNTIME) return;
-        centerFrame = mobileSequenceDemandFrame;
         const loaded = [];
         for (let i = 0; i < SCROLL_FRAME_COUNT; i++) {
           if (scrollFrames[i]) loaded.push(i);
@@ -10269,7 +10274,8 @@ void main(){
         let excess = loaded.length - MOBILE_SEQUENCE_CACHE_MAX;
         for (const frame of loaded) {
           if (excess <= 0) break;
-          if (frame === currentScrollFrame || Math.abs(frame - centerFrame) <= 2) continue;
+          if (frame === 0 || frame === SCROLL_FRAME_COUNT - 1 || frame === currentScrollFrame ||
+              Math.abs(frame - centerFrame) <= 2) continue;
           scrollFrames[frame] = null;
           maskFrames[frame] = null;
           mobileSequenceUse.delete(frame);
@@ -10314,7 +10320,8 @@ void main(){
             maskFrames[frame] = null;
             markMobileSequenceFrameUsed(frame);
             mobileSequenceLoads.delete(frame);
-            pruneMobileSequenceCache(currentScrollFrame >= 0 ? currentScrollFrame : frame);
+            pruneMobileSequenceCache(mobileSequenceDemandFrame);
+            if (scrollingReady && currentScrollFrame !== mobileSequenceDemandFrame) touchFlow.dirty = true;
             return [image, null];
           })
           .catch(error => {
@@ -10334,7 +10341,7 @@ void main(){
         for (let i = 1; i <= MOBILE_SEQUENCE_PREFETCH_AHEAD; i++) frames.push(center + i * dir);
         for (let i = 1; i <= MOBILE_SEQUENCE_PREFETCH_BEHIND; i++) frames.push(center - i * dir);
         frames.forEach(frame => {
-          if (frame < 0 || frame >= SCROLL_FRAME_COUNT) return;
+          if (frame < 0 || frame >= SCROLL_FRAME_COUNT || scrollFrames[frame] || mobileSequenceLoads.has(frame)) return;
           loadMobileSequencePair(frame).catch(() => {});
         });
       }
@@ -10436,6 +10443,8 @@ void main(){
             if (status) status.textContent = `Loading mobile images ${loaded} / ${initialFrames.length}`;
           })));
           scrollingReady = true;
+          // Keep the exact panorama handoff ready even if playback skips ahead.
+          loadMobileSequencePair(SCROLL_FRAME_COUNT - 1).catch(() => {});
           prefetchMobileSequenceWindow(initialFrames.length - 1, 1);
         } else {
           let loaded = 0; const total = SCROLL_FRAME_COUNT * 2;
@@ -10780,21 +10789,12 @@ void main(){
           }
           return;
         }
-        if (MOBILE_RUNTIME) {
-          markMobileSequenceFrameUsed(frame);
-          if (touchFlow.position < TOUCH_FLOW.sequenceEnd) prefetchMobileSequenceWindow(frame, mobileSequenceDirection);
-        }
+        if (MOBILE_RUNTIME) markMobileSequenceFrameUsed(frame);
 
         drawCover(sceneCtx, image, sceneCanvas); // cover the entire physical canvas, no letterboxing
 
-        /* Mobile intentionally has no animated foreground mask. The real DOM hero text
-           fades away independently, so there is no second canvas compositing pass here. */
-        if (MOBILE_RUNTIME) {
-          maskedTextCtx.setTransform(1, 0, 0, 1, 0, 0);
-          maskedTextCtx.clearRect(0, 0, maskedTextCanvas.width, maskedTextCanvas.height);
-          maskedTextCanvas.style.opacity = '0';
-          return;
-        }
+        // The mobile DOM text fades independently and has no foreground mask.
+        if (MOBILE_RUNTIME) return;
 
         /* IMPORTANT: do not replace the real HTML hero text with a canvas redraw.
            That old approach used different font metrics and caused the visible jump on
@@ -11994,7 +11994,7 @@ void main(){
         const worker = async () => {
           while (cursor < WCN_FAST_TOTAL) await wcnFastFetch(cursor++);
         };
-        wcnFastWarmPromise = Promise.all(Array.from({ length: 4 }, worker)).then(() => true)
+        wcnFastWarmPromise = Promise.all(Array.from({ length: MOBILE_RUNTIME && !wcnFast.starting ? 2 : 4 }, worker)).then(() => true)
           .catch(error => { wcnFastWarmPromise = null; throw error; });
         wcnFastWarmPromise.catch(() => {});
         return wcnFastWarmPromise;
@@ -12542,7 +12542,9 @@ void main(){
 
 
 
-        sceneScale = Math.min(window.devicePixelRatio || 1, 1.5);
+        sceneScale = MOBILE_RUNTIME
+          ? Math.min(window.devicePixelRatio || 1, 1.5, 1280 / Math.max(viewportWidth, viewportHeight))
+          : Math.min(window.devicePixelRatio || 1, 1.5);
 
 
 
