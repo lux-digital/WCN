@@ -58,7 +58,7 @@ function controller() {
     updateOpeningTextLottie(){}, updateTextMode(){}, updateMoodSectionMotion(){}
   });
   vm.runInContext(declarations + '\n' +
-    html.slice(html.indexOf('const TOUCH_FLOW ='), html.indexOf("      if (MOBILE_RUNTIME) {\n        window.addEventListener('touchstart'")) + '\n' +
+    html.slice(html.indexOf('const TOUCH_FIRST_STORY_IMAGE ='), html.indexOf("      if (MOBILE_RUNTIME) {\n        window.addEventListener('touchstart'")) + '\n' +
     html.slice(html.indexOf('function storyClipDuration('), html.indexOf('function easeOutQuint01')) + '\n' +
     html.slice(html.indexOf('const TOUCH_STORY_PAINT_INTERVAL_MS ='), html.indexOf('// Retry transient network failures')) + '\n' +
     html.slice(html.indexOf('function masterAnimationLoop(time)'), html.indexOf('async function init()')) + '\n' +
@@ -70,7 +70,7 @@ function controller() {
          clip: touchFlow.autoplay && {...touchFlow.autoplay}, complete: moodClipComplete,
          hold: TOUCH_HOLD_POSITION, end: TOUCH_END_POSITION, sequenceEnd: TOUCH_FLOW.sequenceEnd,
          canPan: touchCanPanHold(), visibleClip: storyClips.indexOf(visibleStoryClip), gesture: touchFlow.gesture, yaw: holdEnvYaw, pitch: holdEnvPitch }),
-       seek: p => { touchFlow.autoplay = null; setTouchPosition(p); updateTouchTimeline(true); },
+       seek: p => { touchFlow.autoplay = touchFlow.storyHold = null; setTouchPosition(p); updateTouchTimeline(true); },
        swipe: px => { advanceTouchTimeline(px, {stopped:false}); updateTouchTimeline(); },
        tickAt: masterAnimationLoop,
        holdTick: updateTouchHoldEnvironment,
@@ -94,14 +94,15 @@ test('all inline scripts parse', () => {
 test('clip 01 starts during the image sequence and continues to its last frame after the image stops', () => {
   const {api,context}=controller();
   api.swipe(30);
-  while(api.state().clip.kind==='sequence' && api.state().frame<95) api.tick(1/60);
-  assert.ok(api.state().frame<108);
+  while(api.state().clip.kind==='sequence' && api.state().visibleClip!==0) api.tick(1/60);
+  assert.ok(api.state().frame>=43 && api.state().frame<=45);
+  while(api.state().clip.kind==='sequence' && api.state().frame<70) api.tick(1/60);
   assert.equal(api.state().visibleClip,0);
   assert.ok(context.storyClips[0].frame>0 && context.storyClips[0].frame<34);
   while(api.state().clip.kind==='sequence') api.tick(1/60);
   assert.equal(api.state().frame,108);
   assert.equal(api.state().clip.index,0);
-  assert.ok(Math.abs(context.storyClips[0].frame-34.5)<2);
+  assert.ok(Math.abs(context.storyClips[0].frame-55.2)<2);
   const atHandoff=context.storyClips[0].frame;
   api.tick(.1);
   assert.ok(context.storyClips[0].frame>atHandoff);
@@ -301,4 +302,22 @@ test('desktop waits for an export, uses its duration and holds the exact last fr
   assert.equal(clip.frame,114);
   assert.equal(context.storySequenceLottie.style.opacity,'1');
   assert.equal(context.moodClipActive,false);
+  context.smoothStorySequenceProgress=.95;
+  vm.runInContext('updateStoryTextMotion()',context);
+  assert.equal(clip.frame,114,'a later scroll calculation cannot change the held frame');
+});
+
+test('touch holds the exact endpoint through a later scroll recalculation', () => {
+  const {api,context}=controller();
+  api.seek(api.state().sequenceEnd);
+  api.swipe(30);
+  finish(api);
+  context.smoothStorySequenceProgress=.22;
+  vm.runInContext('updateStoryTextMotion()',context);
+  assert.equal(context.storyClips[0].frame,69);
+  assert.equal(api.state().visibleClip,0);
+  api.swipe(5000);
+  finish(api);
+  assert.equal(api.state().visibleClip,1);
+  assert.equal(context.storyClips[1].frame,76);
 });
