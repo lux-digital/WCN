@@ -6433,12 +6433,18 @@
             gesture.startPosition < TOUCH_FLOW.sequenceEnd - .001 ||
             gesture.startPosition > TOUCH_END_POSITION + .001) return false;
         const elapsed = Math.max(16, now - gesture.startedAt);
-        const distance = Math.max(310, Math.min(440, viewportHeight * .45));
-        // Strong travel PLUS speed PLUS vertical dominance. A normal swipe never
-        // enters quick navigation, including when leaving the thumbnail scene.
+        const fromThumbnail = gesture.startPosition > TOUCH_HOLD_POSITION + .015;
+        // Deliberate flick: at least ~1/5 of the screen, substantial speed,
+        // and a strongly vertical path. The previous 310-440px + 2.2px/ms
+        // rule was practically unreachable on a normal iPhone swipe.
+        const distance = fromThumbnail
+          ? Math.max(185, Math.min(265, viewportHeight * .29))
+          : Math.max(145, Math.min(210, viewportHeight * .22));
+        const velocity = Math.abs(totalY) / elapsed;
         if (Math.abs(totalY) < distance ||
-            Math.abs(totalY) < Math.abs(totalX) * 2.4 ||
-            Math.abs(totalY) / elapsed < 2.20) return false;
+            Math.abs(totalY) < Math.abs(totalX) * 1.8 ||
+            velocity < (fromThumbnail ? 1.45 : 1.25) ||
+            elapsed > 390) return false;
         const direction = totalY < 0 ? 1 : -1;
         gesture.stopped = true;
         if (direction > 0) startWcnQuickMoodForward();
@@ -6451,11 +6457,11 @@
         if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
             touchStoryInputLocked(now) || gesture.startedAt < (touchFlow.storyHold?.readUntil ?? 0) ||
             gesture.mode !== 'timeline' || gesture.startPosition <= TOUCH_HOLD_POSITION + .01) return false;
-        const distance = Math.max(310, Math.min(440, viewportHeight * .45));
+        const distance = Math.max(185, Math.min(265, viewportHeight * .29));
         const elapsed = Math.max(16, now - gesture.startedAt);
         // Returning up the page means moving the finger downward. Require both
         // deliberate vertical distance and speed; sideways looking can never skip.
-        if (totalY < distance || totalY < Math.abs(totalX) * 1.8 || totalY / elapsed < 2.2) return false;
+        if (totalY < distance || totalY < Math.abs(totalX) * 1.8 || totalY / elapsed < 1.45 || elapsed > 390) return false;
         gesture.stopped = true;
         void startWcnQuickReverseToTop();
         return true;
@@ -8425,6 +8431,13 @@
 
       function updateStoryTextMotion() {
         pendingStoryPaint = false;
+        // A finished quick route must NEVER leave the story's parent hidden.
+        // Its scroll timing can continue normally even when a stale CSS class
+        // makes the rendered Lottie invisible.
+        if (!wcnQuickMoodDirection && !wcnQuickReverseStarting &&
+            !wcnFast.active && !wcnFast.starting) {
+          stage.classList.remove('wcn-quick-story-exit', 'wcn-fast-routing');
+        }
         const logicalFrame = clamp(smoothStorySequenceProgress, 0, 1) * STORY_LAST_FRAME;
         const touchClip = MOBILE_RUNTIME && touchFlow.autoplay?.kind === 'story' ? touchFlow.autoplay : null;
         const touchHold = MOBILE_RUNTIME ? touchFlow.storyHold : null;
@@ -8479,6 +8492,11 @@
                 visibleStoryClip = clip;
               }
             }
+          }
+          // A previously active quick transition can leave the clip container
+          // hidden even though the authored story playhead is advancing.
+          if (visibleStoryClip && visibleStoryClip.container.style.visibility !== 'visible') {
+            visibleStoryClip.container.style.visibility = 'visible';
           }
           storySequenceLottie.style.opacity = visibleStoryClip ? '1' : '0';
         } else {
@@ -12362,7 +12380,8 @@ void main(){
           wcnFastWhite.style.opacity='0';wcnFastFrame.style.opacity='0';
           wcnFastFrame.style.transition='';
           wcnFast.active=false;
-          stage.classList.remove('wcn-fast-routing');
+          stage.classList.remove('wcn-fast-routing', 'wcn-quick-story-exit');
+          wcnQuickMoodDirection = 0;
           if(destination==='top'){
             // Use the exact original 3.6s scale+opacity keyframes after reaching the sphere.
             if(openingTextReady&&openingTextAnimation)openingTextAnimation.goToAndStop(0,true);
