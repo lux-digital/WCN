@@ -12163,8 +12163,14 @@ void main(){
         wcnFastSetStatus('Loading quick navigation…');
         const isForward=direction>=0;
         try {
-          await wcnFastWarmAssets();
-          await Promise.all(Array.from({ length: 9 }, (_, i) =>
+          if (wcnQuickAligning) {
+            // The reverse handoff only needs the last few decoded frames.
+            // Download the remaining 48 assets without blocking its crossfade.
+            void wcnFastWarmAssets();
+          } else {
+            await wcnFastWarmAssets();
+          }
+          await Promise.all(Array.from({ length: wcnQuickAligning ? 5 : 9 }, (_, i) =>
             wcnFastLoad(fromCurrent
               ? clamp(Math.round(sourceFraction * 47) + (isForward ? i : -i), 0, 47)
               : (isForward ? i : 47 - i))));
