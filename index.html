@@ -6116,8 +6116,9 @@
       function touchStoryInputLocked(now = performance.now()) {
         const clip = touchFlow.autoplay;
         return clip?.kind === 'story' ||
-          (clip?.kind === 'sequence' && clip.direction > 0 && touchFlow.firstStoryStart !== null) ||
-          now < (touchFlow.storyHold?.readUntil ?? 0);
+          (clip?.kind === 'sequence' && clip.direction > 0 && touchFlow.firstStoryStart !== null);
+        // A completed square holds until a NEW swipe. Do not consume the first
+        // intentional new gesture with a separate read timer.
       }
 
       function startTouchSequence(direction) {
@@ -6145,7 +6146,7 @@
         const from = touchFlow.position;
         const distance = deltaPixels / Math.max(320, viewportHeight) * TOUCH_FLOW.swipeGain;
         if (Math.abs(distance) < .000001) return;
-        if (touchStoryInputLocked() || gesture.startedAt < (touchFlow.storyHold?.readUntil ?? 0)) {
+        if (touchStoryInputLocked()) {
           gesture.stopped = true;
           return;
         }
@@ -12121,6 +12122,10 @@ void main(){
           wcnFastSetStatus('Experience is still loading',false,2300);
           return false;
         }
+        // A deliberate quick gesture hides the current square immediately. Keep
+        // the established fast-loader feedback visible until its first image is ready.
+        // Normal mobile swipes never call this branch.
+        if (fromCurrent) stage.classList.add('wcn-fast-routing');
         // Feedback starts IMMEDIATELY at click, rather than waiting silently for
         // a new JPG. The approved master timeline keeps running while we load it.
         const sourceFraction = fromCurrent ? (MOBILE_RUNTIME
@@ -12144,6 +12149,7 @@ void main(){
         }catch(err){
           console.warn('[WCN optional fast route]',err);
           wcnFast.starting=false;
+          if (fromCurrent) stage.classList.remove('wcn-fast-routing');
           wcnFastSetButtonBusy(destination,false);
           wcnFastSetStatus('Quick navigation couldn’t load. Please tap the button to try again.',true,9000);
           return false;
