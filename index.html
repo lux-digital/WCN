@@ -6436,7 +6436,7 @@
       function tryTouchFastReturn(gesture, totalX, totalY, now) {
         if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
             touchStoryInputLocked(now) || gesture.startedAt < (touchFlow.storyHold?.readUntil ?? 0) ||
-            gesture.mode !== 'timeline' || gesture.startPosition < (touchFlow.firstStoryStart ?? TOUCH_FLOW.sequenceEnd)) return false;
+            gesture.mode !== 'timeline' || gesture.startPosition <= TOUCH_HOLD_POSITION + .01) return false;
         const distance = clamp(viewportHeight * .14, 110, 180);
         const elapsed = Math.max(16, now - gesture.startedAt);
         // Returning up the page means moving the finger downward. Require both
