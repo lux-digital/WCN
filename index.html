@@ -3119,6 +3119,14 @@
     #volumeControl.is-docked {
       top: max(9px, env(safe-area-inset-top));
     }
+    /* Keep the speaker accessible but never extend its slider over the mobile
+       product-thumbnail artwork. The main audio volume remains unchanged. */
+    .wcn-touch-runtime #stage.wcn-mobile-thumbnail-visible #volumeSliderRow {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      max-height: 0 !important;
+    }
     #volumeButton {
       -webkit-appearance: none;
       appearance: none;
@@ -5617,7 +5625,7 @@
       const MOBILE_SEQUENCE_PREFETCH_AHEAD = 16;
       const MOBILE_SEQUENCE_PREFETCH_BEHIND = 4;
       const MOBILE_SEQUENCE_FPS = 30;
-      const TOUCH_STORY_READ_HOLD_MS = 750;
+      const TOUCH_STORY_READ_HOLD_MS = 500;
       let mobileSequenceUseTick = 0;
       let mobileSequenceDirection = 1;
       let mobileSequenceDemandFrame = 0;
@@ -6035,7 +6043,7 @@
       const TOUCH_FLOW = Object.freeze({
         sequenceEnd: 1.20,
         storyLength: 1.90,
-        storyManualLength: 1.10,
+        storyManualLength: .62,
         moodLength: .85,
         swipeGain: 1.50
       });
@@ -6218,7 +6226,7 @@
           ? TOUCH_FLOW.sequenceEnd * MOBILE_SEQUENCE_FPS / (SCROLL_FRAME_COUNT - 1)
           : clip.kind === 'story'
           ? (clip.high - clip.low) / Math.max(1 / 30,
-            storyClipDuration(clip) * (clip.index === 0 ? 1 - touchFlow.firstStoryProgress : 1))
+            storyClipDuration(clip) * .86 * (clip.index === 0 ? 1 - touchFlow.firstStoryProgress : 1))
           : TOUCH_FLOW.moodLength * Math.max(.75, parentHandoffRate) / MOOD_CLIP_DURATION;
         const rate = clip.kind === 'story' ? 1 : clip.rate;
         const next = clamp(touchFlow.position + clip.direction * dt * speed * rate, clip.low, clip.high);
@@ -6407,6 +6415,24 @@
         if (!control && event.cancelable) event.preventDefault();
       }
 
+      /* Fast navigation has its own deliberate swipe threshold. A normal one-swipe
+         square advance still goes through advanceTouchTimeline unchanged. */
+      function tryTouchFastStoryNavigation(gesture, totalX, totalY, now) {
+        if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
+            gesture.mode !== 'timeline' ||
+            gesture.startPosition < TOUCH_FLOW.sequenceEnd - .001 ||
+            gesture.startPosition > TOUCH_HOLD_POSITION + .001) return false;
+        const distance = Math.max(240, Math.min(360, viewportHeight * .34));
+        const elapsed = Math.max(16, now - gesture.startedAt);
+        if (Math.abs(totalY) < distance ||
+            Math.abs(totalY) < Math.abs(totalX) * 2 ||
+            Math.abs(totalY) / elapsed < 1.55) return false;
+        const direction = totalY < 0 ? 1 : -1;
+        gesture.stopped = true;
+        void wcnFastBegin(direction > 0 ? 'colours' : 'top', direction, true);
+        return true;
+      }
+
       function tryTouchFastReturn(gesture, totalX, totalY, now) {
         if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
             touchStoryInputLocked(now) || gesture.startedAt < (touchFlow.storyHold?.readUntil ?? 0) ||
@@ -6431,7 +6457,10 @@
         const totalX = touch.clientX - gesture.x, totalY = touch.clientY - gesture.y;
         const ax = Math.abs(totalX), ay = Math.abs(totalY);
         if (gesture.stopped) {
-          tryTouchFastReturn(gesture, totalX, totalY, performance.now());
+          if (gesture.mode === 'timeline') {
+            if (tryTouchFastStoryNavigation(gesture, totalX, totalY, performance.now())) return;
+            tryTouchFastReturn(gesture, totalX, totalY, performance.now());
+          }
           return;
         }
         let dx = touch.clientX - gesture.lastX, dy = touch.clientY - gesture.lastY;
@@ -6450,10 +6479,12 @@
             if (ay < threshold || ay < ax * dominance) return;
             gesture.mode = 'timeline';
             dy = Math.sign(totalY) * (ay - threshold);
+            if (tryTouchFastStoryNavigation(gesture, totalX, totalY, performance.now())) return;
           }
         }
         // Once panning starts, vertical drift can never become a navigation swipe.
         if (gesture.mode === 'timeline') {
+          if (tryTouchFastStoryNavigation(gesture, totalX, totalY, performance.now())) return;
           if (tryTouchFastReturn(gesture, totalX, totalY, performance.now())) return;
           advanceTouchTimeline(-dy, gesture);
         }
@@ -7347,6 +7378,7 @@
         /* 2) Fade Coastal Sand in over the white background. */
 
         const videoOpacity = smootherstep01(rangeProgress(p, MOOD_VIDEO_START, MOOD_VIDEO_END));
+        if (MOBILE_RUNTIME) stage.classList.toggle('wcn-mobile-thumbnail-visible', videoOpacity > .08);
         updateMoodStillFallback(videoOpacity);
         if (videoOpacity <= .001 || !mediaIsVisible()) moodVideoPlayers.forEach(pauseMoodVideoIfSilent);
         const quickFallback = document.getElementById('wcnFastMoodFallback');
@@ -12053,7 +12085,9 @@ void main(){
       function wcnFastUpdateLinks() {
         if(!wcnFastLinks || !scrollingReady)return;
         const atOpening = !wcnFast.active && !wcnFast.starting && !parentOverlayActive &&
-          !moodClipActive && !moodClipComplete &&
+          !moodClipActive && !moodClipComplete && !panoramaReturnActive &&
+          (MOBILE_RUNTIME || (smoothScrollFrame < .6 && targetScrollFrame < .6 &&
+            holdEnvBlend < .005 && holdEnvMode === 'inactive')) &&
           (!MOBILE_RUNTIME || (touchFlow.displayedPosition <= .0001 && smoothScrollFrame <= .5 && holdEnvBlend <= .001)) &&
           calculateRawScrollProgress() < .024;
         if (atOpening !== wcnFastButtonsShown) {
@@ -12080,7 +12114,7 @@ void main(){
         scrollInputEnergy=0;timelinePlaybackRate=1;
         clearMoodExitSettle();clearMoodReturnHold();
       }
-      async function wcnFastBegin(destination, direction=1) {
+      async function wcnFastBegin(destination, direction=1, fromCurrent=false) {
         if(wcnFast.active || wcnFast.starting || parentOverlayActive)return false;
         if (MOBILE_RUNTIME) finishTouchFlowGesture();
         if(!scrollingReady){
@@ -12089,13 +12123,19 @@ void main(){
         }
         // Feedback starts IMMEDIATELY at click, rather than waiting silently for
         // a new JPG. The approved master timeline keeps running while we load it.
+        const sourceFraction = fromCurrent ? (MOBILE_RUNTIME
+          ? clamp(touchFlow.displayedPosition / TOUCH_END_POSITION, 0, 1)
+          : clamp(calculateRawScrollProgress(), 0, 1)) : (direction >= 0 ? 0 : 1);
         wcnFast.starting=true;
         wcnFastSetButtonBusy(destination,true);
         wcnFastSetStatus('Loading quick navigation…');
         const isForward=direction>=0;
         try {
           await wcnFastWarmAssets();
-          await Promise.all(Array.from({ length: 9 }, (_, i) => wcnFastLoad(isForward ? i : 47 - i)));
+          await Promise.all(Array.from({ length: 9 }, (_, i) =>
+            wcnFastLoad(fromCurrent
+              ? clamp(Math.round(sourceFraction * 47) + (isForward ? i : -i), 0, 47)
+              : (isForward ? i : 47 - i))));
           // Establish the actual destination before the fast overlay can expose it.
           if (MOBILE_RUNTIME) {
             mobileSequenceDemandFrame = isForward ? SCROLL_FRAME_COUNT - 1 : 0;
@@ -12116,14 +12156,16 @@ void main(){
         wcnFast.destination=destination;
         wcnFast.startedAt=performance.now();
         wcnFast.lastTickAt=wcnFast.startedAt;
-        wcnFast.playhead=0;
+        wcnFast.playhead = fromCurrent
+          ? clamp(isForward ? Math.round(sourceFraction * 47) : 47 - Math.round(sourceFraction * 47), 0, 46)
+          : 0;
         wcnFast.previousFrame=-1;
         wcnFast.active=true;
         wcnFast.starting=false;
         wcnFast.transitionStarted=false;
         stage.classList.add('wcn-fast-routing');
-        wcnFastSetFrame(isForward?0:47);
-        wcnFastFrame.style.opacity=isForward?'0':'1';
+        wcnFastSetFrame(isForward ? Math.round(wcnFast.playhead) : 47 - Math.round(wcnFast.playhead));
+        wcnFastFrame.style.opacity = fromCurrent ? '1' : (isForward ? '0' : '1');
         wcnFastWhite.style.opacity='0';
         wcnFastTravel.classList.add('is-active');
         wcnFastWarmAssets();
@@ -12229,6 +12271,9 @@ void main(){
         moodClipActive=moodClipComplete=false;moodClipProgress=0;moodClipDirection=0;
         moodClipAnchorY=null;moodClipReverseSuppressed=false;
         holdEnvMode='inactive';holdEnvBlend=0;
+        holdEnvHotspotReveal=0;
+        if (activeHoldHotspotIndex !== -1) setActiveHoldHotspot(-1);
+        holdHotspotButtons.forEach(button => button.classList.remove('is-visible','is-active'));
         holdEnvReverseSuppressed=false;
         holdEnvReverseFrameLock=false;
         panoramaReturnCameraGlideActive=true;
@@ -12313,7 +12358,10 @@ void main(){
         const raw = calculateRawScrollProgress();
         const nearOpening = raw < .085 && !moodClipActive && !moodClipComplete;
         const nearMood = moodClipActive || moodClipComplete || raw > Math.max(.88, MOOD_WHITE_START - .055);
-        return direction > 0 ? nearOpening : nearMood;
+        const inSquareStory = storySequenceAutoplayActive ||
+          (smoothStoryProgress >= STORY_SEQUENCE_START - .005 &&
+           smoothStoryProgress <= STORY_SEQUENCE_HOLD_END + .005);
+        return inSquareStory || (direction > 0 ? nearOpening : nearMood);
       }
       /* Explicit fast-gesture detection, in capture phase. Slow scrolling is handed through
          to the original listeners WITHOUT ANY CHANGE. Fast-wheel intention is cumulative,
@@ -12329,24 +12377,34 @@ void main(){
         const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?window.innerHeight:1);
         const direction=Math.sign(delta),now=performance.now();
         if(!direction)return;
-        if (blockDesktopStoryWheel(now)) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          return;
-        }
-        if(now-wcnFastWheelAt>155||direction!==wcnFastWheelDir || now-wcnFastWheelFirstAt>165){
+        if(now-wcnFastWheelAt>210||direction!==wcnFastWheelDir || now-wcnFastWheelFirstAt>260){
           wcnFastWheelEnergy=0;wcnFastWheelFirstAt=now;
         }
         wcnFastWheelAt=now;wcnFastWheelDir=direction;
         wcnFastWheelEnergy+=Math.abs(delta);
         // A series of normal mouse-wheel clicks must NOT silently switch experiences.
-        const forceful=Math.abs(delta)>320||(wcnFastWheelEnergy>480&&now-wcnFastWheelFirstAt<155);
-        if(!forceful)return;
+        const inSquareStory = storySequenceAutoplayActive ||
+          (smoothStoryProgress >= STORY_SEQUENCE_START - .005 &&
+           smoothStoryProgress <= STORY_SEQUENCE_HOLD_END + .005);
+        const forceful = Math.abs(delta) > (inSquareStory ? 250 : 320) ||
+          (wcnFastWheelEnergy > (inSquareStory ? 440 : 480) &&
+           now - wcnFastWheelFirstAt < (inSquareStory ? 260 : 155));
+        if (!forceful) {
+          if (blockDesktopStoryWheel(now)) {
+            event.preventDefault(); event.stopImmediatePropagation();
+          }
+          return;
+        }
         const towardMood=direction>0;
-        if(!wcnFastGestureAllowed(direction))return;
+        if (!wcnFastGestureAllowed(direction)) {
+          if (blockDesktopStoryWheel(now)) {
+            event.preventDefault(); event.stopImmediatePropagation();
+          }
+          return;
+        }
         event.preventDefault();event.stopImmediatePropagation();
         wcnFastWheelEnergy=0;
-        wcnFastBegin(towardMood?'colours':'top',direction);
+        void wcnFastBegin(towardMood?'colours':'top',direction,inSquareStory);
       },{capture:true,passive:false});
       // Rapid upward touch navigation uses tryTouchFastReturn in the touch controller;
       // ordinary swipes still follow the authored story and panorama holds.
