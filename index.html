@@ -4307,9 +4307,9 @@
       will-change:opacity,transform,filter;backface-visibility:hidden;
     }
     /* The authored Lotties and all current controls are untouched in normal mode. */
-    /* During quick story exits, suppress typography only. The high-resolution
-       semi-panorama stays in place through the real mood crossfade. */
-    #stage.wcn-quick-story-exit #storyLayer {opacity:0!important;pointer-events:none!important}
+    /* Story visibility is controlled only by the authored Lottie timeline.
+       A quick-navigation state must never suppress its entire parent layer:
+       that left otherwise normally playing squares invisible on PC and touch. */
     #stage.wcn-fast-routing #heroText,
     #stage.wcn-fast-routing #storyLayer,
     #stage.wcn-fast-routing #scrollIndicator,
@@ -8431,13 +8431,9 @@
 
       function updateStoryTextMotion() {
         pendingStoryPaint = false;
-        // A finished quick route must NEVER leave the story's parent hidden.
-        // Its scroll timing can continue normally even when a stale CSS class
-        // makes the rendered Lottie invisible.
-        if (!wcnQuickMoodDirection && !wcnQuickReverseStarting &&
-            !wcnFast.active && !wcnFast.starting) {
-          stage.classList.remove('wcn-quick-story-exit', 'wcn-fast-routing');
-        }
+        // Fast-route classes are transition state, not permission to hide
+        // the story. Avoid clearing them in the render path; a route may still
+        // be completing its own crossfade when a story frame is repainted.
         const logicalFrame = clamp(smoothStorySequenceProgress, 0, 1) * STORY_LAST_FRAME;
         const touchClip = MOBILE_RUNTIME && touchFlow.autoplay?.kind === 'story' ? touchFlow.autoplay : null;
         const touchHold = MOBILE_RUNTIME ? touchFlow.storyHold : null;
@@ -8468,7 +8464,7 @@
           }
         }
 
-        if (active && activeHoldHotspotIndex < 0) {
+        if (active) {
           const clip = storyClips[range.index];
           if (clip.state === 'ready') {
             const lastFrame = clip.readFrame ?? clip.animation.totalFrames - 1;
