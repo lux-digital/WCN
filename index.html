@@ -12409,6 +12409,19 @@ void main(){
       function startWcnQuickMoodForward() {
         if (wcnFast.active || wcnFast.starting || parentOverlayActive ||
             wcnQuickMoodDirection || wcnQuickReverseStarting) return;
+        if (!MOBILE_RUNTIME && moodClipComplete && !moodClipActive) return;
+        if (!MOBILE_RUNTIME && moodClipActive) {
+          // Accelerate the current fade instead of restarting it at zero.
+          moodClipDirection = 1;
+          wcnQuickMoodDirection = 1;
+          return;
+        }
+        if (MOBILE_RUNTIME && touchFlow.displayedPosition > TOUCH_HOLD_POSITION + .001) {
+          // Do not jump backwards from an in-progress mood transition.
+          wcnQuickMoodDirection = 1;
+          if (touchFlow.autoplay?.kind === 'mood') touchFlow.autoplay.direction = 1;
+          return;
+        }
         wcnQuickMoodDirection = 1;
         stage.classList.add('wcn-quick-story-exit');
         if (MOBILE_RUNTIME) {
