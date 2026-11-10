@@ -12102,7 +12102,12 @@ void main(){
         }
         // Feedback starts IMMEDIATELY at click, rather than waiting silently for
         // a new JPG. The approved master timeline keeps running while we load it.
+        const fastStartFraction = MOBILE_RUNTIME
+          ? clamp(touchFlow.displayedPosition / TOUCH_END_POSITION, 0, 1)
+          : clamp(calculateRawScrollProgress(), 0, 1);
         wcnFast.starting=true;
+        // Cancel the active square autoplay immediately, before asset loading.
+        wcnFastStopOrdinaryAutoplay();
         // Suppress the currently visible square and top shortcuts the instant a
         // quick gesture begins rather than waiting for the 48 fast JPG downloads.
         stage.classList.add('wcn-fast-routing');
@@ -12112,8 +12117,15 @@ void main(){
         wcnFastSetStatus('Loading quick navigation…');
         const isForward=direction>=0;
         try {
-          await wcnFastWarmAssets();
-          await Promise.all(Array.from({ length: 9 }, (_, i) => wcnFastLoad(isForward ? i : 47 - i)));
+          // Warm the remaining frames in the background: do not hold the user on
+          // a square while waiting for the entire 48-frame sequence to download.
+          void wcnFastWarmAssets();
+          const initialFrame = clamp(Math.round(fastStartFraction * 47), 0, 47);
+          await Promise.all([
+            wcnFastLoad(initialFrame),
+            wcnFastLoad(Math.min(47, initialFrame + (isForward ? 1 : -1)) < 0 ? 0 :
+              Math.min(47, initialFrame + (isForward ? 1 : -1)))
+          ]);
           // Establish the actual destination before the fast overlay can expose it.
           if (MOBILE_RUNTIME) {
             mobileSequenceDemandFrame = isForward ? SCROLL_FRAME_COUNT - 1 : 0;
@@ -12135,9 +12147,7 @@ void main(){
         wcnFast.destination=destination;
         wcnFast.startedAt=performance.now();
         wcnFast.lastTickAt=wcnFast.startedAt;
-        const fastSourceFraction = MOBILE_RUNTIME
-          ? clamp(touchFlow.displayedPosition / TOUCH_END_POSITION, 0, 1)
-          : clamp(calculateRawScrollProgress(), 0, 1);
+        const fastSourceFraction = fastStartFraction;
         // Play only the remaining portion of Scroll_01_fast in either direction.
         wcnFast.playhead = clamp(Math.round((isForward ? fastSourceFraction : 1 - fastSourceFraction) * 47), 0, 45);
         wcnFast.previousFrame=-1;
@@ -12340,7 +12350,7 @@ void main(){
         const inExperience = experience.getBoundingClientRect().bottom > 0 &&
           experience.getBoundingClientRect().top < window.innerHeight;
         return inExperience && raw > .012 && raw < 1.001 &&
-          !parentOverlayActive && (direction > 0 || raw > .07);
+          !parentOverlayActive && (direction > 0 || raw > .012);
       }
       /* Explicit fast-gesture detection, in capture phase. Slow scrolling is handed through
          to the original listeners WITHOUT ANY CHANGE. Fast-wheel intention is cumulative,
@@ -12356,13 +12366,22 @@ void main(){
         const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?window.innerHeight:1);
         const direction=Math.sign(delta),now=performance.now();
         if(!direction)return;
-        if(now-wcnFastWheelAt>155||direction!==wcnFastWheelDir || now-wcnFastWheelFirstAt>165){
+        if(now-wcnFastWheelAt>220||direction!==wcnFastWheelDir || now-wcnFastWheelFirstAt>260){
           wcnFastWheelEnergy=0;wcnFastWheelFirstAt=now;
         }
         wcnFastWheelAt=now;wcnFastWheelDir=direction;
         wcnFastWheelEnergy+=Math.abs(delta);
         // A series of normal mouse-wheel clicks must NOT silently switch experiences.
-        const forceful=Math.abs(delta)>320||(wcnFastWheelEnergy>480&&now-wcnFastWheelFirstAt<155);
+        const squareOnScreen = storySequenceAutoplayActive ||
+          performance.now() < desktopStoryReadUntil ||
+          (smoothStoryProgress >= STORY_SEQUENCE_START &&
+           smoothStoryProgress <= STORY_SEQUENCE_HOLD_END &&
+           storyLayer.getBoundingClientRect().width > 0);
+        // A deliberate flick during any square must outrank the autoplay/read lock.
+        // A single ordinary wheel notch should still allow the sentence to finish.
+        const forceful = Math.abs(delta) > (squareOnScreen ? 165 : 320) ||
+          (wcnFastWheelEnergy > (squareOnScreen ? 260 : 480) &&
+           now - wcnFastWheelFirstAt < (squareOnScreen ? 260 : 165));
         if(!forceful) {
           if (blockDesktopStoryWheel(now)) { event.preventDefault(); event.stopImmediatePropagation(); }
           return;
