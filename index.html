@@ -10414,8 +10414,9 @@ void main(){
         });
       }
 
-      async function loadStoryClip(range) {
+      async function loadStoryClip(range, attempt = 0) {
         const clip = storyClips[range.index];
+        clip.state = 'loading';
         const container = document.createElement('div');
         container.className = 'storyClip';
         storySequenceLottie.appendChild(container);
@@ -10487,8 +10488,21 @@ void main(){
           clip.duration = clip.readFrame / animation.frameRate;
           clip.state = 'ready';
         } catch (error) {
+          // A single failed JSON/image request must not leave an entire authored
+          // section permanently blank while its scroll clock keeps advancing.
+          // Recreate the SVG player and retry this clip without duplicating
+          // the existing container or blocking the main experience.
+          try { clip.animation?.destroy(); } catch (_) {}
+          clip.animation = null;
+          container.remove();
+          clip.container = null;
+          if (attempt < 2) {
+            console.warn(`Retrying ${range.file} (${attempt + 2}/3)`, error);
+            await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+            return loadStoryClip(range, attempt + 1);
+          }
           clip.state = 'failed';
-          console.warn(`Could not load ${range.file}`, error);
+          console.warn(`Could not load ${range.file} after 3 attempts`, error);
         }
         if (scrollingReady && !wcnFast.active) updateStoryTextMotion();
       }
