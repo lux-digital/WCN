@@ -12399,6 +12399,107 @@ void main(){
         event.preventDefault();event.stopPropagation();
         void wcnFastBegin('gallery',1);
       });
+      /* Scene-aware fast navigation. Keep the real semi-panorama/high-res insert
+         visible during a forward mood fade. Only a reverse journey needs the
+         Scroll_01_fast sequence after the hold camera has returned to neutral. */
+      function startWcnQuickMoodForward() {
+        if (wcnFast.active || wcnFast.starting || parentOverlayActive ||
+            wcnQuickMoodDirection || wcnQuickReverseStarting) return;
+        wcnQuickMoodDirection = 1;
+        stage.classList.add('wcn-quick-story-exit');
+        if (MOBILE_RUNTIME) {
+          touchFlow.autoplay = null;
+          touchFlow.storyHold = null;
+          setTouchPosition(TOUCH_HOLD_POSITION);
+          updateTouchTimeline(true);
+          touchFlow.autoplay = {
+            kind: 'mood', low: TOUCH_HOLD_POSITION, high: TOUCH_END_POSITION,
+            direction: 1, rate: 1
+          };
+        } else {
+          // Don't reset the canvas, hi-res texture, or hold scene.
+          storySequenceAutoplayActive = false;
+          desktopStoryRange = null;
+          desktopStoryReadUntil = 0;
+          backgroundAutoplayActive = false;
+          firstStoryAutoplayPending = false;
+          moodClipActive = false;
+          moodClipComplete = false;
+          moodClipProgress = 0;
+          startMoodClip(1);
+        }
+      }
+
+      function startWcnQuickMoodReverse() {
+        if (wcnFast.active || wcnFast.starting || parentOverlayActive ||
+            wcnQuickMoodDirection || wcnQuickReverseStarting) return;
+        wcnQuickMoodDirection = -1;
+        if (MOBILE_RUNTIME) {
+          touchFlow.storyHold = null;
+          touchFlow.autoplay = {
+            kind: 'mood', low: TOUCH_HOLD_POSITION, high: TOUCH_END_POSITION,
+            direction: -1, rate: 1
+          };
+          clearMoodExitSettle();
+          clearMoodReturnHold();
+        } else {
+          // The existing animated thumbnail first fades back into the already
+          // loaded panorama, just as THE COLOURS shortcut does in reverse.
+          clearMoodExitSettle();
+          clearMoodReturnHold();
+          if (moodClipActive) {
+            moodClipDirection = -1;
+            moodClipComplete = false;
+          } else {
+            moodClipActive = false;
+            startMoodClip(-1);
+          }
+        }
+      }
+
+      async function startWcnQuickReverseToTop() {
+        if (wcnQuickReverseStarting || wcnFast.starting || wcnFast.active ||
+            parentOverlayActive) return;
+        wcnQuickReverseStarting = true;
+        stage.classList.add('wcn-quick-story-exit');
+        try {
+          // Neutralize the semi-panorama before exposing the last fast frame.
+          // It stays fully visible until the handoff crossfade has started.
+          const fromYaw = holdEnvYaw, fromPitch = holdEnvPitch;
+          const fromMouseX = holdEnvSmoothMouseX, fromMouseY = holdEnvSmoothMouseY;
+          const fromTouchX = mouseX, fromTouchY = mouseY;
+          const prep = wcnFastLoad(WCN_FAST_TOTAL - 1);
+          const started = performance.now();
+          await new Promise(resolve => {
+            const align = now => {
+              const t = smootherstep01((now - started) / 430);
+              holdEnvYaw = fromYaw * (1 - t);
+              holdEnvPitch = fromPitch * (1 - t);
+              holdEnvSmoothMouseX = fromMouseX * (1 - t);
+              holdEnvSmoothMouseY = fromMouseY * (1 - t);
+              mouseX = fromTouchX * (1 - t);
+              mouseY = fromTouchY * (1 - t);
+              if (t < 1) requestAnimationFrame(align);
+              else resolve();
+            };
+            requestAnimationFrame(align);
+          });
+          await prep;
+          wcnQuickAligning = true;
+          const startedFast = await wcnFastBegin('top', -1, false);
+          if (!startedFast) {
+            wcnQuickAligning = false;
+            stage.classList.remove('wcn-quick-story-exit');
+          }
+        } catch (error) {
+          console.warn('[WCN] aligned fast return unavailable', error);
+          wcnQuickAligning = false;
+          stage.classList.remove('wcn-quick-story-exit');
+        } finally {
+          wcnQuickReverseStarting = false;
+        }
+      }
+
       function wcnFastGestureAllowed(direction) {
         const raw = calculateRawScrollProgress();
         const nearOpening = raw < .085 && !moodClipActive && !moodClipComplete;
