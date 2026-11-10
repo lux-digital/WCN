@@ -6398,6 +6398,17 @@
           woodViewerShell.classList.remove('is-dragging');
         }
         touchFlow.gesture = null;
+        // Decide navigation only once the swipe has FINISHED. Previously the
+        // first few touchmove events could prematurely hide an ordinary square
+        // and the rest of the finger movement could not undo that decision.
+        if (event?.type === 'touchend' && gesture &&
+            (gesture.mode === 'timeline' || gesture.mode === 'pending')) {
+          const touch = Array.from(event.changedTouches || [])
+            .find(item => item.identifier === gesture.id);
+          if (touch) tryTouchFastStoryNavigation(
+            gesture, touch.clientX - gesture.x,
+            touch.clientY - gesture.y, performance.now());
+        }
       }
 
       function beginTouchFlowGesture(event) {
@@ -6428,7 +6439,7 @@
          square advance still goes through advanceTouchTimeline unchanged. */
       function tryTouchFastStoryNavigation(gesture, totalX, totalY, now) {
         if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
-            gesture.mode !== 'timeline' ||
+            (gesture.mode !== 'timeline' && gesture.mode !== 'pending') ||
             gesture.startPosition < TOUCH_FLOW.sequenceEnd - .001 ||
             gesture.startPosition > TOUCH_END_POSITION + .001) return false;
         const elapsed = Math.max(16, now - gesture.startedAt);
@@ -6437,13 +6448,13 @@
         // and a strongly vertical path. The previous 310-440px + 2.2px/ms
         // rule was practically unreachable on a normal iPhone swipe.
         const distance = fromThumbnail
-          ? Math.max(185, Math.min(265, viewportHeight * .29))
-          : Math.max(145, Math.min(210, viewportHeight * .22));
+          ? Math.max(260, Math.min(350, viewportHeight * .38))
+          : Math.max(215, Math.min(290, viewportHeight * .32));
         const velocity = Math.abs(totalY) / elapsed;
         if (Math.abs(totalY) < distance ||
-            Math.abs(totalY) < Math.abs(totalX) * 1.8 ||
-            velocity < (fromThumbnail ? 1.45 : 1.25) ||
-            elapsed > 390) return false;
+            Math.abs(totalY) < Math.abs(totalX) * 2 ||
+            velocity < (fromThumbnail ? 1.95 : 1.75) ||
+            elapsed > 340) return false;
         const direction = totalY < 0 ? 1 : -1;
         gesture.stopped = true;
         if (direction > 0) startWcnQuickMoodForward();
@@ -6475,13 +6486,7 @@
         if (!touch) return;
         const totalX = touch.clientX - gesture.x, totalY = touch.clientY - gesture.y;
         const ax = Math.abs(totalX), ay = Math.abs(totalY);
-        if (gesture.stopped) {
-          if (gesture.mode === 'timeline') {
-            if (tryTouchFastStoryNavigation(gesture, totalX, totalY, performance.now())) return;
-            tryTouchFastReturn(gesture, totalX, totalY, performance.now());
-          }
-          return;
-        }
+        if (gesture.stopped) return;
         let dx = touch.clientX - gesture.lastX, dy = touch.clientY - gesture.lastY;
         if (gesture.mode === 'pending') {
           if (gesture.pan !== 'none' && ax >= 12 && ax > ay * 1.10) {
@@ -6498,13 +6503,10 @@
             if (ay < threshold || ay < ax * dominance) return;
             gesture.mode = 'timeline';
             dy = Math.sign(totalY) * (ay - threshold);
-            if (tryTouchFastStoryNavigation(gesture, totalX, totalY, performance.now())) return;
           }
         }
         // Once panning starts, vertical drift can never become a navigation swipe.
         if (gesture.mode === 'timeline') {
-          if (tryTouchFastStoryNavigation(gesture, totalX, totalY, performance.now())) return;
-          if (tryTouchFastReturn(gesture, totalX, totalY, performance.now())) return;
           advanceTouchTimeline(-dy, gesture);
         }
         else if (gesture.mode === 'main-pan') {
@@ -12597,11 +12599,9 @@ void main(){
         // This deliberately avoids treating ordinary fast-ish scrolling as a shortcut.
         const fastArea = inSquareStory || moodClipActive || moodClipComplete;
         wcnQuickWheelSamples++;
-        const forceful = fastArea && (
-          Math.abs(delta) >= 760 ||
-          (wcnQuickWheelSamples >= 3 && wcnFastWheelEnergy >= 1250 &&
-           now - wcnFastWheelFirstAt <= 260)
-        );
+        const forceful = fastArea && wcnQuickWheelSamples >= 5 &&
+          wcnFastWheelEnergy >= 1900 &&
+          now - wcnFastWheelFirstAt <= 260;
         if (!forceful) {
           if (blockDesktopStoryWheel(now)) {
             event.preventDefault(); event.stopImmediatePropagation();
