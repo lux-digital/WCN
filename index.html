@@ -12163,13 +12163,11 @@ void main(){
         wcnFastSetStatus('Loading quick navigation…');
         const isForward=direction>=0;
         try {
-          if (wcnQuickAligning) {
-            // The reverse handoff only needs the last few decoded frames.
-            // Download the remaining 48 assets without blocking its crossfade.
-            void wcnFastWarmAssets();
-          } else {
+          if (!wcnQuickAligning) {
             await wcnFastWarmAssets();
           }
+          // The aligned reverse route prioritizes its first five decoded
+          // frames; the remaining assets warm AFTER the crossfade begins.
           await Promise.all(Array.from({ length: wcnQuickAligning ? 5 : 9 }, (_, i) =>
             wcnFastLoad(fromCurrent
               ? clamp(Math.round(sourceFraction * 47) + (isForward ? i : -i), 0, 47)
@@ -12468,6 +12466,17 @@ void main(){
             parentOverlayActive) return;
         wcnQuickReverseStarting = true;
         stage.classList.add('wcn-quick-story-exit');
+        // Freeze authored autoplay at its current visual position. A running
+        // square may not continue dragging the underlying hold scene while
+        // the camera is realigning.
+        storySequenceAutoplayActive = false;
+        desktopStoryReadUntil = 0;
+        touchFlow.autoplay = null;
+        touchFlow.storyHold = null;
+        if (activeHoldHotspotIndex !== -1) setActiveHoldHotspot(-1);
+        holdTouchLookUnlocked = false;
+        holdEnvMouseBlend = 0;
+        holdEnvHoverZoomBlend = 0;
         try {
           // Neutralize the semi-panorama before exposing the last fast frame.
           // It stays fully visible until the handoff crossfade has started.
