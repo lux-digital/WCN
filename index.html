@@ -12376,7 +12376,7 @@ void main(){
           performance.now() < desktopStoryReadUntil ||
           (smoothStoryProgress >= STORY_SEQUENCE_START &&
            smoothStoryProgress <= STORY_SEQUENCE_HOLD_END &&
-           storyLayer.getBoundingClientRect().width > 0);
+           !!document.getElementById('storyLayer'));
         // A deliberate flick during any square must outrank the autoplay/read lock.
         // A single ordinary wheel notch should still allow the sentence to finish.
         const forceful = Math.abs(delta) > (squareOnScreen ? 165 : 320) ||
