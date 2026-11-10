@@ -12420,6 +12420,10 @@ void main(){
           // Do not jump backwards from an in-progress mood transition.
           wcnQuickMoodDirection = 1;
           if (touchFlow.autoplay?.kind === 'mood') touchFlow.autoplay.direction = 1;
+          else touchFlow.autoplay = {
+            kind: 'mood', low: TOUCH_HOLD_POSITION, high: TOUCH_END_POSITION,
+            direction: 1, rate: 1
+          };
           return;
         }
         wcnQuickMoodDirection = 1;
