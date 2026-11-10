@@ -4307,6 +4307,9 @@
       will-change:opacity,transform,filter;backface-visibility:hidden;
     }
     /* The authored Lotties and all current controls are untouched in normal mode. */
+    /* During quick story exits, suppress typography only. The high-resolution
+       semi-panorama stays in place through the real mood crossfade. */
+    #stage.wcn-quick-story-exit #storyLayer {opacity:0!important;pointer-events:none!important}
     #stage.wcn-fast-routing #heroText,
     #stage.wcn-fast-routing #storyLayer,
     #stage.wcn-fast-routing #scrollIndicator,
@@ -6229,12 +6232,18 @@
           ? (clip.high - clip.low) / Math.max(1 / 30,
             storyClipDuration(clip) * .86 * (clip.index === 0 ? 1 - touchFlow.firstStoryProgress : 1))
           : TOUCH_FLOW.moodLength * Math.max(.75, parentHandoffRate) / MOOD_CLIP_DURATION;
-        const rate = clip.kind === 'story' ? 1 : clip.rate;
+        const rate = clip.kind === 'story' ? 1 : (clip.kind === 'mood' && wcnQuickMoodDirection ? 2.8 : clip.rate);
         const next = clamp(touchFlow.position + clip.direction * dt * speed * rate, clip.low, clip.high);
         setTouchPosition(next);
         const complete = clip.direction > 0 ? next >= clip.high - .000001 : next <= clip.low + .000001;
         if (complete) {
           setTouchPosition(clip.direction > 0 ? clip.high : clip.low);
+          if (clip.kind === 'mood' && wcnQuickMoodDirection) {
+            const wasReverse = wcnQuickMoodDirection < 0;
+            wcnQuickMoodDirection = 0;
+            stage.classList.remove('wcn-quick-story-exit');
+            if (wasReverse) requestAnimationFrame(() => { void startWcnQuickReverseToTop(); });
+          }
           if (clip.kind === 'story') {
             // Hold the completed export independently of the scroll coordinates.
             touchFlow.storyHold = {
@@ -6422,15 +6431,19 @@
         if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
             gesture.mode !== 'timeline' ||
             gesture.startPosition < TOUCH_FLOW.sequenceEnd - .001 ||
-            gesture.startPosition > TOUCH_HOLD_POSITION + .001) return false;
-        const distance = Math.max(240, Math.min(360, viewportHeight * .34));
+            gesture.startPosition > TOUCH_END_POSITION + .001) return false;
         const elapsed = Math.max(16, now - gesture.startedAt);
+        const distance = Math.max(310, Math.min(440, viewportHeight * .45));
+        // Strong travel PLUS speed PLUS vertical dominance. A normal swipe never
+        // enters quick navigation, including when leaving the thumbnail scene.
         if (Math.abs(totalY) < distance ||
-            Math.abs(totalY) < Math.abs(totalX) * 2 ||
-            Math.abs(totalY) / elapsed < 1.55) return false;
+            Math.abs(totalY) < Math.abs(totalX) * 2.4 ||
+            Math.abs(totalY) / elapsed < 2.20) return false;
         const direction = totalY < 0 ? 1 : -1;
         gesture.stopped = true;
-        void wcnFastBegin(direction > 0 ? 'colours' : 'top', direction, true);
+        if (direction > 0) startWcnQuickMoodForward();
+        else if (touchFlow.displayedPosition >= TOUCH_HOLD_POSITION + .02) startWcnQuickMoodReverse();
+        else void startWcnQuickReverseToTop();
         return true;
       }
 
@@ -6438,13 +6451,13 @@
         if (!scrollingReady || wcnFast.active || wcnFast.starting || parentOverlayActive ||
             touchStoryInputLocked(now) || gesture.startedAt < (touchFlow.storyHold?.readUntil ?? 0) ||
             gesture.mode !== 'timeline' || gesture.startPosition <= TOUCH_HOLD_POSITION + .01) return false;
-        const distance = clamp(viewportHeight * .14, 110, 180);
+        const distance = Math.max(310, Math.min(440, viewportHeight * .45));
         const elapsed = Math.max(16, now - gesture.startedAt);
         // Returning up the page means moving the finger downward. Require both
         // deliberate vertical distance and speed; sideways looking can never skip.
-        if (totalY < distance || totalY < Math.abs(totalX) * 1.8 || totalY / elapsed < .85) return false;
+        if (totalY < distance || totalY < Math.abs(totalX) * 1.8 || totalY / elapsed < 2.2) return false;
         gesture.stopped = true;
-        void wcnFastBegin('top', -1);
+        void startWcnQuickReverseToTop();
         return true;
       }
 
@@ -6955,7 +6968,8 @@
         if (!moodClipActive) return;
         const baseClipDuration = moodClipDirection < 0 && wcnFastArrivalReversePending
           ? 3.15 : MOOD_CLIP_DURATION;
-        const clipDuration = baseClipDuration / Math.max(.75, parentHandoffRate);
+        const clipDuration = baseClipDuration / Math.max(.75, parentHandoffRate) /
+          (wcnQuickMoodDirection ? 2.8 : 1);
         moodClipProgress = clamp(moodClipProgress + moodClipDirection * (dt / clipDuration), 0, 1);
         updateMoodSectionMotion();
 
@@ -6965,6 +6979,10 @@
           moodClipComplete = true;
           updateMoodSectionMotion();
           beginMoodExitSettle();
+          if (wcnQuickMoodDirection > 0) {
+            wcnQuickMoodDirection = 0;
+            stage.classList.remove('wcn-quick-story-exit');
+          }
         } else if (moodClipDirection < 0 && moodClipProgress <= .0001) {
           moodClipProgress = 0;
           moodClipActive = false;
@@ -6977,6 +6995,10 @@
           syncScrollTrackingAfterProgrammaticMove();
           updateScrollTarget();
           updateMoodSectionMotion();
+          if (wcnQuickMoodDirection < 0) {
+            wcnQuickMoodDirection = 0;
+            requestAnimationFrame(() => { void startWcnQuickReverseToTop(); });
+          }
         }
       }
 
@@ -11955,6 +11977,11 @@ void main(){
       let wcnFastAssetWarmupStarted = false;
       let wcnFastFallbackTimer = 0;
       let wcnFastWheelAt = 0, wcnFastWheelFirstAt = 0, wcnFastWheelEnergy = 0, wcnFastWheelDir = 0;
+      // Quick scroll state is separate from the approved shortcut-button route.
+      let wcnQuickMoodDirection = 0;
+      let wcnQuickAligning = false;
+      let wcnQuickReverseStarting = false;
+      let wcnQuickWheelSamples = 0;
       let wcnFastTouch = null;
       let wcnFastArrivalReversePending = false;
       let wcnFastGalleryReturnPending = false;
@@ -12165,6 +12192,7 @@ void main(){
         wcnFast.playhead = fromCurrent
           ? clamp(isForward ? Math.round(sourceFraction * 47) : 47 - Math.round(sourceFraction * 47), 0, 46)
           : 0;
+        wcnFast.handoffUntil = wcnQuickAligning ? performance.now() + 320 : 0;
         wcnFast.previousFrame=-1;
         wcnFast.active=true;
         wcnFast.starting=false;
@@ -12172,8 +12200,14 @@ void main(){
         stage.classList.add('wcn-fast-routing');
         wcnFastSetFrame(isForward ? Math.round(wcnFast.playhead) : 47 - Math.round(wcnFast.playhead));
         wcnFastFrame.style.opacity = fromCurrent ? '1' : (isForward ? '0' : '1');
+        wcnFastFrame.style.transition = wcnQuickAligning ? 'opacity 320ms ease-in-out' : '';
+        if (wcnQuickAligning) wcnFastFrame.style.opacity = '0';
         wcnFastWhite.style.opacity='0';
         wcnFastTravel.classList.add('is-active');
+        if (wcnQuickAligning) {
+          requestAnimationFrame(() => { wcnFastFrame.style.opacity = '1'; });
+          wcnQuickAligning = false;
+        }
         wcnFastWarmAssets();
         if (isForward) wcnFastPrimeReverseAssets();
         // Keep the iframe's real scroll position stationary throughout the visual shortcut.
@@ -12322,6 +12356,7 @@ void main(){
           wcnFastTravel.classList.remove('is-active');
           wcnFastTravel.style.transition='';wcnFastTravel.style.opacity='';
           wcnFastWhite.style.opacity='0';wcnFastFrame.style.opacity='0';
+          wcnFastFrame.style.transition='';
           wcnFast.active=false;
           stage.classList.remove('wcn-fast-routing');
           if(destination==='top'){
@@ -12338,6 +12373,10 @@ void main(){
         if (!wcnFast.active || wcnFast.transitionStarted) return;
         const dt = clamp((now - wcnFast.lastTickAt) / 1000, 0, .10);
         wcnFast.lastTickAt = now;
+        if (wcnFast.handoffUntil && now < wcnFast.handoffUntil) {
+          wcnFast.lastTickAt = now;
+          return;
+        }
         const nextPlayhead = Math.min(47, wcnFast.playhead + dt * 24);
         const logicalFrame = wcnFast.direction > 0 ? Math.round(nextPlayhead) : 47 - Math.round(nextPlayhead);
         // A late decode pauses the clock, retaining the last visible JPG. It cannot
@@ -12384,7 +12423,7 @@ void main(){
         const direction=Math.sign(delta),now=performance.now();
         if(!direction)return;
         if(now-wcnFastWheelAt>210||direction!==wcnFastWheelDir || now-wcnFastWheelFirstAt>260){
-          wcnFastWheelEnergy=0;wcnFastWheelFirstAt=now;
+          wcnFastWheelEnergy=0;wcnFastWheelFirstAt=now;wcnQuickWheelSamples=0;
         }
         wcnFastWheelAt=now;wcnFastWheelDir=direction;
         wcnFastWheelEnergy+=Math.abs(delta);
@@ -12392,9 +12431,16 @@ void main(){
         const inSquareStory = storySequenceAutoplayActive ||
           (smoothStoryProgress >= STORY_SEQUENCE_START - .005 &&
            smoothStoryProgress <= STORY_SEQUENCE_HOLD_END + .005);
-        const forceful = Math.abs(delta) > (inSquareStory ? 250 : 320) ||
-          (wcnFastWheelEnergy > (inSquareStory ? 440 : 480) &&
-           now - wcnFastWheelFirstAt < (inSquareStory ? 260 : 155));
+        // Wheel delta varies by mouse and OS. Require either an unmistakably large
+        // event or multiple substantial, same-direction events in a short burst.
+        // This deliberately avoids treating ordinary fast-ish scrolling as a shortcut.
+        const fastArea = inSquareStory || moodClipActive || moodClipComplete;
+        wcnQuickWheelSamples++;
+        const forceful = fastArea && (
+          Math.abs(delta) >= 760 ||
+          (wcnQuickWheelSamples >= 3 && wcnFastWheelEnergy >= 1250 &&
+           now - wcnFastWheelFirstAt <= 260)
+        );
         if (!forceful) {
           if (blockDesktopStoryWheel(now)) {
             event.preventDefault(); event.stopImmediatePropagation();
@@ -12409,8 +12455,10 @@ void main(){
           return;
         }
         event.preventDefault();event.stopImmediatePropagation();
-        wcnFastWheelEnergy=0;
-        void wcnFastBegin(towardMood?'colours':'top',direction,inSquareStory);
+        wcnFastWheelEnergy=0;wcnQuickWheelSamples=0;
+        if (towardMood) startWcnQuickMoodForward();
+        else if (moodClipActive || moodClipComplete) startWcnQuickMoodReverse();
+        else void startWcnQuickReverseToTop();
       },{capture:true,passive:false});
       // Rapid upward touch navigation uses tryTouchFastReturn in the touch controller;
       // ordinary swipes still follow the authored story and panorama holds.
