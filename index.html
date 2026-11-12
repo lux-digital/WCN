@@ -6405,9 +6405,16 @@
             (gesture.mode === 'timeline' || gesture.mode === 'pending')) {
           const touch = Array.from(event.changedTouches || [])
             .find(item => item.identifier === gesture.id);
-          if (touch) tryTouchFastStoryNavigation(
-            gesture, touch.clientX - gesture.x,
-            touch.clientY - gesture.y, performance.now());
+          if (touch) {
+            const dx = touch.clientX - gesture.x;
+            const dy = touch.clientY - gesture.y;
+            const releasedAt = performance.now();
+            // Evaluate the forward-only square skip before existing navigation.
+            // Reverse and thumbnail gesture behavior remains unchanged.
+            if (!tryTouchFastForwardSquareSwipe(gesture, dx, dy, releasedAt)) {
+              tryTouchFastStoryNavigation(gesture, dx, dy, releasedAt);
+            }
+          }
         }
       }
 
@@ -6433,6 +6440,38 @@
           yawVelocity: 0, pitchVelocity: 0, startedAt: performance.now(), startPosition: touchFlow.displayedPosition,
           at: performance.now() };
         if (!control && event.cancelable) event.preventDefault();
+      }
+
+      /* square_01 overlaps the image sequence, before sequenceEnd. This separate
+         check covers all four visible Lotties. Only a deliberate forward flick
+         bypasses normal story autoplay; ordinary swipes remain unmodified. */
+      function tryTouchFastForwardSquareSwipe(gesture, totalX, totalY, now) {
+        if (!MOBILE_RUNTIME || !scrollingReady || wcnFast.active || wcnFast.starting ||
+            parentOverlayActive || wcnQuickMoodDirection || wcnQuickReverseStarting ||
+            (gesture.mode !== 'timeline' && gesture.mode !== 'pending') ||
+            totalY >= 0) return false;
+
+        const firstSquareStarted = touchFlow.firstStoryStart !== null &&
+          gesture.startPosition >= touchFlow.firstStoryStart - .015 &&
+          gesture.startPosition <= TOUCH_FLOW.sequenceEnd + .01;
+        const laterSquareStarted = gesture.startPosition >= TOUCH_FLOW.sequenceEnd - .01 &&
+          gesture.startPosition <= TOUCH_HOLD_POSITION + .005;
+        if ((!firstSquareStarted && !laterSquareStarted) ||
+            !visibleStoryClip || storySequenceLottie.style.opacity !== '1') return false;
+
+        const distance = -totalY;
+        const elapsed = Math.max(16, now - gesture.startedAt);
+        const vertical = distance >= Math.abs(totalX) * 1.7;
+        const flickDistance = Math.max(120, Math.min(175, viewportHeight * .18));
+        const longDistance = Math.max(205, Math.min(255, viewportHeight * .29));
+        const speed = distance / elapsed;
+        const deliberate = (distance >= flickDistance && speed >= 1.15) ||
+          (distance >= longDistance && speed >= .88);
+        if (!vertical || !deliberate || elapsed > 400) return false;
+
+        gesture.stopped = true;
+        startWcnQuickMoodForward();
+        return true;
       }
 
       /* Fast navigation has its own deliberate swipe threshold. A normal one-swipe
@@ -8432,6 +8471,12 @@
 
       function updateStoryTextMotion() {
         pendingStoryPaint = false;
+        // Only the explicit forward quick route suppresses a mobile square.
+        // Restore visibility on every normal paint to avoid blank story sections.
+        if (MOBILE_RUNTIME) {
+          storySequenceLottie.style.visibility =
+            wcnQuickMoodDirection > 0 ? 'hidden' : 'visible';
+        }
         // Fast-route classes are transition state, not permission to hide
         // the story. Avoid clearing them in the render path; a route may still
         // be completing its own crossfade when a story frame is repainted.
@@ -12459,6 +12504,9 @@ void main(){
         wcnQuickMoodDirection = 1;
         stage.classList.add('wcn-quick-story-exit');
         if (MOBILE_RUNTIME) {
+          // Hide the square on the confirmed high-speed flick before the
+          // accelerated mood handoff starts. The painter restores it afterward.
+          storySequenceLottie.style.visibility = 'hidden';
           touchFlow.autoplay = null;
           touchFlow.storyHold = null;
           setTouchPosition(TOUCH_HOLD_POSITION);
